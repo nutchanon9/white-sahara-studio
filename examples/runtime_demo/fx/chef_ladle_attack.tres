@@ -1,0 +1,73 @@
+[gd_resource type="Animation" format=3 uid="uid://qa0snl8makmu"]
+
+[ext_resource type="PackedScene" path="res://examples/runtime_demo/fx/fire_burst.tscn" id="effect_fire_burst"]
+[ext_resource type="PackedScene" path="res://examples/runtime_demo/fx/fire_burst_sfx.tscn" id="effect_fire_burst_sfx"]
+
+[resource]
+resource_name = "chef_ladle_attack"
+length = 0.6
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Body/Skeleton/Hips/Chest/ArmR:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.3, 0.45, 0.6),
+"transitions": PackedFloat32Array(0.5, 2, 0.5, 1, 1),
+"update": 0,
+"values": [0.0, 2.6179938779914944, -0.9599310885968813, -0.6981317007977318, 0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Body/Skeleton/Hips/Chest:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.3, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, -0.12217304763960307, 0.15707963267948966, 0.0]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Body/Skeleton/Hips:position")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.3, 0.6),
+"transitions": PackedFloat32Array(1, 1, 0.5, 1),
+"update": 0,
+"values": [Vector2(0, -34), Vector2(-3, -35), Vector2(6, -32), Vector2(0, -34)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Body/Skeleton/Hips/Chest/ArmL:rotation")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.3, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, -0.4363323129985824, 0.3490658503988659, 0.0]
+}
+tracks/4/type = "method"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("OasisAnimationEvents")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.3),
+"transitions": PackedFloat32Array(1, 1),
+"values": [{
+"args": [&"attack_start", [], NodePath(".")],
+"method": &"oasis_event"
+}, {
+"args": [&"hit_frame", [ExtResource("effect_fire_burst"), ExtResource("effect_fire_burst_sfx")], NodePath("Body/Skeleton/Hips/Chest/ArmR/WeaponPivot/Tip")],
+"method": &"oasis_event"
+}]
+}

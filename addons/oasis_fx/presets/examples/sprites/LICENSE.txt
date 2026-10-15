@@ -1,0 +1,2 @@
+flame_sheet.png was drawn by tools/synth_example_sprites.gd for OasisFx.
+It contains no third-party material and is dedicated to the public domain (CC0 1.0).

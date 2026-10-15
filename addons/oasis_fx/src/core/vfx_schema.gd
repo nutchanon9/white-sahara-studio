@@ -1,8 +1,8 @@
 @tool
 extends RefCounted
 ## Builds the JSON Schemas (draft 2020-12) for presets from the field tables
-## (vfx_spec.gd, sfx_spec.gd), so schemas/vfx.v1.schema.json and
-## schemas/sfx.v1.schema.json can never drift from the validator.
+## of every asset type (asset_types.gd), so schemas/<type>.v1.schema.json can
+## never drift from the validator.
 ##
 ## Regenerate the file after changing vfx_spec.gd:
 ##   godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- schema --write
@@ -15,37 +15,28 @@ extends RefCounted
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
-
-## Schema file path per asset type.
-const PATHS := {"vfx": OasisFx.SCHEMA_PATH, "sfx": OasisFx.SFX_SCHEMA_PATH}
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
+const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
 
 
 static func build(asset_type := "vfx") -> Dictionary:
-	if asset_type == "sfx":
-		var sfx := {
-			"$schema": "https://json-schema.org/draft/2020-12/schema",
-			"$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/sfx.v1.schema.json",
-			"title": "OasisFx SFX preset v1",
-			"description": "Data-only description of a layered sound effect that OasisFx turns into a Godot 4 scene of audio players. Generated from addons/oasis_fx/src/core/sfx_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/sfx_format.md.",
-		}
-		sfx.merge(_object(SfxSpec.EFFECT_FIELDS))
-		sfx["$defs"] = {
-			"id": {"type": "string", "pattern": Spec.ID_PATTERN},
-			"layer": _object(SfxSpec.LAYER_FIELDS),
-		}
-		return sfx
+	var info: Dictionary = AssetTypes.TYPES[asset_type]
 	var schema := {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/vfx.v1.schema.json",
-		"title": "OasisFx VFX preset v1",
-		"description": "Data-only description of a 2D particle effect that OasisFx turns into a Godot 4 scene. Generated from addons/oasis_fx/src/core/vfx_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/preset_format.md.",
+		"$id": AssetTypes.SCHEMA_URL + asset_type + ".v1.schema.json",
+		"title": info.title,
+		"description": info.summary,
 	}
-	schema.merge(_object(Spec.EFFECT_FIELDS))
-	schema["$defs"] = {
-		"id": {"type": "string", "pattern": Spec.ID_PATTERN},
-		"color": {"type": "string", "pattern": Spec.COLOR_PATTERN},
-		"emitter": _object(Spec.EMITTER_FIELDS),
-	}
+	schema.merge(_object(info.fields))
+	var defs := {"id": {"type": "string", "pattern": Spec.ID_PATTERN}}
+	var tables: Array = [info.fields]
+	for item in AssetTypes.item_kinds(info.fields):
+		tables.append(AssetTypes.item_fields(item))
+	if tables.any(func(t): return t.values().any(func(f): return f.type in ["color", "key_value"])):
+		defs["color"] = {"type": "string", "pattern": Spec.COLOR_PATTERN}
+	for item in AssetTypes.item_kinds(info.fields):
+		defs[item] = _object(AssetTypes.item_fields(item))
+	schema["$defs"] = defs
 	return schema
 
 
@@ -110,6 +101,18 @@ static func _property(spec: Dictionary) -> Dictionary:
 			p = {"type": "string", "pattern": SfxSpec.BUS_PATTERN}
 		"list":
 			p = {"type": "array", "minItems": spec.min_items, "maxItems": spec.max_items, "items": {"$ref": "#/$defs/" + spec.item}}
+		"node_path":
+			p = {"type": "string", "maxLength": 256, "pattern": AnimSpec.NODE_PATH_PATTERN}
+		"key_value":
+			p = {"anyOf": [
+				{"type": "number"},
+				{"type": "boolean"},
+				{"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+				{"$ref": "#/$defs/color"},
+			]}
+		"frame_list":
+			p = {"type": "array", "minItems": spec.min_items, "maxItems": spec.max_items,
+				"items": {"type": "integer", "minimum": spec.min, "maximum": spec.max}}
 	p["description"] = spec.doc
 	if not spec.get("required", false):
 		p["default"] = spec.default

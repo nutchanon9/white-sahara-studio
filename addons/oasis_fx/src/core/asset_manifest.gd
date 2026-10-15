@@ -9,12 +9,15 @@ extends RefCounted
 ## The file is deterministic (sorted keys, no timestamps) so it diffs cleanly.
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 
 const FORMAT := "oasis_fx_manifest"
 const FORMAT_VERSION := 1
 
 var path := ""
 ## id -> {"preset", "preset_sha256", "scene", "scene_sha256", "dependencies"}
+## ("scene" is the generated file: a .tscn scene or, for animation and
+## sprite_frames presets, a .tres resource; the key name is kept for compatibility)
 var entries := {}
 
 
@@ -63,6 +66,21 @@ func scene_state(id: String, scene_path: String, scene_file := "") -> String:
 	if not entries.has(id) or entries[id].get("scene") != scene_path:
 		return "unknown"
 	return "unmodified" if FileAccess.get_sha256(file) == entries[id].get("scene_sha256") else "modified"
+
+
+## Dependencies recorded for the generated file `res_path` in the manifest of
+## its folder (looked up under `roots`), or [] when it has no entry there.
+static func dependencies_of(res_path: String, roots := PackedStringArray()) -> PackedStringArray:
+	var file := PathUtils.resolve_res_path(res_path.get_base_dir().path_join(OasisFx.MANIFEST_FILE), roots)
+	if file.is_empty():
+		return PackedStringArray()
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(file)) != OK or not json.data is Dictionary:
+		return PackedStringArray()
+	for entry in json.data.get("entries", {}).values():
+		if entry is Dictionary and entry.get("scene") == res_path:
+			return PackedStringArray(entry.get("dependencies", []))
+	return PackedStringArray()
 
 
 func save() -> Error:

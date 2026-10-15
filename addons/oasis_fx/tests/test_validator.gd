@@ -131,8 +131,8 @@ func test_unknown_schema_version() -> void:
 
 func test_unknown_asset_type() -> void:
 	var data := _valid()
-	data.asset_type = "animation"
-	_expect_error(data, "asset_type", "unsupported asset_type \"animation\"")
+	data.asset_type = "rig"
+	_expect_error(data, "asset_type", "unsupported asset_type \"rig\"")
 
 
 func test_unknown_fields_are_rejected() -> void:

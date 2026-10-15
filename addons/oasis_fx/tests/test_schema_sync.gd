@@ -7,6 +7,7 @@ const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const Schema := preload("res://addons/oasis_fx/src/core/vfx_schema.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
 
 func test_schema_file_is_up_to_date() -> void:
@@ -14,6 +15,29 @@ func test_schema_file_is_up_to_date() -> void:
 	check(committed == Schema.to_text(), "%s is out of date; run: godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- schema --write" % OasisFx.SCHEMA_PATH)
 	var sfx := FileAccess.get_file_as_string(OasisFx.SFX_SCHEMA_PATH)
 	check(sfx == Schema.to_text("sfx"), "%s is out of date; run the same command" % OasisFx.SFX_SCHEMA_PATH)
+
+
+func test_every_asset_type_schema_is_up_to_date_and_complete() -> void:
+	for type in AssetTypes.names():
+		var path := AssetTypes.schema_path(type)
+		check(FileAccess.get_file_as_string(path) == Schema.to_text(type), "%s is out of date; run: oasis_fx_cli.gd -- schema --write" % path)
+		var schema: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+		check_eq(schema.properties.keys(), AssetTypes.fields(type).keys(), type + " properties in canonical order")
+		for item in AssetTypes.item_kinds(AssetTypes.fields(type)):
+			check_eq(schema["$defs"][item].properties.keys(), AssetTypes.item_fields(item).keys(), "%s %s properties" % [type, item])
+			check_eq(schema["$defs"][item].additionalProperties, false, "%s %s rejects unknown properties" % [type, item])
+
+
+func test_every_asset_type_format_doc_lists_every_field() -> void:
+	for type in AssetTypes.names():
+		var doc_path: String = "res://addons/oasis_fx/docs/" + AssetTypes.TYPES[type].doc
+		var doc := FileAccess.get_file_as_string(doc_path)
+		var tables: Array = [AssetTypes.fields(type)]
+		for item in AssetTypes.item_kinds(AssetTypes.fields(type)):
+			tables.append(AssetTypes.item_fields(item))
+		for fields in tables:
+			for name in fields:
+				check(doc.contains("| `%s` |" % name), "%s has a table row for %s field `%s`" % [doc_path, type, name])
 
 
 func test_schema_covers_every_field() -> void:
@@ -60,8 +84,9 @@ func test_ai_guide_examples_match_example_presets() -> void:
 		if data is Dictionary and data.has("id"):
 			blocks.append(data)
 	check(blocks.size() >= 5, "the guide has complete vfx and sfx examples (found %d)" % blocks.size())
-	check(blocks.any(func(d): return d.get("asset_type") == "sfx"), "including an sfx example")
+	for type in AssetTypes.names():
+		check(blocks.any(func(d): return d.get("asset_type") == type), "including a complete %s example" % type)
 	for data in blocks:
-		var path := "%s/%s%s" % [OasisFx.EXAMPLES_DIR, data.id, OasisFx.PRESET_SUFFIXES.get(data.get("asset_type"), ".json")]
+		var path := "%s/%s%s" % [OasisFx.EXAMPLES_DIR, data.id, AssetTypes.suffix(data.asset_type) if AssetTypes.has(data.get("asset_type")) else ".json"]
 		if check(FileAccess.file_exists(path), "guide example %s is a shipped preset" % data.id):
 			check(data == JSON.parse_string(FileAccess.get_file_as_string(path)), "guide example %s matches %s" % [data.id, path])

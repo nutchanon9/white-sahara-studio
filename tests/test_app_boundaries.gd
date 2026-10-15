@@ -33,6 +33,9 @@ func test_cli_runs_in_a_project_that_only_has_the_addon() -> void:
 	var project := ProjectSettings.globalize_path(temp_dir("addon_only"))
 	write_text(project.path_join("project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"Addon Only\"\n")
 	_copy_tree(ProjectSettings.globalize_path(ADDON), project.path_join("addons/oasis_fx"))
+	# The example animations show the example effects, which a game would have
+	# generated before: copy those generated scenes too (not the app).
+	_copy_tree(ProjectSettings.globalize_path("res://examples/runtime_demo/fx"), project.path_join("examples/runtime_demo/fx"))
 	var output := []
 	var argv := ["--headless", "--path", project, "--script", "res://addons/oasis_fx/cli/oasis_fx_cli.gd", "--",
 		"generate-all", "addons/oasis_fx/presets/examples", "--out", "res://vfx"]

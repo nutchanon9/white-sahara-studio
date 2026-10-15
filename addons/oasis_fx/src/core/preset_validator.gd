@@ -6,19 +6,19 @@ extends RefCounted
 
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
+const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
+const FramesSpec := preload("res://addons/oasis_fx/src/core/sprite_frames_spec.gd")
+const Outline := preload("res://addons/oasis_fx/src/core/scene_outline.gd")
+const ImageHeader := preload("res://addons/oasis_fx/src/core/image_header.gd")
 const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
 ## JSON numbers are doubles; integers beyond this cannot be represented exactly.
 const _MAX_SAFE_INT := 9007199254740991.0
 
 const SUPPORTED_SCHEMA_VERSIONS := [1]
-const SUPPORTED_ASSET_TYPES := ["vfx", "sfx"]
-## Top-level field table per asset type.
-const _EFFECT_FIELDS := {"vfx": Spec.EFFECT_FIELDS, "sfx": SfxSpec.EFFECT_FIELDS}
-## Field table per list item kind.
-const _ITEM_FIELDS := {"emitter": Spec.EMITTER_FIELDS, "layer": SfxSpec.LAYER_FIELDS}
 
 
 ## Loads, parses and validates a preset file. Returns the normalized preset,
@@ -30,15 +30,15 @@ static func validate_file(path: String, report: RefCounted) -> Dictionary:
 	var preset := validate(data, report)
 	if preset.is_empty():
 		return preset
-	var suffix: String = OasisFx.PRESET_SUFFIXES[preset.asset_type]
+	var suffix := AssetTypes.suffix(preset.asset_type)
 	if path.ends_with(suffix):
 		var expected := path.get_file().trim_suffix(suffix)
 		if expected != preset.id:
 			report.warn("id", "id \"%s\" differs from the file name \"%s\"; keeping them equal avoids confusion" % [preset.id, path.get_file()])
 	else:
-		for other in OasisFx.PRESET_SUFFIXES.values():
-			if path.ends_with(other):
-				report.warn("asset_type", "a \"%s\" preset in a %s file; name it <id>%s" % [preset.asset_type, other, suffix])
+		var other := AssetTypes.type_for_file(path)
+		if not other.is_empty():
+			report.warn("asset_type", "a \"%s\" preset in a %s file; name it <id>%s" % [preset.asset_type, AssetTypes.suffix(other), suffix])
 	return preset
 
 
@@ -50,12 +50,17 @@ static func validate(data: Variant, report: RefCounted) -> Dictionary:
 		return {}
 	if not _check_header(data, report):
 		return {}
-	var preset := _check_object(data, _EFFECT_FIELDS[data.asset_type], "", report)
+	var preset := _check_object(data, AssetTypes.fields(data.asset_type), "", report)
 	if report.is_ok():
-		if data.asset_type == "sfx":
-			_check_sfx_semantics(data, preset, report)
-		else:
-			_check_effect_semantics(data, preset, report)
+		match data.asset_type:
+			"sfx":
+				_check_sfx_semantics(data, preset, report)
+			"vfx":
+				_check_effect_semantics(data, preset, report)
+			"animation":
+				_check_animation_semantics(data, preset, report)
+			"sprite_frames":
+				_check_sprite_frames_semantics(data, preset, report)
 	return preset if report.is_ok() else {}
 
 
@@ -71,11 +76,11 @@ static func _check_header(data: Dictionary, report: RefCounted) -> bool:
 			JSON.stringify(version), OasisFx.VERSION, _join(SUPPORTED_SCHEMA_VERSIONS)])
 		return false
 	if not data.has("asset_type"):
-		report.error("asset_type", "is required (\"vfx\" or \"sfx\")")
+		report.error("asset_type", "is required (one of %s)" % _join(AssetTypes.names()))
 		return false
-	if typeof(data.asset_type) != TYPE_STRING or not SUPPORTED_ASSET_TYPES.has(data.asset_type):
-		report.error("asset_type", "unsupported asset_type %s; supported: %s (animation is planned for a later phase)" % [
-			JSON.stringify(data.asset_type), _join(SUPPORTED_ASSET_TYPES)])
+	if not AssetTypes.has(data.asset_type):
+		report.error("asset_type", "unsupported asset_type %s; supported: %s" % [
+			JSON.stringify(data.asset_type), _join(AssetTypes.names())])
 		return false
 	return true
 
@@ -181,7 +186,45 @@ static func _check_value(value: Variant, spec: Dictionary, path: String, report:
 			return value
 		"list":
 			return _check_list(value, spec, path, report)
+		"node_path":
+			if typeof(value) != TYPE_STRING or value.length() > 256 or not _matches(AnimSpec.NODE_PATH_PATTERN, value):
+				report.error(path, "must be a node path like \"Body/Arm\" (\".\" = the scene root; no \"..\", \":\", \"%%\" or \"@\"); got %s" % JSON.stringify(value))
+				return null
+			return value
+		"key_value":
+			return _check_key_value(value, path, report)
+		"frame_list":
+			if typeof(value) != TYPE_ARRAY:
+				report.error(path, "must be an array of frame numbers")
+				return null
+			if value.size() < spec.min_items or value.size() > spec.max_items:
+				report.error(path, "must contain %d to %d frame numbers (got %d)" % [spec.min_items, spec.max_items, value.size()])
+				return null
+			var frames := []
+			for i in value.size():
+				if not _is_whole_number(value[i]):
+					report.error("%s[%d]" % [path, i], "must be a whole number (got %s)" % JSON.stringify(value[i]))
+					return null
+				_check_range(float(value[i]), spec, "%s[%d]" % [path, i], report)
+				frames.append(int(value[i]))
+			return frames
 	report.error(path, "internal error: unknown field type %s" % spec.type)
+	return null
+
+
+## A keyframe value: number, bool, [x, y] or a color string. Whether it fits
+## the track's property is checked later (_check_animation_semantics).
+static func _check_key_value(value: Variant, path: String, report: RefCounted) -> Variant:
+	if _is_number(value):
+		return float(value)
+	if typeof(value) == TYPE_BOOL:
+		return value
+	if typeof(value) == TYPE_ARRAY and value.size() == 2 and _is_number(value[0]) and _is_number(value[1]):
+		return [float(value[0]), float(value[1])]
+	if typeof(value) == TYPE_STRING and _matches(Spec.COLOR_PATTERN, value):
+		var hex: String = value.substr(1).to_upper()
+		return "#" + (hex + "FF" if hex.length() == 6 else hex)
+	report.error(path, "must be a number, true/false, [x, y] or a color \"#RRGGBBAA\" (got %s)" % JSON.stringify(value))
 	return null
 
 
@@ -250,7 +293,7 @@ static func _check_list(value: Variant, spec: Dictionary, path: String, report: 
 		if typeof(value[i]) != TYPE_DICTIONARY:
 			report.error(item_path, "must be an object")
 			continue
-		out.append(_check_object(value[i], _ITEM_FIELDS[item], item_path + ".", report))
+		out.append(_check_object(value[i], AssetTypes.item_fields(item), item_path + ".", report))
 	return out
 
 
@@ -271,12 +314,7 @@ static func _check_res_path(value: String, spec: Dictionary, path: String, repor
 ## The first existing file for `res_path` under `roots` ("res://" = this
 ## project; empty roots = this project only), or "" when none exists.
 static func resolve_res_path(res_path: String, roots: PackedStringArray) -> String:
-	var candidates := roots if not roots.is_empty() else PackedStringArray(["res://"])
-	for root in candidates:
-		var file := res_path if root == "res://" else root.path_join(res_path.trim_prefix("res://"))
-		if FileAccess.file_exists(file):
-			return file
-	return ""
+	return PathUtils.resolve_res_path(res_path, roots)
 
 
 static func _check_effect_semantics(raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
@@ -378,6 +416,151 @@ static func _check_sfx_semantics(raw: Dictionary, preset: Dictionary, report: Re
 		for key in ["max_distance", "attenuation"]:
 			if raw.has(key):
 				report.warn(key, "is ignored when positional is false")
+
+static func _check_animation_semantics(raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
+	if preset.tracks.is_empty() and preset.events.is_empty():
+		report.error("tracks", "an animation needs at least one track or event")
+	var outline := Outline.load_outline(preset.target_scene, report.res_roots)
+	if not outline.ok:
+		report.error("target_scene", "cannot read the scene: %s" % outline.error)
+		return
+	var duration: float = preset.duration_seconds
+	var seen := {}
+	var tint := {}
+	for i in preset.tracks.size():
+		var track: Dictionary = preset.tracks[i]
+		var path := "tracks[%d]" % i
+		var prop: Dictionary = AnimSpec.PROPERTIES[track.property]
+		var key: String = track.node + ":" + track.property
+		if seen.has(key):
+			report.error(path + ".property", "%s of \"%s\" is already animated by tracks[%d]" % [track.property, track.node, seen[key]])
+		seen[key] = i
+		if track.property in ["opacity", "modulate"]:
+			if tint.has(track.node) and tint[track.node] != track.property:
+				report.error(path + ".property", "opacity and modulate both set the modulate color of \"%s\"; animate only modulate (its alpha is the opacity)" % track.node)
+			tint[track.node] = track.property
+		if not outline.nodes.has(track.node):
+			report.error(path + ".node", "no node \"%s\" in %s%s" % [track.node, preset.target_scene, _suggest_node(outline, track.node)])
+		elif not _node_fits(outline, track.node, prop["class"]):
+			report.error(path + ".node", "\"%s\" is a %s; %s needs a %s" % [track.node, Outline.node_class(outline, track.node), track.property, " or ".join(prop["class"].split("|"))])
+		if prop.get("discrete", false) and raw.tracks[i].has("interpolation") and track.interpolation != "nearest":
+			report.warn(path + ".interpolation", "is ignored: %s always switches at each key" % track.property)
+		var frame_limit := -1
+		if track.property == "frame" and Outline.node_class(outline, track.node) == "Sprite2D":
+			frame_limit = int(Outline.property(outline, track.node, "hframes", 1)) * int(Outline.property(outline, track.node, "vframes", 1))
+		var last := -1.0
+		for j in track.keys.size():
+			var k: Dictionary = track.keys[j]
+			var kpath := "%s.keys[%d]" % [path, j]
+			if k.time > duration + 0.000001:
+				report.error(kpath + ".time", "must be <= duration_seconds (%s > %s)" % [_num(k.time), _num(duration)])
+			if k.time <= last:
+				report.error(kpath + ".time", "keys must be in increasing time order (%s comes after %s)" % [_num(k.time), _num(last)])
+			last = k.time
+			_check_key_for_property(k.value, track.property, prop, kpath + ".value", report)
+			if frame_limit > 0 and typeof(k.value) == TYPE_FLOAT and k.value >= frame_limit:
+				report.error(kpath + ".value", "frame %d does not exist: \"%s\" has %d frames (hframes × vframes)" % [int(k.value), track.node, frame_limit])
+	for i in preset.events.size():
+		var event: Dictionary = preset.events[i]
+		var path := "events[%d]" % i
+		if event.time > duration + 0.000001:
+			report.error(path + ".time", "must be <= duration_seconds (%s > %s)" % [_num(event.time), _num(duration)])
+		if not outline.nodes.has(event.at):
+			report.error(path + ".at", "no node \"%s\" in %s%s" % [event.at, preset.target_scene, _suggest_node(outline, event.at)])
+		elif not event.effects.is_empty() and not Outline.node_is_a(outline, event.at, "Node2D"):
+			report.error(path + ".at", "\"%s\" is a %s; effects can only appear at a Node2D" % [event.at, Outline.node_class(outline, event.at)])
+		for j in event.effects.size():
+			var scene_path: String = event.effects[j]
+			var file := PathUtils.resolve_res_path(scene_path, report.res_roots)
+			var text := FileAccess.get_file_as_string(file) if not file.is_empty() else ""
+			if not text.is_empty() and not (text.contains("path=\"%s\"" % OasisFx.RUNTIME_SCRIPT_PATH) or text.contains("path=\"%s\"" % OasisFx.SFX_RUNTIME_SCRIPT_PATH)):
+				report.error("%s.effects[%d]" % [path, j], "%s is not a scene generated by OasisFx; events can only show OasisFx effects and sounds" % scene_path)
+	if not preset.events.is_empty():
+		var receiver := AnimSpec.EVENT_NODE
+		if not outline.nodes.has(receiver):
+			report.warn("events", "%s has no child node \"%s\"; add a Node with the script %s to its root, otherwise the events do nothing" % [preset.target_scene, receiver, AnimSpec.EVENTS_RUNTIME_PATH])
+		elif Outline.ext_resource_path(outline, receiver, "script") != AnimSpec.EVENTS_RUNTIME_PATH:
+			report.warn("events", "the node \"%s\" in %s does not use the script %s, so the events may do nothing" % [receiver, preset.target_scene, AnimSpec.EVENTS_RUNTIME_PATH])
+
+
+static func _check_key_for_property(value: Variant, property: String, prop: Dictionary, path: String, report: RefCounted) -> void:
+	var ok := true
+	match prop.value:
+		"number":
+			ok = typeof(value) == TYPE_FLOAT
+		"int":
+			ok = typeof(value) == TYPE_FLOAT and value == floorf(value)
+		"vec2":
+			ok = typeof(value) == TYPE_ARRAY
+		"color":
+			ok = typeof(value) == TYPE_STRING
+		"bool":
+			ok = typeof(value) == TYPE_BOOL
+	if not ok:
+		var wanted := {"number": "a number", "int": "a whole number", "vec2": "[x, y]", "color": "a color \"#RRGGBBAA\"", "bool": "true or false"}
+		report.error(path, "%s needs %s (got %s)" % [property, wanted[prop.value], JSON.stringify(value)])
+		return
+	if prop.has("min"):
+		for component in (value if typeof(value) == TYPE_ARRAY else [value]):
+			_check_range(component, prop, path, report)
+
+
+static func _node_fits(outline: Dictionary, node_path: String, classes: String) -> bool:
+	for c in classes.split("|"):
+		if Outline.node_is_a(outline, node_path, c):
+			return true
+	return false
+
+
+static func _suggest_node(outline: Dictionary, wanted: String) -> String:
+	var name := wanted.get_file()
+	for path in outline.order:
+		if path.get_file() == name or path.get_file().to_lower() == name.to_lower():
+			return "; did you mean \"%s\"?" % path
+	var some := Array(outline.order).slice(0, 12)
+	return "; nodes in the scene: %s%s" % [", ".join(PackedStringArray(some)), " …" if outline.order.size() > 12 else ""]
+
+
+static func _check_sprite_frames_semantics(_raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
+	var cells: int = preset.columns * preset.rows
+	if preset.frame_count > cells:
+		report.error("frame_count", "must be at most columns × rows = %d (got %d)" % [cells, preset.frame_count])
+		return
+	if preset.frame_count > 0:
+		cells = preset.frame_count
+	var seen := {}
+	for i in preset.animations.size():
+		var anim: Dictionary = preset.animations[i]
+		var path := "animations[%d]" % i
+		if seen.has(anim.name):
+			report.error(path + ".name", "duplicate animation name \"%s\" (also animations[%d])" % [anim.name, seen[anim.name]])
+		seen[anim.name] = i
+		for j in anim.frames.size():
+			if anim.frames[j] >= cells:
+				report.error("%s.frames[%d]" % [path, j], "frame %d does not exist; the sheet has %d frames (0 … %d)" % [anim.frames[j], cells, cells - 1])
+	var size := ImageHeader.size_of(OasisFx.raw_file_path(PathUtils.resolve_res_path(preset.texture, report.res_roots)))
+	if size == Vector2i.ZERO:
+		report.error("texture", "cannot read the image size of %s (PNG, JPEG or WebP expected)" % preset.texture)
+		return
+	var cell := frame_size(preset, size)
+	if cell.x < 1 or cell.y < 1:
+		report.error("columns", "the sheet (%d × %d px) is too small for %d columns × %d rows with this margin and separation" % [size.x, size.y, preset.columns, preset.rows])
+		return
+	var used := Vector2(preset.margin_px[0] * 2 + cell.x * preset.columns + preset.separation_px[0] * (preset.columns - 1),
+			preset.margin_px[1] * 2 + cell.y * preset.rows + preset.separation_px[1] * (preset.rows - 1))
+	if used.x != size.x or used.y != size.y:
+		report.warn("columns", "the sheet (%d × %d px) does not divide evenly into %d × %d frames; each frame is %d × %d px and %d × %d px at the right/bottom are unused" % [
+			size.x, size.y, preset.columns, preset.rows, cell.x, cell.y, size.x - int(used.x), size.y - int(used.y)])
+	if preset.source_license.is_empty():
+		report.warn("source_license", "is empty; record the license of %s (where it came from and whether credit is required)" % preset.texture.get_file())
+
+
+## Pixel size of one frame of a sprite_frames preset whose sheet is `image_size`.
+static func frame_size(preset: Dictionary, image_size: Vector2i) -> Vector2i:
+	var w: float = (image_size.x - 2.0 * preset.margin_px[0] - (preset.columns - 1) * preset.separation_px[0]) / preset.columns
+	var h: float = (image_size.y - 2.0 * preset.margin_px[1] - (preset.rows - 1) * preset.separation_px[1]) / preset.rows
+	return Vector2i(floori(w), floori(h))
+
 
 static func _warn_ignored(raw: Dictionary, keys: Array, path: String, shape: String, report: RefCounted) -> void:
 	for key in keys:

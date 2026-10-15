@@ -8,11 +8,10 @@ extends RefCounted
 ## Works on raw preset dictionaries (as parsed or edited), not only validated
 ## ones: unknown keys are kept, after the known ones, in their original order.
 
-const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
-const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
-## Multi-line list key -> field table of its items.
-const _LISTS := {"emitters": Spec.EMITTER_FIELDS, "layers": SfxSpec.LAYER_FIELDS}
+## Lists whose items are written one per line in compact form ({"time": 0, "value": 1}).
+const INLINE_ITEMS := ["key"]
 
 ## Decimal places kept for non-integral numbers (hides float noise such as
 ## 0.35000000000000003 from UI spin boxes).
@@ -20,11 +19,30 @@ const DECIMALS := 6
 
 
 static func to_text(preset: Dictionary) -> String:
-	var fields: Dictionary = SfxSpec.EFFECT_FIELDS if preset.get("asset_type") == "sfx" else Spec.EFFECT_FIELDS
+	var type: Variant = preset.get("asset_type")
+	var fields: Dictionary = AssetTypes.fields(type) if AssetTypes.has(type) else AssetTypes.fields("vfx")
 	return _object(preset, fields, 0) + "\n"
 
 
 static func _object(obj: Dictionary, fields: Dictionary, depth: int) -> String:
+	var keys := _ordered_keys(obj, fields)
+	if keys.is_empty():
+		return "{}"
+	var pad := "  ".repeat(depth + 1)
+	var lines := PackedStringArray()
+	for key in keys:
+		lines.append(pad + JSON.stringify(str(key)) + ": " + _value(obj[key], fields.get(key, {}), depth + 1))
+	return "{\n" + ",\n".join(lines) + "\n" + "  ".repeat(depth) + "}"
+
+
+static func _inline_object(obj: Dictionary, fields: Dictionary) -> String:
+	var parts := PackedStringArray()
+	for key in _ordered_keys(obj, fields):
+		parts.append(JSON.stringify(str(key)) + ": " + _value(obj[key], {}, 0))
+	return "{" + ", ".join(parts) + "}"
+
+
+static func _ordered_keys(obj: Dictionary, fields: Dictionary) -> Array:
 	var keys := []
 	for key in fields:
 		if obj.has(key):
@@ -32,29 +50,29 @@ static func _object(obj: Dictionary, fields: Dictionary, depth: int) -> String:
 	for key in obj:
 		if not keys.has(key):
 			keys.append(key)
-	if keys.is_empty():
-		return "{}"
-	var pad := "  ".repeat(depth + 1)
-	var lines := PackedStringArray()
-	for key in keys:
-		lines.append(pad + JSON.stringify(str(key)) + ": " + _value(obj[key], key, depth + 1))
-	return "{\n" + ",\n".join(lines) + "\n" + "  ".repeat(depth) + "}"
+	return keys
 
 
-static func _value(value: Variant, key: Variant, depth: int) -> String:
+## `spec` is the field-table entry of the value ({} when unknown).
+static func _value(value: Variant, spec: Dictionary, depth: int) -> String:
 	match typeof(value):
 		TYPE_DICTIONARY:
-			return _object(value, key if key is Dictionary else {}, depth)
+			return _object(value, {}, depth)
 		TYPE_ARRAY:
-			if _LISTS.has(key) and not value.is_empty() and value.any(func(v): return v is Dictionary):
+			if spec.get("type") == "list" and not value.is_empty() and value.any(func(v): return v is Dictionary):
+				var item_fields := AssetTypes.item_fields(spec.item)
+				var inline: bool = INLINE_ITEMS.has(spec.item)
 				var pad := "  ".repeat(depth + 1)
 				var items := PackedStringArray()
-				for i in value.size():
-					items.append(pad + _value(value[i], _LISTS[key], depth + 1))
+				for item in value:
+					if item is Dictionary:
+						items.append(pad + (_inline_object(item, item_fields) if inline else _object(item, item_fields, depth + 1)))
+					else:
+						items.append(pad + _value(item, {}, depth + 1))
 				return "[\n" + ",\n".join(items) + "\n" + "  ".repeat(depth) + "]"
 			var parts := PackedStringArray()
 			for item in value:
-				parts.append(_value(item, null, depth))
+				parts.append(_value(item, {}, depth))
 			return "[" + ", ".join(parts) + "]"
 		TYPE_FLOAT:
 			return number(value)

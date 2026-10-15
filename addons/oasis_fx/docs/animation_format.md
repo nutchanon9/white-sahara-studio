@@ -1,0 +1,268 @@
+# OasisFx preset formats — `animation` v1 and `sprite_frames` v1
+
+Phase 3 adds two asset types for movement:
+
+| Asset type | File | Generates | Use it for |
+|---|---|---|---|
+| `animation` | `<id>.anim.json` | `<id>.tres` — a Godot **Animation** for an existing scene's `AnimationPlayer` | keyframes on nodes of a character or prop: Skeleton2D bones, sprites, polygons, markers; plus **events** (hit_frame, footstep, cooking_complete …) that show OasisFx effects and sounds |
+| `sprite_frames` | `<id>.frames.json` | `<id>.tres` — a Godot **SpriteFrames** for `AnimatedSprite2D` | frame-by-frame animations cut from one sprite-sheet image |
+
+They are separate workflows (spec section 9): skeletal/keyframe animation of a scene you
+already have, and sprite-sheet playback. Like every OasisFx preset they are **data only**:
+unknown fields are errors, file references are `res://` paths that must exist, and nothing in
+a preset is executed. OasisFx never creates or changes the character scene itself — it reads
+it to check the node paths and writes a separate animation file.
+
+- JSON Schemas: [`schemas/animation.v1.schema.json`](../schemas/animation.v1.schema.json),
+  [`schemas/sprite_frames.v1.schema.json`](../schemas/sprite_frames.v1.schema.json) —
+  generated from the field tables, checked by a test
+- Authoritative rules: `src/core/animation_spec.gd`, `src/core/sprite_frames_spec.gd` (field
+  tables) and `src/core/preset_validator.gd` (cross-field rules)
+- Examples (in [`presets/examples/`](../presets/examples/)): `chef_idle` (loop),
+  `chef_ladle_attack` (events with a fire burst and its sound), `chef_cooking_success`
+  (all value kinds incl. color and visibility) for the example rig
+  `presets/examples/rigs/chef_rig.tscn`; `campfire_flame` for the CC0 sheet
+  `presets/examples/sprites/flame_sheet.png` (drawn by `tools/synth_example_sprites.gd`)
+- Writing presets with ChatGPT or Claude: [AI authoring guide](ai_authoring_guide.md), section 10
+
+---
+
+## `animation`
+
+### Units and conventions
+
+| Topic | Convention |
+|---|---|
+| Time | seconds from the start of the animation |
+| Node paths | relative to the **root of `target_scene`**, Godot style: `"Body/Skeleton/Hips"`; `"."` = the root. No `..`, `:`, `%`, `@` or leading `/` |
+| Angles | degrees; positive = clockwise on screen (Godot 2D, +y is down) |
+| Distance | pixels, relative to the node's parent |
+| Colors | `"#RRGGBB"` or `"#RRGGBBAA"` |
+
+### Effect fields
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `schema_version` | int | 1 … 1 | **required** | Preset format version. Must be 1. |
+| `asset_type` | enum: `animation` |  | **required** | Asset kind: "animation" for keyframe tracks and events of an existing scene. |
+| `id` | id |  | **required** | Stable identifier; also the output file name (<id>.tres) and the suggested animation name. Lowercase snake_case. |
+| `display_name` | string |  | **required** | Human-readable name. |
+| `description` | string |  | `""` | What the animation is for. |
+| `tags` | tags |  | `[]` | Up to 16 lowercase search tags. |
+| `author` | string |  | `""` | Who made the preset (person or AI tool). |
+| `notes` | string |  | `""` | Free-form authoring notes. |
+| `target_scene` | res_path (tscn) |  | **required** | The scene this animation is for (a .tscn in the game, e.g. the character). Track and event node paths are relative to its root, which must be the AnimationPlayer's root node. |
+| `duration_seconds` | number | 0.05 … 60.0 | **required** | Length of the animation in seconds. |
+| `loop` | bool |  | `false` | true = repeats until stopped (idle, walk); false = plays once. |
+| `tracks` | list of track | 0 … 32 | `[]` | Animated properties, up to 32; each animates one property of one node. |
+| `events` | list of event | 0 … 32 | `[]` | Named moments (hit_frame, footstep …), up to 32; each can show OasisFx effects/sounds and is sent to game code as a signal. |
+
+### Track fields (`tracks[i]`)
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `node` | node_path |  | **required** | Path of the animated node from the scene root, e.g. "Body/Skeleton/Hips/Chest/ArmR"; "." = the root. |
+| `property` | enum: `position`, `rotation_degrees`, `scale`, `opacity`, `modulate`, `visible`, `frame`, `z_index` |  | **required** | Animated property: position, rotation_degrees, scale, opacity, modulate, visible, frame or z_index (see the property table). |
+| `interpolation` | enum: `linear`, `cubic`, `nearest` |  | `"linear"` | Between keys: linear, cubic (smooth curve through the keys) or nearest (jump). visible, frame and z_index always jump. |
+| `keys` | list of key | 1 … 128 | **required** | Keyframes in increasing time order, 1 to 128. |
+
+### Key fields (`tracks[i].keys[j]`)
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `time` | number | 0.0 … 60.0 | **required** | Time of the key in seconds from the start (0 … duration_seconds). |
+| `value` | key_value |  | **required** | Value at that time; its type depends on the property (number, [x, y], "#RRGGBBAA", true/false or a whole number). |
+| `ease` | enum: `linear`, `in`, `out`, `in_out` |  | `"linear"` | How the value moves from this key to the next: linear, in (starts slow), out (ends slow) or in_out. |
+
+### Event fields (`events[i]`)
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `time` | number | 0.0 … 60.0 | **required** | When the event happens, in seconds (0 … duration_seconds). |
+| `name` | id |  | **required** | Event name sent to game code, e.g. hit_frame, footstep, cooking_complete. Lowercase snake_case. |
+| `effects` | res_path_list (tscn) | ≤ 4 items | `[]` | Up to 4 scenes generated by OasisFx (effects or sounds) shown at this moment; [] = only the event. |
+| `at` | node_path |  | `"."` | Node whose position the effects appear at, e.g. "Body/Skeleton/Hips/Chest/ArmR/WeaponPivot/Tip"; "." = the root. |
+
+### Animatable properties
+
+A track animates exactly one of these properties; nothing else can be named, so a preset
+cannot reach scripts, signals or arbitrary node properties.
+
+| Property | Value | Node | Godot track | Range | Interpolated | Meaning |
+|---|---|---|---|---|---|---|
+| `position` | vec2 | Node2D | `position` | -100000.0 … 100000.0 | yes | Position relative to the parent in pixels [x, y]; +y is down. |
+| `rotation_degrees` | number | Node2D | `rotation` | -36000.0 … 36000.0 | yes | Rotation in degrees, positive = clockwise on screen. Values are interpolated as written (0 → 360 is a full turn). |
+| `scale` | vec2 | Node2D | `scale` | -100.0 … 100.0 | yes | Scale [x, y]; 1 = original size, negative mirrors. |
+| `opacity` | number | CanvasItem | `modulate:a` | 0.0 … 1.0 | yes | Opacity 0 (invisible) … 1 (opaque); also fades the node's children. |
+| `modulate` | color | CanvasItem | `modulate` |  | yes | Tint color "#RRGGBB" or "#RRGGBBAA" (white = unchanged); also tints children. |
+| `visible` | bool | CanvasItem | `visible` |  | no (jumps) | Shown (true) or hidden (false); switches at each key. |
+| `frame` | int | Sprite2D or AnimatedSprite2D | `frame` | 0.0 … 9999.0 | no (jumps) | Frame index of a Sprite2D sprite sheet (hframes × vframes) or an AnimatedSprite2D animation. |
+| `z_index` | int | CanvasItem | `z_index` | -4096.0 … 4096.0 | no (jumps) | Draw order; switches at each key. |
+
+`ease` maps to the Godot key transition: `linear` 1, `in` 2, `out` 0.5, `in_out` −2.
+
+### Cross-field rules (enforced by the validator)
+
+The validator reads `target_scene` as text (see *How the scene is read* below) and checks the
+preset against it. Errors:
+
+1. `target_scene` must be an existing text scene (`.tscn`); instanced sub-scenes are
+   followed, up to 6 levels.
+2. Every `node` and event `at` must exist in that scene. The message suggests the full
+   path when only the node name was given (`did you mean "Body/Skeleton/Hips/Chest/ArmR"?`).
+3. The node must be of the class the property needs (table above): `rotation_degrees` on a
+   plain `Node` or `frame` on a `Polygon2D` is an error. Bone2D, Sprite2D, Polygon2D and
+   Marker2D are Node2D.
+4. One track per node and property; `opacity` and `modulate` cannot both be animated on the
+   same node (both write its modulate color).
+5. Keys are in strictly increasing time order, and every key and event time is
+   ≤ `duration_seconds`.
+6. Each key value has the property's type and range; `frame` of a Sprite2D must be below
+   its `hframes × vframes`.
+7. Event `effects` must be scenes **generated by OasisFx** (effects or sounds); `at` must be
+   a Node2D when there are effects.
+8. An animation needs at least one track or event.
+9. In a batch, ids must be unique across all preset types.
+
+Warnings:
+
+- `interpolation` on `visible`, `frame` or `z_index` (they always jump);
+- events, but the scene has no `OasisAnimationEvents` node with the runtime script (the
+  events would do nothing).
+
+### How the scene is read
+
+`src/core/scene_outline.gd` reads the `.tscn` **text**: node names, classes, parents and
+instanced scenes, and a few plain property values (for the `frame` check and the desktop
+preview). It never loads, instantiates or runs the scene, its scripts or resources, and it
+only decodes values made of numbers, strings, vectors, colors, transforms, packed arrays and
+node paths. Binary `.scn` scenes are not supported; save the character as `.tscn`.
+
+### What is generated
+
+| Preset | Godot 4 |
+|---|---|
+| animation | `Animation` resource, `resource_name` = id, `length` = `duration_seconds`, `loop_mode` linear or none |
+| track | value track `"<node>:<godot property>"` (table above); `rotation_degrees` stored as `rotation` in radians, `opacity` as `modulate:a`; update mode discrete for visible/frame/z_index |
+| `interpolation` | `INTERPOLATION_LINEAR` / `_CUBIC` / `_NEAREST` (angles are not wrapped, so 0 → 360 is a full turn) |
+| key | key at `time` with the converted value and `ease` as transition |
+| events | one method track on the node `OasisAnimationEvents`, calling `oasis_event(name, effect scenes, at)` — the method name is fixed |
+| event `effects` | external references to the effect scenes (by path, not loaded while generating) |
+
+The file is deterministic (fixed resource ids such as `effect_fire_burst`, uid derived from
+the output path), like the other generated files.
+
+### Using it in the game
+
+1. Generate it: `… oasis_fx_cli.gd -- generate chef_ladle_attack.anim.json --out res://anim`
+   (or **Export to game…** in the desktop app).
+2. In the character scene, add it to the `AnimationPlayer`: Animation panel → *Manage
+   Animations* → *Load* `res://anim/chef_ladle_attack.tres` (or from code,
+   `library.add_animation("ladle_attack", preload("res://anim/chef_ladle_attack.tres"))`).
+   The AnimationPlayer's *Root Node* must be the scene root (the default when the player is a
+   direct child of the root).
+3. For events, add a child **Node** named `OasisAnimationEvents` to the scene root with the
+   script `res://addons/oasis_fx/src/runtime/oasis_animation_events.gd` (the example rig has
+   one). It:
+   - emits `event_triggered(event_name, at_node)` for every event — connect it for gameplay
+     reactions that belong to your code (camera shake, footstep variation …);
+   - shows the event's OasisFx effects/sounds at the `at` node's global position, added to
+     `effects_parent` (default: the parent of the animated root, so a spark stays where it
+     appeared). Set `show_effects = false` on a server;
+   - only shows scenes whose root runs an OasisFx runtime script; anything else is refused
+     with a warning.
+
+Events are cosmetic and never decide damage or items. Combat code keeps its own
+authoritative timing; an event only tells it *when the picture shows* the hit.
+
+```gdscript
+func _ready() -> void:
+	$OasisAnimationEvents.event_triggered.connect(_on_animation_event)
+
+func _on_animation_event(event_name: StringName, _at: Node) -> void:
+	if event_name == &"footstep":
+		pass # e.g. pick a footstep sound for the ground type
+```
+
+### Existing rigs (White Sahara)
+
+OasisFx does not create or rewrite rigs. Point `target_scene` at the existing character scene
+(for example the `Skeleton2D` + `Polygon2D` mannequin) and animate its nodes; bones are
+`Bone2D` nodes, so `rotation_degrees`, `position` and `scale` work on them. Costume
+variants that keep the same node names can share animations.
+
+---
+
+## `sprite_frames`
+
+### Fields
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `schema_version` | int | 1 … 1 | **required** | Preset format version. Must be 1. |
+| `asset_type` | enum: `sprite_frames` |  | **required** | Asset kind: "sprite_frames" for frame-by-frame animations from a sprite sheet. |
+| `id` | id |  | **required** | Stable identifier; also the output file name (<id>.tres). Lowercase snake_case. |
+| `display_name` | string |  | **required** | Human-readable name. |
+| `description` | string |  | `""` | What the sprite animations are for. |
+| `tags` | tags |  | `[]` | Up to 16 lowercase search tags. |
+| `author` | string |  | `""` | Who made the preset (person or AI tool). |
+| `notes` | string |  | `""` | Free-form authoring notes. |
+| `texture` | res_path (png/webp/jpg/jpeg) |  | **required** | The sprite sheet image in the project, res://… (png, webp, jpg). |
+| `source_author` | string |  | `""` | Who drew or generated the sprite sheet. |
+| `source_license` | string |  | `""` | License of the sprite sheet, e.g. "CC0", "own work". |
+| `columns` | int | 1 … 64 | **required** | Number of frames per row of the sheet. |
+| `rows` | int | 1 … 64 | **required** | Number of rows of the sheet. |
+| `frame_count` | int | 0 … 4096 | `0` | Frames actually used in the sheet when the last row is not full; 0 = columns × rows. |
+| `margin_px` | vec2 | 0.0 … 4096.0 | `[0, 0]` | Empty border around the whole sheet in pixels [x, y]. |
+| `separation_px` | vec2 | 0.0 … 4096.0 | `[0, 0]` | Empty space between neighboring frames in pixels [x, y]. |
+| `animations` | list of sprite_animation | 1 … 32 | **required** | Named animations, 1 to 32 (e.g. idle, walk, burn). |
+
+### Animation fields (`animations[i]`)
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `name` | id |  | **required** | Animation name used with AnimatedSprite2D.play("name"). Lowercase snake_case. |
+| `frames` | frame_list | 0 … 4095; ≤ 256 items | **required** | Sheet cells to show, in order: 0 is the top-left frame, counting along each row. A cell may repeat. |
+| `fps` | number | 0.1 … 120.0 | `12.0` | Frames per second. |
+| `loop` | bool |  | `true` | true = repeats; false = stops on the last frame (AnimatedSprite2D emits animation_finished). |
+
+### Rules
+
+Errors: `frame_count` larger than `columns × rows`; a frame number that is not in the sheet;
+duplicate animation names; an image that is not a readable PNG/JPEG/WebP (its size is read
+from the file header, the image is not imported or decoded); a grid that does not fit the
+image. Warnings: the image does not divide evenly into the grid (the unused pixels at the
+right/bottom are reported); empty `source_license`.
+
+### Frame layout
+
+Frame `n` is in row `n / columns` (integer division) and column `n % columns`. Its rectangle
+is `x = margin_x + column × (w + separation_x)`, `y = margin_y + row × (h + separation_y)`, where
+the frame size is `w = (image width − 2 × margin_x − (columns − 1) × separation_x) / columns`
+(rounded down; the same for rows).
+
+### What is generated
+
+A `SpriteFrames` resource with one `AtlasTexture` per used cell (shared by all animations
+that show it, ids `frame_<n>`) pointing at the sheet by path, and one Godot animation per
+preset animation (speed = `fps`, loop). In the game:
+
+```gdscript
+$Flame.sprite_frames = preload("res://anim/campfire_flame.tres")
+$Flame.play(&"burn")
+```
+
+---
+
+## Not in this version
+
+- Bezier curve tracks, per-key tangents, `AnimationTree` / blend trees, 3D.
+- Creating or editing rigs, bones, IK or Polygon2D weights (Phase 4).
+- Animating script properties, calling arbitrary methods, audio tracks (use events with
+  OasisFx sounds instead).
+- Packing loose frame images into a sheet; sheets with irregular frame sizes.
+
+## Versioning
+
+As for the other types: changes that would alter the meaning of existing presets bump
+`schema_version`, with an explicit migration.

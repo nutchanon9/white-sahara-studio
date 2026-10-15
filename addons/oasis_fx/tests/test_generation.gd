@@ -191,6 +191,10 @@ func test_all_examples_generate_and_load() -> void:
 		if not check(result.ok, "%s: %s" % [result.id, " | ".join(result.report.format_lines())]):
 			continue
 		var preset := Validator.validate_file(result.report.source, Report.new())
+		if preset.asset_type in ["animation", "sprite_frames"]:
+			var resource := load(result.output_path)
+			check(resource is Animation if preset.asset_type == "animation" else resource is SpriteFrames, "%s loads as a resource" % result.id)
+			continue
 		var root := (load(result.output_path) as PackedScene).instantiate()
 		var items: Array = preset.layers if preset.asset_type == "sfx" else preset.emitters
 		check_eq(root.get_child_count(), items.size(), result.id + " node count")

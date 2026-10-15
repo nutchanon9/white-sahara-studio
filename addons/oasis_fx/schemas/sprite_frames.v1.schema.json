@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/sprite_frames.v1.schema.json",
+  "title": "OasisFx sprite frames preset v1",
+  "description": "Data-only description of frame-by-frame animations cut from a sprite sheet, which OasisFx turns into a Godot 4 SpriteFrames resource. Generated from addons/oasis_fx/src/core/sprite_frames_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/animation_format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset_type",
+    "id",
+    "display_name",
+    "texture",
+    "columns",
+    "rows",
+    "animations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Preset format version. Must be 1."
+    },
+    "asset_type": {
+      "enum": [
+        "sprite_frames"
+      ],
+      "description": "Asset kind: \"sprite_frames\" for frame-by-frame animations from a sprite sheet."
+    },
+    "id": {
+      "$ref": "#/$defs/id",
+      "description": "Stable identifier; also the output file name (<id>.tres). Lowercase snake_case."
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "description": "Human-readable name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "What the sprite animations are for.",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+      },
+      "description": "Up to 16 lowercase search tags.",
+      "default": []
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who made the preset (person or AI tool).",
+      "default": ""
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Free-form authoring notes.",
+      "default": ""
+    },
+    "texture": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^res://.*\\.(png|webp|jpg|jpeg)$",
+      "description": "The sprite sheet image in the project, res://… (png, webp, jpg)."
+    },
+    "source_author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who drew or generated the sprite sheet.",
+      "default": ""
+    },
+    "source_license": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "License of the sprite sheet, e.g. \"CC0\", \"own work\".",
+      "default": ""
+    },
+    "columns": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "Number of frames per row of the sheet."
+    },
+    "rows": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "Number of rows of the sheet."
+    },
+    "frame_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4096,
+      "description": "Frames actually used in the sheet when the last row is not full; 0 = columns × rows.",
+      "default": 0
+    },
+    "margin_px": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number",
+        "minimum": 0.0,
+        "maximum": 4096.0
+      },
+      "description": "Empty border around the whole sheet in pixels [x, y].",
+      "default": [
+        0.0,
+        0.0
+      ]
+    },
+    "separation_px": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number",
+        "minimum": 0.0,
+        "maximum": 4096.0
+      },
+      "description": "Empty space between neighboring frames in pixels [x, y].",
+      "default": [
+        0.0,
+        0.0
+      ]
+    },
+    "animations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/sprite_animation"
+      },
+      "description": "Named animations, 1 to 32 (e.g. idle, walk, burn)."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "sprite_animation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "frames"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/id",
+          "description": "Animation name used with AnimatedSprite2D.play(\"name\"). Lowercase snake_case."
+        },
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "description": "Sheet cells to show, in order: 0 is the top-left frame, counting along each row. A cell may repeat."
+        },
+        "fps": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 120.0,
+          "description": "Frames per second.",
+          "default": 12.0
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "true = repeats; false = stops on the last frame (AnimatedSprite2D emits animation_finished).",
+          "default": true
+        }
+      }
+    }
+  }
+}

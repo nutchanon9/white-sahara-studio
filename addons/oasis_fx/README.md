@@ -1,12 +1,19 @@
 # OasisFx (Godot 4 addon)
 
-OasisFx turns small, versioned JSON presets into native Godot 4 effect and sound scenes.
+OasisFx turns small, versioned JSON presets into native Godot 4 effect and sound scenes,
+animations and sprite frames.
 Humans, ChatGPT and Claude can all write the same presets; a headless CLI validates them
 and generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D`,
 `ParticleProcessMaterial`, `AudioStreamPlayer`, …) plus one small runtime script that
 handles playback.
 
-**Status: 0.4.0 — Phase 2.** Sound presets (`*.sfx.json`): layers of existing audio files
+**Status: 0.5.0 — Phase 3.** Animation presets (`*.anim.json`): keyframe tracks for nodes
+of an existing scene (bones, sprites, polygons …) and events that show OasisFx effects and
+sounds, generated as a Godot `Animation` (`.tres`); sprite-frame presets (`*.frames.json`)
+generated as `SpriteFrames`. Three example animations for an example rig and a CC0 flame
+sheet; see [docs/animation_format.md](docs/animation_format.md).
+
+Phase 2: sound presets (`*.sfx.json`): layers of existing audio files
 with start offsets, volume, pitch, trim, fades, loops, random variants/pitch/volume and
 license metadata, played by `OasisSfxEffect`; four example sounds; see
 [docs/sfx_format.md](docs/sfx_format.md).
@@ -49,7 +56,16 @@ func _on_hit_landed(at: Vector2) -> void:
 	OasisFxEffect.spawn(FIRE_BURST, $Effects, at)
 ```
 
-Sounds work the same way:
+Animations go into the character's AnimationPlayer; their events need one child node
+named `OasisAnimationEvents` with `src/runtime/oasis_animation_events.gd`:
+
+```gdscript
+$AnimationPlayer.get_animation_library("").add_animation("ladle_attack", preload("res://anim/chef_ladle_attack.tres"))
+$AnimationPlayer.play("ladle_attack")  # the hit_frame event shows its fire burst at the ladle tip
+$OasisAnimationEvents.event_triggered.connect(func(name, _at): print(name))
+```
+
+Sounds work the same way as effects:
 
 ```gdscript
 const SWORD_SLASH_SFX := preload("res://sfx/sword_slash_sfx.tscn")
@@ -88,8 +104,10 @@ addons/oasis_fx/
   src/core/                      shared loader, validator, builder, generator, manifest
   src/runtime/oasis_fx_effect.gd playback script attached to generated effect scenes
   src/runtime/oasis_sfx_effect.gd playback script attached to generated sound scenes
-  schemas/                       JSON Schemas vfx.v1 / sfx.v1 (generated from the field tables)
-  presets/examples/              example presets; audio/ holds the CC0 example sounds
+  src/runtime/oasis_animation_events.gd  receives animation events (shows their effects)
+  schemas/                       JSON Schemas vfx/sfx/animation/sprite_frames v1 (generated from the field tables)
+  presets/examples/              example presets; audio/ and sprites/ hold CC0 example files,
+                                 rigs/chef_rig.tscn is the example character for the animations
   docs/                          preset format, CLI reference, AI authoring guide
   tests/                         headless test suite (run_tests.gd)
 ```
@@ -98,6 +116,7 @@ addons/oasis_fx/
 
 - [Preset format](docs/preset_format.md) — every field, unit, range, rule and the runtime behavior
 - [Sound preset format](docs/sfx_format.md) — `sfx` fields, rules, runtime, export and licensing
+- [Animation and sprite frames formats](docs/animation_format.md) — tracks, keys, events, sprite sheets
 - [CLI](docs/cli.md) — commands, options, exit codes, manifest, CI setup, tests
 - [AI authoring guide](docs/ai_authoring_guide.md) — prompt, rules, examples and edit recipes for ChatGPT/Claude
 - [Desktop app](docs/desktop.md) — using, building and verifying the standalone app

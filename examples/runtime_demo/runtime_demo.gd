@@ -30,6 +30,12 @@ const SOUNDS := {
 	"cooking_success": preload("res://examples/runtime_demo/fx/cooking_success_sfx.tscn"),
 }
 const SIZZLE := preload("res://examples/runtime_demo/fx/cooking_sizzle_loop.tscn")
+## Animations generated from the chef_*.anim.json presets for the example rig.
+const CHEF_ANIMATIONS := {
+	&"idle": preload("res://examples/runtime_demo/fx/chef_idle.tres"),
+	&"ladle_attack": preload("res://examples/runtime_demo/fx/chef_ladle_attack.tres"),
+	&"cooking_success": preload("res://examples/runtime_demo/fx/chef_cooking_success.tres"),
+}
 
 ## The looping sizzle while the stove is cooking (null when idle).
 var sizzle: Node2D
@@ -39,6 +45,28 @@ var sizzle: Node2D
 @onready var _hero_animation: AnimationPlayer = $Hero/AnimationPlayer
 @onready var _pot_top: Marker2D = $Stove/PotTop
 @onready var _stove_animation: AnimationPlayer = $Stove/AnimationPlayer
+@onready var _chef_animation: AnimationPlayer = $Chef/AnimationPlayer
+
+
+func _ready() -> void:
+	# A game would keep these in the character scene's AnimationPlayer library
+	# (Animation panel > Manage Animations > Load); added from code here so
+	# the generated files in ./fx/ stay the only copy.
+	var library := AnimationLibrary.new()
+	for name in CHEF_ANIMATIONS:
+		library.add_animation(name, CHEF_ANIMATIONS[name])
+	_chef_animation.add_animation_library(&"oasis", library)
+	# Effects from animation events go to the effects layer, like spawn_effect().
+	var events: Node = $Chef/OasisAnimationEvents
+	events.effects_parent = events.get_path_to(_effects_layer)
+	_chef_animation.animation_finished.connect(func(_name): _chef_animation.play(&"oasis/idle"))
+	_chef_animation.play(&"oasis/idle")
+
+
+## Plays one of the chef animations ("ladle_attack", "cooking_success");
+## their events show the effects and sounds at the ladle tip / above the head.
+func play_chef(animation: StringName) -> void:
+	_chef_animation.play(StringName("oasis/" + animation))
 
 
 ## Spawns one of the demo effects (and its sound, if it has one) at a global
@@ -87,3 +115,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				play_attack()
 			KEY_C:
 				start_cooking()
+			KEY_A:
+				play_chef(&"ladle_attack")
+			KEY_S:
+				play_chef(&"cooking_success")

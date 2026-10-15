@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "asset_type": "animation",
+  "id": "chef_cooking_success",
+  "display_name": "Chef Cooking Success",
+  "description": "Little jump with both arms up when a dish is completed; sparkle and chime at the top of the jump.",
+  "tags": ["chef", "cooking", "success", "celebration"],
+  "author": "OasisFx examples",
+  "target_scene": "res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn",
+  "duration_seconds": 1,
+  "tracks": [
+    {
+      "node": "Body",
+      "property": "position",
+      "keys": [
+        {"time": 0, "value": [0, 0], "ease": "out"},
+        {"time": 0.1, "value": [0, 4], "ease": "out"},
+        {"time": 0.35, "value": [0, -22], "ease": "in"},
+        {"time": 0.6, "value": [0, 0], "ease": "out"},
+        {"time": 0.7, "value": [0, 3]},
+        {"time": 0.8, "value": [0, 0]}
+      ]
+    },
+    {
+      "node": "Shadow",
+      "property": "scale",
+      "keys": [
+        {"time": 0, "value": [1, 1]},
+        {"time": 0.35, "value": [0.7, 0.7]},
+        {"time": 0.6, "value": [1, 1]}
+      ]
+    },
+    {
+      "node": "Shadow",
+      "property": "opacity",
+      "keys": [
+        {"time": 0, "value": 1},
+        {"time": 0.35, "value": 0.5},
+        {"time": 0.6, "value": 1}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips/Chest/ArmL",
+      "property": "rotation_degrees",
+      "keys": [
+        {"time": 0, "value": 0},
+        {"time": 0.25, "value": 155, "ease": "out"},
+        {"time": 0.75, "value": 150},
+        {"time": 1, "value": 0}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips/Chest/ArmR",
+      "property": "rotation_degrees",
+      "keys": [
+        {"time": 0, "value": 0},
+        {"time": 0.25, "value": -155, "ease": "out"},
+        {"time": 0.75, "value": -150},
+        {"time": 1, "value": 0}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips/Chest/Head/Face",
+      "property": "modulate",
+      "keys": [
+        {"time": 0, "value": "#FFFFFF"},
+        {"time": 0.35, "value": "#FFE2C2"},
+        {"time": 0.8, "value": "#FFFFFF"}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips/Chest/ArmR/WeaponPivot",
+      "property": "visible",
+      "keys": [
+        {"time": 0, "value": true},
+        {"time": 0.15, "value": false},
+        {"time": 0.9, "value": true}
+      ]
+    }
+  ],
+  "events": [
+    {
+      "time": 0.35,
+      "name": "cooking_complete",
+      "effects": ["res://examples/runtime_demo/fx/cooking_success.tscn", "res://examples/runtime_demo/fx/cooking_success_sfx.tscn"],
+      "at": "Body/Skeleton/Hips/Chest/Head"
+    }
+  ]
+}

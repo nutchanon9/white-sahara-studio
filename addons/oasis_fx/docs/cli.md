@@ -17,6 +17,7 @@ OASIS="godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli
 
 $OASIS validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
 $OASIS validate addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json
+$OASIS validate addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json
 $OASIS validate-all addons/oasis_fx/presets/examples
 $OASIS generate addons/oasis_fx/presets/examples/fire_burst.vfx.json --out res://generated/oasis_fx
 $OASIS generate-all addons/oasis_fx/presets/examples --out res://generated/oasis_fx --dry-run
@@ -27,8 +28,14 @@ $OASIS help
 
 Everything after `--` belongs to OasisFx; everything before it belongs to Godot.
 
-Every command handles both asset types: particle effects (`*.vfx.json`,
-[preset_format.md](preset_format.md)) and sounds (`*.sfx.json`, [sfx_format.md](sfx_format.md)).
+Every command handles all asset types; the type comes from the preset's `asset_type`:
+
+| Type | Preset file | Generates | Format |
+|---|---|---|---|
+| `vfx` particle effect | `*.vfx.json` | `<id>.tscn` | [preset_format.md](preset_format.md) |
+| `sfx` layered sound | `*.sfx.json` | `<id>.tscn` | [sfx_format.md](sfx_format.md) |
+| `animation` keyframes + events for an existing scene | `*.anim.json` | `<id>.tres` (Animation) | [animation_format.md](animation_format.md) |
+| `sprite_frames` sprite-sheet animations | `*.frames.json` | `<id>.tres` (SpriteFrames) | [animation_format.md](animation_format.md) |
 The type comes from the preset's `asset_type`.
 
 ## Commands
@@ -36,11 +43,11 @@ The type comes from the preset's `asset_type`.
 | Command | What it does |
 |---|---|
 | `validate <preset>` | Parses and validates one preset. Prints errors with field paths. |
-| `validate-all <dir>` | Validates every `*.vfx.json` and `*.sfx.json` under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across all of them. |
-| `generate <preset>` | Validates, then writes `<out>/<id>.tscn`, loads it back to verify it, and updates `<out>/oasis_fx_manifest.json`. |
+| `validate-all <dir>` | Validates every preset file (`*.vfx.json`, `*.sfx.json`, `*.anim.json`, `*.frames.json`) under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across all of them. |
+| `generate <preset>` | Validates, then writes `<out>/<id>.tscn` (or `<id>.tres`), loads it back to verify it, and updates `<out>/oasis_fx_manifest.json`. |
 | `generate-all <dir>` | Generates every preset under `<dir>`. **All or nothing:** if any preset is invalid, two presets share an id, or (without `--force`) any output file exists, nothing is written and the presets that would have been fine are reported as `SKIP`. |
 | `format <preset\|dir> [--check]` | Rewrites presets in canonical form (field order, 2-space indent, whole numbers without `.0`) — the same text the desktop app saves. `--check` only reports files that are not canonical (exit 1). |
-| `schema [vfx\|sfx] [--write]` | Prints the JSON Schema of an asset type (default `vfx`) built from the validator's field table; `--write` rewrites both `schemas/vfx.v1.schema.json` and `schemas/sfx.v1.schema.json` (a test fails while either is out of date). |
+| `schema [TYPE] [--write]` | Prints the JSON Schema of an asset type (`vfx` (default), `sfx`, `animation`, `sprite_frames`) built from the validator's field tables; `--write` rewrites every `schemas/<type>.v1.schema.json` (a test fails while any is out of date). |
 | `version` | Prints the OasisFx version. |
 | `help` | Prints usage. |
 
@@ -49,7 +56,7 @@ The type comes from the preset's `asset_type`.
 | Option | Applies to | Meaning |
 |---|---|---|
 | `--out <dir>` / `--out=<dir>` | generate, generate-all | Output folder, `res://` or `user://`. Default `res://generated/oasis_fx`. |
-| `--force` | generate, generate-all | Allow overwriting existing `<id>.tscn` files. Without it an existing file is an error. |
+| `--force` | generate, generate-all | Allow overwriting existing `<id>.tscn` / `<id>.tres` files. Without it an existing file is an error. |
 | `--dry-run` | generate, generate-all | Validate and report the target paths; write nothing (no folders either). |
 | `--json` | all | Print one JSON object on its own line instead of text. |
 | `--write` | schema | Write the schema file instead of printing it. |
@@ -79,7 +86,11 @@ Text mode (real output):
 
 ```
 $ $OASIS validate-all addons/oasis_fx/presets/examples
+OK    res://addons/oasis_fx/presets/examples/campfire_flame.frames.json  campfire_flame (sprite_frames, 2 animation(s), 14 frame(s))
 OK    res://addons/oasis_fx/presets/examples/campfire_loop.vfx.json  campfire_loop (3 emitter(s), 44 particles)
+OK    res://addons/oasis_fx/presets/examples/chef_cooking_success.anim.json  chef_cooking_success (animation, 7 track(s), 1 event(s), 1 s)
+OK    res://addons/oasis_fx/presets/examples/chef_idle.anim.json  chef_idle (animation, 5 track(s), 0 event(s), 1.6 s, loop)
+OK    res://addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json  chef_ladle_attack (animation, 4 track(s), 2 event(s), 0.6 s)
 OK    res://addons/oasis_fx/presets/examples/cooking_sizzle_loop.sfx.json  cooking_sizzle_loop (sfx, 2 layer(s), 2 audio file(s))
 OK    res://addons/oasis_fx/presets/examples/cooking_success.vfx.json  cooking_success (4 emitter(s), 47 particles)
 OK    res://addons/oasis_fx/presets/examples/cooking_success_sfx.sfx.json  cooking_success_sfx (sfx, 2 layer(s), 2 audio file(s))
@@ -88,7 +99,7 @@ OK    res://addons/oasis_fx/presets/examples/fire_burst_sfx.sfx.json  fire_burst
 OK    res://addons/oasis_fx/presets/examples/ice_nova.vfx.json  ice_nova (4 emitter(s), 49 particles)
 OK    res://addons/oasis_fx/presets/examples/sword_slash.vfx.json  sword_slash (3 emitter(s), 96 particles)
 OK    res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json  sword_slash_sfx (sfx, 2 layer(s), 4 audio file(s))
-9 valid, 0 invalid
+13 valid, 0 invalid
 
 $ $OASIS validate presets/ice_nova.vfx.json
 FAIL  res://presets/ice_nova.vfx.json
@@ -115,14 +126,21 @@ take the line that starts with `{` (for example `| grep '^{'`).
 - `<id>.tscn` of an `sfx` preset: a `Node2D` with `res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd`
   and one `AudioStreamPlayer` (or `AudioStreamPlayer2D`) per layer, referencing the audio files
   by path.
+- `<id>.tres` of an `animation` preset: an `Animation` resource for the target scene's
+  `AnimationPlayer`; events call `OasisAnimationEvents.oasis_event()` (runtime
+  `res://addons/oasis_fx/src/runtime/oasis_animation_events.gd`, needed only when the animation has events).
+- `<id>.tres` of a `sprite_frames` preset: a `SpriteFrames` resource with one `AtlasTexture` per
+  used sheet cell, referencing the sheet by path.
 - **The game project needs the runtime script** at the same path (only the file the scene
-  uses), and the audio/image files the preset references.
-- Deterministic: the same preset gives a byte-identical `.tscn` (fixed sub-resource and
-  ext_resource ids, stable node ids, a scene UID derived from the output path). Checked by
+  uses), and the audio/image files and effect scenes the preset references. The manifest
+  lists them per entry (for animations including what their effect scenes need).
+- Deterministic: the same preset gives a byte-identical `.tscn` / `.tres` (fixed sub-resource
+  and ext_resource ids, stable node ids, a UID derived from the output path). Checked by
   tests, including committed golden files in `examples/runtime_demo/fx/`.
-- Only built-in resources; procedural textures are embedded, file textures and audio are
-  referenced by path. Generating does not load them, so the output is the same whether or
-  not the project has imported them.
+- Only built-in resources; procedural textures are embedded, file textures, audio, sprite
+  sheets and event effect scenes are referenced by path. Generating does not load them, so the
+  output is the same whether or not the project has imported them. Animation presets read
+  their target scene as text to check node paths; it is never loaded or run.
 - Scenes written under `user://` have no UID line: Godot only assigns UIDs to project files.
 - `oasis_fx_manifest.json` (one per output folder, sorted, no timestamps) records for each id
   the preset path, a hash of the normalized preset, the scene path and hash, and the files

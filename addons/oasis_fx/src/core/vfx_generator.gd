@@ -1,16 +1,17 @@
 @tool
 extends RefCounted
-## Turns presets (vfx and sfx) into saved .tscn files. Shared by the CLI and
-## the desktop app, so there is exactly one generation code path.
+## Turns presets into saved files: vfx and sfx into scenes (.tscn), animation
+## and sprite_frames into resources (.tres). Shared by the CLI and the desktop
+## app, so there is exactly one generation code path.
 ##
 ## Safety rules:
 ## - output only under a sanitized res:// or user:// directory
-## - the file name is always <preset id>.tscn
+## - the file name is always <preset id>.tscn / <preset id>.tres
 ## - an existing file is never overwritten unless options.force is true
 ## - batch generation validates everything first and writes nothing if any
 ##   preset is invalid, two presets share an id, or a file would be overwritten
 ##   without force
-## - output is deterministic: stable sub-resource ids, node ids and scene uid
+## - output is deterministic: stable sub-resource ids, node ids and uid
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
@@ -19,6 +20,10 @@ const Builder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
 const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 const Manifest := preload("res://addons/oasis_fx/src/core/asset_manifest.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
+const AnimationBuilder := preload("res://addons/oasis_fx/src/core/animation_builder.gd")
+const SpriteFramesBuilder := preload("res://addons/oasis_fx/src/core/sprite_frames_builder.gd")
+const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
 
 
 ## Validates and generates one preset file.
@@ -45,7 +50,7 @@ static func generate_preset(preset: Dictionary, out_dir: String, options := {}, 
 	if not dir.ok:
 		report.error("--out", dir.error)
 		return _result(report, "failed", preset.get("id", ""), "")
-	var output_path := scene_path_for(dir.path, preset.id)
+	var output_path := output_path_for(dir.path, preset)
 	var manifest := Manifest.new()
 	manifest.load_dir(dir.path, report)
 	var state: String = manifest.scene_state(preset.id, output_path)
@@ -62,23 +67,32 @@ static func generate_preset(preset: Dictionary, out_dir: String, options := {}, 
 	if dry_run:
 		return _result(report, "would_overwrite" if exists else "would_create", preset.id, output_path)
 
-	var root := build(preset, report)
-	if root == null:
-		return _result(report, "failed", preset.id, output_path)
-	_stabilize_external_ids(root, output_path)
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	root.free()
-	if err != OK:
-		report.error("", "could not pack the scene: %s" % error_string(err))
-		return _result(report, "failed", preset.id, output_path)
-	_stabilize_node_ids(packed, preset.id)
+	var output: Resource
+	var err := OK
+	if is_scene_type(preset):
+		var root := build(preset, report)
+		if root == null:
+			return _result(report, "failed", preset.id, output_path)
+		_stabilize_external_ids(root, output_path)
+		var packed := PackedScene.new()
+		err = packed.pack(root)
+		root.free()
+		if err != OK:
+			report.error("", "could not pack the scene: %s" % error_string(err))
+			return _result(report, "failed", preset.id, output_path)
+		_stabilize_node_ids(packed, preset.id)
+		output = packed
+	else:
+		output = build_resource(preset, report)
+		if output == null:
+			return _result(report, "failed", preset.id, output_path)
+		_stabilize_resource_ids(output, output_path)
 
 	err = DirAccess.make_dir_recursive_absolute(dir.path)
 	if err != OK:
 		report.error("--out", "could not create %s: %s" % [dir.path, error_string(err)])
 		return _result(report, "failed", preset.id, output_path)
-	err = ResourceSaver.save(packed, output_path)
+	err = ResourceSaver.save(output, output_path)
 	if err != OK:
 		report.error("", "could not save %s: %s" % [output_path, error_string(err)])
 		return _result(report, "failed", preset.id, output_path)
@@ -107,7 +121,7 @@ static func validate_many(paths: PackedStringArray) -> Dictionary:
 		var preset := Validator.validate_file(path, report)
 		if report.is_ok():
 			if first_path_for_id.has(preset.id):
-				report.error("id", "duplicate id \"%s\" (also used by %s); each id becomes <id>.tscn, so ids must be unique" % [preset.id, first_path_for_id[preset.id]])
+				report.error("id", "duplicate id \"%s\" (also used by %s); each id names its output file (<id>.tscn or <id>.tres) and manifest entry, so ids must be unique" % [preset.id, first_path_for_id[preset.id]])
 			else:
 				first_path_for_id[preset.id] = path
 		ok = ok and report.is_ok()
@@ -149,14 +163,28 @@ static func generate_many(paths: PackedStringArray, out_dir: String, options := 
 	return {"ok": ok, "results": results}
 
 
-## Builds the node tree for any asset type (audio as path-only placeholders).
+## Builds the node tree of a scene asset type (vfx, sfx); audio and file
+## textures as path-only placeholders.
 static func build(preset: Dictionary, report: RefCounted) -> Node2D:
 	if preset.get("asset_type") == "sfx":
 		return SfxBuilder.build(preset, report)
 	return Builder.build(preset, report)
 
 
-## Every *.vfx.json and *.sfx.json under `dir` (recursively), sorted. Hidden folders are skipped.
+## Builds the resource of a resource asset type (animation, sprite_frames).
+static func build_resource(preset: Dictionary, report: RefCounted, roots := PackedStringArray()) -> Resource:
+	if preset.asset_type == "animation":
+		return AnimationBuilder.build(preset, report)
+	return SpriteFramesBuilder.build(preset, report, Callable(), roots if not roots.is_empty() else report.res_roots)
+
+
+## True for asset types generated as scenes (.tscn).
+static func is_scene_type(preset: Dictionary) -> bool:
+	return AssetTypes.output_extension(preset.asset_type) == OasisFx.SCENE_EXTENSION
+
+
+## Every preset file (*.vfx.json, *.sfx.json, … see asset_types.gd) under
+## `dir` (recursively), sorted. Hidden folders are skipped.
 static func find_presets(dir: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	_collect_presets(dir.trim_suffix("/"), out)
@@ -166,7 +194,7 @@ static func find_presets(dir: String) -> PackedStringArray:
 
 static func _collect_presets(dir: String, out: PackedStringArray) -> void:
 	for file in DirAccess.get_files_at(dir):
-		if file.ends_with(OasisFx.VFX_PRESET_SUFFIX) or file.ends_with(OasisFx.SFX_PRESET_SUFFIX):
+		if not AssetTypes.type_for_file(file).is_empty():
 			out.append(dir + "/" + file)
 	for sub in DirAccess.get_directories_at(dir):
 		if not sub.begins_with("."):
@@ -177,8 +205,29 @@ static func scene_path_for(dir: String, id: String) -> String:
 	return dir.trim_suffix("/") + "/" + id + OasisFx.SCENE_EXTENSION
 
 
-## Files a generated scene needs at runtime besides itself.
-static func dependencies(preset: Dictionary) -> PackedStringArray:
+## Output file of a preset in `dir`: <id>.tscn, or <id>.tres for resource types.
+static func output_path_for(dir: String, preset: Dictionary) -> String:
+	return dir.trim_suffix("/") + "/" + preset.id + AssetTypes.output_extension(preset.asset_type)
+
+
+## Files a generated scene or resource needs at runtime besides itself.
+## Animation events also need the files their effect scenes need (taken from
+## the OasisFx manifest next to those scenes; `roots` as in ValidationReport).
+static func dependencies(preset: Dictionary, roots := PackedStringArray()) -> PackedStringArray:
+	if preset.get("asset_type") == "animation":
+		var deps := PackedStringArray()
+		for event in preset.events:
+			if deps.is_empty():
+				deps.append(AnimSpec.EVENTS_RUNTIME_PATH)
+			for scene in event.effects:
+				if not deps.has(scene):
+					deps.append(scene)
+				for dep in Manifest.dependencies_of(scene, roots):
+					if not deps.has(dep):
+						deps.append(dep)
+		return deps
+	if preset.get("asset_type") == "sprite_frames":
+		return PackedStringArray([preset.texture])
 	if preset.get("asset_type") == "sfx":
 		var audio := PackedStringArray([OasisFx.SFX_RUNTIME_SCRIPT_PATH])
 		for layer in preset.layers:
@@ -193,9 +242,17 @@ static func dependencies(preset: Dictionary) -> PackedStringArray:
 	return deps
 
 
-## Runtime script attached to the root of a generated scene.
+## OasisFx runtime script the generated file needs ("" for none): attached to
+## the root of vfx/sfx scenes; the event receiver for animations with events.
 static func runtime_script_for(preset: Dictionary) -> String:
-	return OasisFx.SFX_RUNTIME_SCRIPT_PATH if preset.get("asset_type") == "sfx" else OasisFx.RUNTIME_SCRIPT_PATH
+	match preset.get("asset_type"):
+		"sfx":
+			return OasisFx.SFX_RUNTIME_SCRIPT_PATH
+		"animation":
+			return AnimSpec.EVENTS_RUNTIME_PATH if not preset.events.is_empty() else ""
+		"sprite_frames":
+			return ""
+	return OasisFx.RUNTIME_SCRIPT_PATH
 
 
 ## Deterministic ResourceUID for an output path, so regenerating a scene keeps
@@ -226,6 +283,36 @@ static func _stabilize_external_ids(root: Node, output_path: String) -> void:
 					variants[i].set_id_for_path(output_path, "%s_variant_%d" % [layer, i + 1])
 
 
+# Same for resources saved as .tres: effect scenes of animation events and the
+# sheet texture of sprite frames get ids derived from their file names.
+static func _stabilize_resource_ids(resource: Resource, output_path: String) -> void:
+	var used := {}
+	if resource is Animation:
+		for t in resource.get_track_count():
+			if resource.track_get_type(t) != Animation.TYPE_METHOD:
+				continue
+			for k in resource.track_get_key_count(t):
+				for scene in resource.track_get_key_value(t, k).args[1]:
+					if _is_external(scene) and not used.has(scene.resource_path):
+						used[scene.resource_path] = _unique_id("effect_" + scene.resource_path.get_file().get_basename(), used.values())
+						scene.set_id_for_path(output_path, used[scene.resource_path])
+	elif resource is SpriteFrames:
+		for name in resource.get_animation_names():
+			for i in resource.get_frame_count(name):
+				var atlas := resource.get_frame_texture(name, i) as AtlasTexture
+				if atlas != null and _is_external(atlas.atlas):
+					atlas.atlas.set_id_for_path(output_path, "sheet")
+
+
+static func _unique_id(base: String, taken: Array) -> String:
+	var id := base
+	var n := 2
+	while taken.has(id):
+		id = "%s_%d" % [base, n]
+		n += 1
+	return id
+
+
 static func _is_external(resource: Resource) -> bool:
 	return resource != null and not resource.resource_path.is_empty() and not resource.resource_path.contains("::")
 
@@ -251,6 +338,9 @@ static func _stabilize_node_ids(packed: PackedScene, effect_id: String) -> void:
 
 
 static func _verify_loads(output_path: String, preset: Dictionary, report: RefCounted) -> void:
+	if not is_scene_type(preset):
+		_verify_resource_loads(output_path, preset, report)
+		return
 	var scene := ResourceLoader.load(output_path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
 	if scene == null or not scene.can_instantiate():
 		report.error("", "the generated scene %s could not be loaded back" % output_path)
@@ -268,6 +358,28 @@ static func _verify_loads(output_path: String, preset: Dictionary, report: RefCo
 		report.error("", "the generated scene has nodes %s, expected %s" % [names, expected])
 	if not has_runtime:
 		report.error("", "the generated scene is missing the OasisFx runtime script")
+
+
+static func _verify_resource_loads(output_path: String, preset: Dictionary, report: RefCounted) -> void:
+	var loaded := ResourceLoader.load(output_path, "", ResourceLoader.CACHE_MODE_REPLACE)
+	if preset.asset_type == "animation":
+		var anim := loaded as Animation
+		var expected: int = preset.tracks.size() + (0 if preset.events.is_empty() else 1)
+		if anim == null:
+			report.error("", "the generated animation %s could not be loaded back" % output_path)
+		elif anim.get_track_count() != expected:
+			report.error("", "the generated animation has %d tracks, expected %d" % [anim.get_track_count(), expected])
+		return
+	var frames := loaded as SpriteFrames
+	if frames == null:
+		report.error("", "the generated sprite frames %s could not be loaded back" % output_path)
+		return
+	var names: Array = Array(frames.get_animation_names())
+	var expected_names: Array = preset.animations.map(func(a): return a.name)
+	names.sort()
+	expected_names.sort()
+	if names != expected_names:
+		report.error("", "the generated sprite frames have animations %s, expected %s" % [names, expected_names])
 
 
 static func _result(report: RefCounted, action: String, id: String, output_path: String) -> Dictionary:

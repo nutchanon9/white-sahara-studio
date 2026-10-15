@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://examples/runtime_demo/runtime_demo.gd" id="1_2itws"]
 [ext_resource type="PackedScene" path="res://examples/runtime_demo/fx/campfire_loop.tscn" id="2_8x121"]
+[ext_resource type="PackedScene" path="res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn" id="3_chef"]
+[ext_resource type="SpriteFrames" path="res://examples/runtime_demo/fx/campfire_flame.tres" id="4_flame"]
 
 [sub_resource type="Animation" id="Animation_t3psv"]
 resource_name = "attack"
@@ -84,7 +86,8 @@ offset_right = 24.0
 offset_bottom = 20.0
 text = "OasisFx runtime demo
 Left click: Fire Burst   Right click: Ice Nova
-Space: attack (Sword Slash on the hit frame)   C: cook (Cooking Success when done)"
+Space: attack (Sword Slash on the hit frame)   C: cook (Cooking Success when done)
+A: chef ladle attack   S: chef cooking success (generated animations with events)"
 
 [node name="Hero" type="Node2D" parent="." unique_id=503854990]
 position = Vector2(380, 470)
@@ -126,6 +129,16 @@ position = Vector2(0, -40)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Stove" unique_id=1491187165]
 libraries/ = SubResource("AnimationLibrary_vydii")
+
+[node name="Chef" parent="." instance=ExtResource("3_chef")]
+position = Vector2(620, 520)
+scale = Vector2(1.6, 1.6)
+
+[node name="Flame" type="AnimatedSprite2D" parent="Stove"]
+position = Vector2(-110, 0)
+sprite_frames = ExtResource("4_flame")
+animation = &"burn"
+autoplay = "burn"
 
 [node name="Effects" type="Node2D" parent="." unique_id=1757509283]
 z_index = 10

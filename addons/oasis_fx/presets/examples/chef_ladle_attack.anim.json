@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "asset_type": "animation",
+  "id": "chef_ladle_attack",
+  "display_name": "Chef Ladle Attack",
+  "description": "Wind-up and overhead ladle swing; fire burst and swing sound on the hit frame.",
+  "tags": ["chef", "attack", "combat"],
+  "author": "OasisFx examples",
+  "target_scene": "res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn",
+  "duration_seconds": 0.6,
+  "tracks": [
+    {
+      "node": "Body/Skeleton/Hips/Chest/ArmR",
+      "property": "rotation_degrees",
+      "keys": [
+        {"time": 0, "value": 0, "ease": "out"},
+        {"time": 0.18, "value": 150, "ease": "in"},
+        {"time": 0.3, "value": -55, "ease": "out"},
+        {"time": 0.45, "value": -40},
+        {"time": 0.6, "value": 0}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips/Chest",
+      "property": "rotation_degrees",
+      "interpolation": "cubic",
+      "keys": [
+        {"time": 0, "value": 0},
+        {"time": 0.18, "value": -7},
+        {"time": 0.3, "value": 9},
+        {"time": 0.6, "value": 0}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips",
+      "property": "position",
+      "keys": [
+        {"time": 0, "value": [0, -34]},
+        {"time": 0.18, "value": [-3, -35]},
+        {"time": 0.3, "value": [6, -32], "ease": "out"},
+        {"time": 0.6, "value": [0, -34]}
+      ]
+    },
+    {
+      "node": "Body/Skeleton/Hips/Chest/ArmL",
+      "property": "rotation_degrees",
+      "keys": [
+        {"time": 0, "value": 0},
+        {"time": 0.18, "value": -25},
+        {"time": 0.3, "value": 20},
+        {"time": 0.6, "value": 0}
+      ]
+    }
+  ],
+  "events": [
+    {
+      "time": 0,
+      "name": "attack_start"
+    },
+    {
+      "time": 0.3,
+      "name": "hit_frame",
+      "effects": ["res://examples/runtime_demo/fx/fire_burst.tscn", "res://examples/runtime_demo/fx/fire_burst_sfx.tscn"],
+      "at": "Body/Skeleton/Hips/Chest/ArmR/WeaponPivot/Tip"
+    }
+  ]
+}

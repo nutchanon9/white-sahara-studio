@@ -117,7 +117,7 @@ func test_batch_errors() -> void:
 	var empty := temp_dir("cli_batch_empty")
 	r = _cli(["validate-all", empty])
 	check_eq(r.code, 1, "empty folder fails")
-	check(r.output.contains("no *.vfx.json or *.sfx.json files"), "explains empty folder")
+	check(r.output.contains("no *.vfx.json, *.sfx.json, *.anim.json or *.frames.json files"), "explains empty folder")
 	r = _cli(["generate-all", "res://does/not/exist"])
 	check_eq(r.code, 1, "missing folder fails")
 	check_eq(_cli(["validate-all"]).code, 2, "validate-all without directory is a usage error")

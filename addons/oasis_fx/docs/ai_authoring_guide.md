@@ -10,7 +10,9 @@ preset. The JSON Schema and the validator are the final word.
 |---|---|---|
 | `vfx` — 2D particle effect | `schema_version: 1`, [`schemas/vfx.v1.schema.json`](../schemas/vfx.v1.schema.json) | supported (OasisFx 0.2) |
 | `sfx` — layered sound effect from existing audio files | `schema_version: 1`, [`schemas/sfx.v1.schema.json`](../schemas/sfx.v1.schema.json) | supported (OasisFx 0.4); see [section 9](#9-sound-effects-sfx) |
-| `animation` | — | planned; presets with this type are rejected |
+| `animation` — keyframes and events for nodes of an existing scene | `schema_version: 1`, [`schemas/animation.v1.schema.json`](../schemas/animation.v1.schema.json) | supported (OasisFx 0.5); see [section 10](#10-animations-and-sprite-frames) |
+| `sprite_frames` — frame animations from a sprite sheet | `schema_version: 1`, [`schemas/sprite_frames.v1.schema.json`](../schemas/sprite_frames.v1.schema.json) | supported (OasisFx 0.5); see [section 10](#10-animations-and-sprite-frames) |
+| rigs (bones, IK, skins) | — | planned (Phase 4); not a preset type yet |
 
 A `vfx` preset describes one effect made of **1–8 emitters**. Each emitter becomes a Godot
 `GPUParticles2D`. Every field, unit, range and default is listed in
@@ -303,6 +305,148 @@ desktop app before using it; a valid preset can still sound wrong.
   "layers": [
     {"id": "whoosh", "source": "res://addons/oasis_fx/presets/examples/audio/whoosh_1.wav", "variants": ["res://addons/oasis_fx/presets/examples/audio/whoosh_2.wav", "res://addons/oasis_fx/presets/examples/audio/whoosh_3.wav"], "gain_db": -2, "random_pitch_percent": 6, "random_volume_db": 1.5, "source_author": "OasisFx (synthesized)", "source_license": "CC0"},
     {"id": "impact", "source": "res://addons/oasis_fx/presets/examples/audio/impact.wav", "start_ms": 140, "gain_db": -3, "pitch_scale": 1.15, "random_volume_db": 1.5, "fade_out_ms": 120, "source_author": "OasisFx (synthesized)", "source_license": "CC0"}
+  ]
+}
+```
+
+## 10. Animations and sprite frames
+
+Two Phase 3 types; every field is listed in [animation_format.md](animation_format.md).
+
+- **`animation`** (`<id>.anim.json`) animates nodes of a scene **that already exists in the
+  game** (`target_scene`, e.g. the character): position, rotation, scale, opacity, tint,
+  visibility, sprite frame and draw order, with keyframes. **Events** mark moments
+  (`hit_frame`, `footstep`, `cooking_complete`) and can show OasisFx effects/sounds there.
+- **`sprite_frames`** (`<id>.frames.json`) cuts named animations out of one sprite-sheet image.
+
+Neither creates art: the scene, the sheet and the effect scenes must already exist. Never
+invent node names or file paths.
+
+### Copy-paste prompt (animation)
+
+> You are writing an OasisFx animation preset for Godot 4. Read
+> `addons/oasis_fx/docs/animation_format.md` and `addons/oasis_fx/schemas/animation.v1.schema.json`
+> first. The scene is **<res:// path of the .tscn>**; its nodes are:
+> **<paste the node list: path and class, e.g. from the desktop app's node picker or the
+> scene file>**. Output only one JSON object with `"asset_type": "animation"`. Use only those
+> node paths and only the properties allowed for their class. Event effects may only be these
+> generated OasisFx scenes: **<list of res:// .tscn paths or "none">**. Save it as `<id>.anim.json`,
+> run `godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- validate <file>`
+> and fix every error and warning.
+>
+> Animation: **<describe the motion: what moves, how long, loop or once, where the hit/footstep happens>**
+
+### Rules that matter most (animation)
+
+1. **Required:** `schema_version` (1), `asset_type` ("animation"), `id`, `display_name`,
+   `target_scene`, `duration_seconds`; at least one track or event.
+2. **Node paths** are relative to the scene root, exactly as in the scene (`"Body/Skeleton/Hips"`);
+   `"."` is the root. A wrong path is an error that suggests the right one.
+3. **Properties:** `position` / `scale` take `[x, y]`, `rotation_degrees` a number
+   (positive = clockwise), `opacity` 0–1, `modulate` a color, `visible` true/false,
+   `frame` / `z_index` whole numbers. Bones are Node2D: rotate them with `rotation_degrees`.
+4. **Keys** are in increasing time order and never later than `duration_seconds`. The first
+   key is usually at 0 with the rest pose; for a loop, make the last key equal the first.
+5. **Easing:** `out` for fast starts (a strike), `in` for wind-ups, `cubic` interpolation for
+   soft breathing/idle motion.
+6. **Events** are cosmetic. Name them after the moment (`hit_frame`), not after damage;
+   game code decides damage. `at` is a node near where the effect should appear (a hand, a
+   weapon tip).
+7. One track per node and property; do not combine `opacity` and `modulate` on one node.
+
+### Rules that matter most (sprite frames)
+
+1. `texture` is an existing sheet in the project; `columns` × `rows` is its grid
+   (`frame_count` when the last row is not full).
+2. Frame numbers start at 0 at the top left and count along each row.
+3. `fps` 8–15 suits hand-drawn loops; `loop: false` for one-shot animations (attack, flare).
+4. Fill in `source_author` and `source_license`.
+
+### Changing an existing animation
+
+| Request | Change |
+|---|---|
+| "faster / snappier" | scale all key times and `duration_seconds` down together (e.g. ×0.8); use `ease: "out"` on the strike key |
+| "bigger swing" | larger `rotation_degrees` values at the extreme keys |
+| "hit later" | move the strike keys **and** the `hit_frame` event to the new time |
+| "smoother idle" | `interpolation: "cubic"`, fewer keys |
+| "add a footstep" | an event `{"time": …, "name": "footstep", "at": "<foot node>"}` |
+| "flash on hit" | a `modulate` track on the body: white → light tint → white around the hit |
+
+Generate it, then **watch it** in the desktop app (it shows the scene and the event markers) or
+in the game; a valid animation can still look wrong.
+
+### Complete examples
+
+Chef Ladle Attack (events with an effect and its sound):
+
+```json
+{
+  "schema_version": 1,
+  "asset_type": "animation",
+  "id": "chef_ladle_attack",
+  "display_name": "Chef Ladle Attack",
+  "description": "Wind-up and overhead ladle swing; fire burst and swing sound on the hit frame.",
+  "tags": ["chef", "attack", "combat"],
+  "author": "OasisFx examples",
+  "target_scene": "res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn",
+  "duration_seconds": 0.6,
+  "tracks": [
+    {"node": "Body/Skeleton/Hips/Chest/ArmR", "property": "rotation_degrees", "keys": [{"time": 0, "value": 0, "ease": "out"}, {"time": 0.18, "value": 150, "ease": "in"}, {"time": 0.3, "value": -55, "ease": "out"}, {"time": 0.45, "value": -40}, {"time": 0.6, "value": 0}]},
+    {"node": "Body/Skeleton/Hips/Chest", "property": "rotation_degrees", "interpolation": "cubic", "keys": [{"time": 0, "value": 0}, {"time": 0.18, "value": -7}, {"time": 0.3, "value": 9}, {"time": 0.6, "value": 0}]},
+    {"node": "Body/Skeleton/Hips", "property": "position", "keys": [{"time": 0, "value": [0, -34]}, {"time": 0.18, "value": [-3, -35]}, {"time": 0.3, "value": [6, -32], "ease": "out"}, {"time": 0.6, "value": [0, -34]}]},
+    {"node": "Body/Skeleton/Hips/Chest/ArmL", "property": "rotation_degrees", "keys": [{"time": 0, "value": 0}, {"time": 0.18, "value": -25}, {"time": 0.3, "value": 20}, {"time": 0.6, "value": 0}]}
+  ],
+  "events": [
+    {"time": 0, "name": "attack_start"},
+    {"time": 0.3, "name": "hit_frame", "effects": ["res://examples/runtime_demo/fx/fire_burst.tscn", "res://examples/runtime_demo/fx/fire_burst_sfx.tscn"], "at": "Body/Skeleton/Hips/Chest/ArmR/WeaponPivot/Tip"}
+  ]
+}
+```
+
+Chef Idle (looping, cubic):
+
+```json
+{
+  "schema_version": 1,
+  "asset_type": "animation",
+  "id": "chef_idle",
+  "display_name": "Chef Idle",
+  "description": "Looping idle: breathing, a slight head tilt, arm sway and a blink.",
+  "tags": ["chef", "idle", "loop"],
+  "author": "OasisFx examples",
+  "target_scene": "res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn",
+  "duration_seconds": 1.6,
+  "loop": true,
+  "tracks": [
+    {"node": "Body/Skeleton/Hips/Chest", "property": "position", "interpolation": "cubic", "keys": [{"time": 0, "value": [0, -2]}, {"time": 0.8, "value": [0, -3.5]}, {"time": 1.6, "value": [0, -2]}]},
+    {"node": "Body/Skeleton/Hips/Chest/Head", "property": "rotation_degrees", "interpolation": "cubic", "keys": [{"time": 0, "value": 0}, {"time": 0.5, "value": 3}, {"time": 1.2, "value": -2}, {"time": 1.6, "value": 0}]},
+    {"node": "Body/Skeleton/Hips/Chest/ArmL", "property": "rotation_degrees", "interpolation": "cubic", "keys": [{"time": 0, "value": 4}, {"time": 0.8, "value": -4}, {"time": 1.6, "value": 4}]},
+    {"node": "Body/Skeleton/Hips/Chest/ArmR", "property": "rotation_degrees", "interpolation": "cubic", "keys": [{"time": 0, "value": -4}, {"time": 0.8, "value": 4}, {"time": 1.6, "value": -4}]},
+    {"node": "Body/Skeleton/Hips/Chest/Head/Eyes", "property": "scale", "keys": [{"time": 0, "value": [1, 1]}, {"time": 1, "value": [1, 1]}, {"time": 1.06, "value": [1, 0.15]}, {"time": 1.12, "value": [1, 1]}]}
+  ]
+}
+```
+
+Campfire Flame (sprite frames):
+
+```json
+{
+  "schema_version": 1,
+  "asset_type": "sprite_frames",
+  "id": "campfire_flame",
+  "display_name": "Campfire Flame",
+  "description": "Hand-painted-looking flickering flame for campfires, stoves and torches.",
+  "tags": ["fire", "cooking", "loop", "sprite"],
+  "author": "OasisFx examples",
+  "texture": "res://addons/oasis_fx/presets/examples/sprites/flame_sheet.png",
+  "source_author": "OasisFx (procedural, tools/synth_example_sprites.gd)",
+  "source_license": "CC0",
+  "columns": 4,
+  "rows": 2,
+  "animations": [
+    {"name": "burn", "frames": [0, 1, 2, 3, 4, 5, 6, 7], "fps": 12},
+    {"name": "flare", "frames": [1, 5, 3, 7, 3, 1], "fps": 18, "loop": false}
   ]
 }
 ```

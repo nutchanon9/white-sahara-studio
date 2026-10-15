@@ -75,5 +75,16 @@ static func check_resource_ref(path: String, allowed_extensions: Array) -> Strin
 	return ""
 
 
+## The first existing file for `res_path` under `roots` ("res://" = this
+## project; empty roots = this project only), or "" when none exists.
+static func resolve_res_path(res_path: String, roots: PackedStringArray) -> String:
+	var candidates := roots if not roots.is_empty() else PackedStringArray(["res://"])
+	for root in candidates:
+		var file := res_path if root == "res://" else root.path_join(res_path.trim_prefix("res://"))
+		if FileAccess.file_exists(file):
+			return file
+	return ""
+
+
 static func _fail(message: String) -> Dictionary:
 	return {"ok": false, "path": "", "error": message}

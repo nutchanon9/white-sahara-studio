@@ -5,14 +5,14 @@ extends SceneTree
 ##   godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- <command> [args]
 ##
 ## Commands:
-##   validate <preset.vfx.json>                 check a preset
-##   validate-all <dir>                         check every *.vfx.json under dir
-##   generate <preset.vfx.json> [--out DIR]     write DIR/<id>.tscn
+##   validate <preset>                          check a preset (.vfx/.sfx/.anim/.frames.json)
+##   validate-all <dir>                         check every preset under dir
+##   generate <preset> [--out DIR]              write DIR/<id>.tscn (or .tres)
 ##            [--force] [--dry-run]
 ##   generate-all <dir> [--out DIR]             generate every preset (all or nothing)
 ##            [--force] [--dry-run]
 ##   format <preset|dir> [--check]              rewrite presets in canonical form
-##   schema [vfx|sfx] [--write]                 print a JSON Schema, or rewrite both files
+##   schema [TYPE] [--write]                    print a JSON Schema, or rewrite all schema files
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
 ##
@@ -27,6 +27,7 @@ const ErrorCapture := preload("res://addons/oasis_fx/src/core/error_capture.gd")
 const Schema := preload("res://addons/oasis_fx/src/core/vfx_schema.gd")
 const Serializer := preload("res://addons/oasis_fx/src/core/preset_serializer.gd")
 const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
 const EXIT_OK := 0
 const EXIT_FAILED := 1
@@ -38,14 +39,16 @@ Usage:
   godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- <command> [options]
 
 Commands:
-  validate <preset>      Validate a .vfx.json or .sfx.json preset.
-  validate-all <dir>     Validate every *.vfx.json and *.sfx.json under <dir> (recursive); ids must be unique.
-  generate <preset>      Validate and write <out>/<id>.tscn.
+  validate <preset>      Validate a preset (.vfx.json, .sfx.json, .anim.json or .frames.json).
+  validate-all <dir>     Validate every preset under <dir> (recursive); ids must be unique.
+  generate <preset>      Validate and write <out>/<id>.tscn (effects, sounds) or <id>.tres
+                         (animations, sprite frames).
   generate-all <dir>     Generate every preset under <dir>. Writes nothing unless all are valid.
   format <preset|dir>    Rewrite presets in canonical form (key order, spacing, numbers).
                          With --check, only report files that are not canonical.
-  schema [vfx|sfx]       Print the JSON Schema of an asset type (default vfx).
-                         With --write, rewrite schemas/vfx.v1.schema.json and sfx.v1.schema.json.
+  schema [TYPE]          Print the JSON Schema of an asset type: vfx (default), sfx,
+                         animation or sprite_frames. With --write, rewrite every
+                         schemas/<type>.v1.schema.json file.
   version                Print the OasisFx version.
   help                   Show this help.
 
@@ -117,10 +120,10 @@ func _run(args: PackedStringArray) -> int:
 			return _format(rest[0], parsed.flags.has("check"))
 		"schema":
 			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out") or rest.size() > 1:
-				return _usage_error("schema takes an optional asset type (vfx or sfx) and --write")
+				return _usage_error("schema takes an optional asset type (%s) and --write" % _type_list())
 			var type: String = rest[0] if rest.size() == 1 else "vfx"
-			if not Schema.PATHS.has(type):
-				return _usage_error("unknown asset type \"%s\" (vfx or sfx)" % type)
+			if not AssetTypes.has(type):
+				return _usage_error("unknown asset type \"%s\" (%s)" % [type, _type_list()])
 			return _schema(parsed.flags.has("write"), type)
 		"validate-all":
 			if rest.size() != 1:
@@ -164,7 +167,7 @@ func _format(arg: String, check: bool) -> int:
 	else:
 		return _fail_message("format", "not found: %s" % target)
 	if paths.is_empty():
-		return _fail_message("format", "no *.vfx.json or *.sfx.json files found under %s" % target)
+		return _fail_message("format", "no %s files found under %s" % [_preset_patterns(), target])
 	var entries := []
 	var lines := PackedStringArray()
 	var ok := true
@@ -206,13 +209,14 @@ func _schema(write: bool, asset_type: String) -> int:
 		print(Schema.to_text(asset_type).strip_edges())
 		return EXIT_OK
 	var written := []
-	for type in Schema.PATHS:
-		var file := FileAccess.open(Schema.PATHS[type], FileAccess.WRITE)
+	for type in AssetTypes.names():
+		var schema_path := AssetTypes.schema_path(type)
+		var file := FileAccess.open(schema_path, FileAccess.WRITE)
 		if file == null:
-			return _fail_message("schema", "cannot write %s: %s" % [Schema.PATHS[type], error_string(FileAccess.get_open_error())])
+			return _fail_message("schema", "cannot write %s: %s" % [schema_path, error_string(FileAccess.get_open_error())])
 		file.store_string(Schema.to_text(type))
 		file.close()
-		written.append(Schema.PATHS[type])
+		written.append(schema_path)
 	_emit({"command": "schema", "ok": true, "output_paths": written}, "OK    wrote " + ", ".join(PackedStringArray(written)))
 	return EXIT_OK
 
@@ -223,7 +227,7 @@ func _validate_all(arg: String) -> int:
 		return _fail_message("validate-all", "directory not found: %s" % dir)
 	var paths := Generator.find_presets(dir)
 	if paths.is_empty():
-		return _fail_message("validate-all", "no *.vfx.json or *.sfx.json files found under %s" % dir)
+		return _fail_message("validate-all", "no %s files found under %s" % [_preset_patterns(), dir])
 	var validation := Generator.validate_many(paths)
 	var entries := []
 	var lines := PackedStringArray()
@@ -257,7 +261,7 @@ func _generate_all(arg: String, out_dir: String, options: Dictionary) -> int:
 		return _fail_message("generate-all", "directory not found: %s" % dir)
 	var paths := Generator.find_presets(dir)
 	if paths.is_empty():
-		return _fail_message("generate-all", "no *.vfx.json or *.sfx.json files found under %s" % dir)
+		return _fail_message("generate-all", "no %s files found under %s" % [_preset_patterns(), dir])
 	var batch := Generator.generate_many(paths, out_dir, options)
 	var entries := []
 	var lines := PackedStringArray()
@@ -303,7 +307,27 @@ func _fail_message(command: String, message: String) -> int:
 	return EXIT_FAILED
 
 
+## "*.vfx.json or *.sfx.json" for every registered asset type.
+static func _preset_patterns() -> String:
+	var patterns := Array(AssetTypes.suffixes()).map(func(s): return "*" + s)
+	if patterns.size() == 1:
+		return patterns[0]
+	return ", ".join(PackedStringArray(patterns.slice(0, -1))) + " or " + patterns.back()
+
+
+static func _type_list() -> String:
+	return ", ".join(PackedStringArray(AssetTypes.names()))
+
+
 static func _summary(preset: Dictionary) -> String:
+	if preset.get("asset_type") == "animation":
+		return "%s (animation, %d track(s), %d event(s), %s s%s)" % [preset.id, preset.tracks.size(), preset.events.size(),
+				Serializer.number(preset.duration_seconds), ", loop" if preset.loop else ""]
+	if preset.get("asset_type") == "sprite_frames":
+		var frames := 0
+		for anim in preset.animations:
+			frames += anim.frames.size()
+		return "%s (sprite_frames, %d animation(s), %d frame(s))" % [preset.id, preset.animations.size(), frames]
 	if preset.get("asset_type") == "sfx":
 		var files := 0
 		for layer in preset.layers:

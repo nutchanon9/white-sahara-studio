@@ -1,7 +1,8 @@
 extends "res://addons/oasis_fx/tests/oasis_test_case.gd"
 ## Repository-level regression tests for examples/runtime_demo.
 ##
-## examples/runtime_demo/fx/*.tscn (effects and sounds) are committed generator output. They double
+## examples/runtime_demo/fx/*.tscn (effects and sounds) and *.tres (animations,
+## sprite frames) are committed generator output. They double
 ## as golden files: regenerating the example presets must reproduce them byte
 ## for byte (apart from the uid, which Godot only writes for res:// files).
 ## When a generator change is intended, refresh them with:
@@ -23,15 +24,15 @@ func test_committed_example_scenes_match_the_generator() -> void:
 	var out := temp_dir("examples_golden")
 	var batch := Generator.generate_many(Generator.find_presets(OasisFx.EXAMPLES_DIR), out)
 	check(batch.ok, "examples generate")
-	var committed: Array = Array(DirAccess.get_files_at(VFX_DIR)).filter(func(f): return f.ends_with(".tscn"))
+	var committed: Array = Array(DirAccess.get_files_at(VFX_DIR)).filter(func(f): return f.ends_with(".tscn") or f.ends_with(".tres"))
 	var generated: Array = batch.results.map(func(r): return r.output_path.get_file())
 	committed.sort()
 	generated.sort()
-	check_eq(committed, generated, "one committed scene per example preset")
+	check_eq(committed, generated, "one committed scene or resource per example preset")
 	for result in batch.results:
 		var golden_path: String = VFX_DIR + "/" + result.output_path.get_file()
 		var golden := FileAccess.get_file_as_string(golden_path)
-		check(golden.begins_with("[gd_scene format=3 uid=\"uid://"), "%s has a stable uid" % golden_path)
+		check(RegEx.create_from_string("^\\[gd_(scene|resource type=\"\\w+\") format=3 uid=\"uid://").search(golden) != null, "%s has a stable uid" % golden_path)
 		check(_without_uid(golden) == FileAccess.get_file_as_string(result.output_path),
 			"%s differs from the generator output; regenerate it (see this file's header) if the change is intended" % golden_path)
 
@@ -40,7 +41,7 @@ func test_committed_manifest_matches_scenes() -> void:
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(VFX_DIR + "/" + OasisFx.MANIFEST_FILE))
 	for id in manifest.entries:
 		var entry: Dictionary = manifest.entries[id]
-		check_eq(entry.scene, VFX_DIR + "/" + id + ".tscn", id + " scene path")
+		check(entry.scene in [VFX_DIR + "/" + id + ".tscn", VFX_DIR + "/" + id + ".tres"], id + " output path: " + entry.scene)
 		check_eq(entry.scene_sha256, FileAccess.get_sha256(entry.scene), id + " scene hash (scene edited by hand?)")
 		check(FileAccess.file_exists(entry.preset), id + " preset exists")
 
@@ -80,5 +81,24 @@ func test_runtime_demo_triggers_effects_from_animation_events() -> void:
 	await tree.create_timer(2.0).timeout
 	check_eq(effects.get_child_count(), 0, "one-shot effects and sounds freed themselves")
 	check(is_instance_valid(campfire) and campfire.is_playing(), "the looping campfire is still running")
+	demo.queue_free()
+	await tree.process_frame
+
+
+func test_runtime_demo_plays_generated_chef_animations_and_sprite_frames() -> void:
+	var demo: Node = load(DEMO).instantiate()
+	tree.root.add_child(demo)
+	await tree.process_frame
+	var chef_player: AnimationPlayer = demo.get_node("Chef/AnimationPlayer")
+	check_eq(String(chef_player.current_animation), "oasis/idle", "chef idles")
+	var flame: AnimatedSprite2D = demo.get_node("Stove/Flame")
+	check(flame.is_playing() and flame.animation == &"burn", "sprite-sheet flame burns")
+	demo.play_chef(&"ladle_attack")
+	await tree.create_timer(0.5).timeout
+	var effects: Node = demo.get_node("Effects")
+	var ids := effects.get_children().map(func(c): return c.effect_id)
+	check(ids.has("fire_burst") and ids.has("fire_burst_sfx"), "hit_frame event showed the fire burst and its sound in the effects layer: %s" % [ids])
+	await tree.create_timer(0.4).timeout
+	check_eq(String(chef_player.current_animation), "oasis/idle", "back to idle after the attack")
 	demo.queue_free()
 	await tree.process_frame

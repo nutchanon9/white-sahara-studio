@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/animation.v1.schema.json",
+  "title": "OasisFx animation preset v1",
+  "description": "Data-only description of keyframe tracks and events for nodes of an existing Godot scene, which OasisFx turns into a Godot 4 Animation resource. Generated from addons/oasis_fx/src/core/animation_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/animation_format.md (node paths, property types, key order).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset_type",
+    "id",
+    "display_name",
+    "target_scene",
+    "duration_seconds"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Preset format version. Must be 1."
+    },
+    "asset_type": {
+      "enum": [
+        "animation"
+      ],
+      "description": "Asset kind: \"animation\" for keyframe tracks and events of an existing scene."
+    },
+    "id": {
+      "$ref": "#/$defs/id",
+      "description": "Stable identifier; also the output file name (<id>.tres) and the suggested animation name. Lowercase snake_case."
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "description": "Human-readable name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "What the animation is for.",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+      },
+      "description": "Up to 16 lowercase search tags.",
+      "default": []
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who made the preset (person or AI tool).",
+      "default": ""
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Free-form authoring notes.",
+      "default": ""
+    },
+    "target_scene": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^res://.*\\.(tscn)$",
+      "description": "The scene this animation is for (a .tscn in the game, e.g. the character). Track and event node paths are relative to its root, which must be the AnimationPlayer's root node."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "minimum": 0.05,
+      "maximum": 60.0,
+      "description": "Length of the animation in seconds."
+    },
+    "loop": {
+      "type": "boolean",
+      "description": "true = repeats until stopped (idle, walk); false = plays once.",
+      "default": false
+    },
+    "tracks": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/track"
+      },
+      "description": "Animated properties, up to 32; each animates one property of one node.",
+      "default": []
+    },
+    "events": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/event"
+      },
+      "description": "Named moments (hit_frame, footstep …), up to 32; each can show OasisFx effects/sounds and is sent to game code as a signal.",
+      "default": []
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "property",
+        "keys"
+      ],
+      "properties": {
+        "node": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^(\\.|[^/:%@\"\\.\\s][^/:%@\"]*(/[^/:%@\"\\.\\s][^/:%@\"]*)*)$",
+          "description": "Path of the animated node from the scene root, e.g. \"Body/Skeleton/Hips/Chest/ArmR\"; \".\" = the root."
+        },
+        "property": {
+          "enum": [
+            "position",
+            "rotation_degrees",
+            "scale",
+            "opacity",
+            "modulate",
+            "visible",
+            "frame",
+            "z_index"
+          ],
+          "description": "Animated property: position, rotation_degrees, scale, opacity, modulate, visible, frame or z_index (see the property table)."
+        },
+        "interpolation": {
+          "enum": [
+            "linear",
+            "cubic",
+            "nearest"
+          ],
+          "description": "Between keys: linear, cubic (smooth curve through the keys) or nearest (jump). visible, frame and z_index always jump.",
+          "default": "linear"
+        },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "description": "Keyframes in increasing time order, 1 to 128."
+        }
+      }
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "value"
+      ],
+      "properties": {
+        "time": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 60.0,
+          "description": "Time of the key in seconds from the start (0 … duration_seconds)."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "$ref": "#/$defs/color"
+            }
+          ],
+          "description": "Value at that time; its type depends on the property (number, [x, y], \"#RRGGBBAA\", true/false or a whole number)."
+        },
+        "ease": {
+          "enum": [
+            "linear",
+            "in",
+            "out",
+            "in_out"
+          ],
+          "description": "How the value moves from this key to the next: linear, in (starts slow), out (ends slow) or in_out.",
+          "default": "linear"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "name"
+      ],
+      "properties": {
+        "time": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 60.0,
+          "description": "When the event happens, in seconds (0 … duration_seconds)."
+        },
+        "name": {
+          "$ref": "#/$defs/id",
+          "description": "Event name sent to game code, e.g. hit_frame, footstep, cooking_complete. Lowercase snake_case."
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^res://.*\\.(tscn)$"
+          },
+          "description": "Up to 4 scenes generated by OasisFx (effects or sounds) shown at this moment; [] = only the event.",
+          "default": []
+        },
+        "at": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^(\\.|[^/:%@\"\\.\\s][^/:%@\"]*(/[^/:%@\"\\.\\s][^/:%@\"]*)*)$",
+          "description": "Node whose position the effects appear at, e.g. \"Body/Skeleton/Hips/Chest/ArmR/WeaponPivot/Tip\"; \".\" = the root.",
+          "default": "."
+        }
+      }
+    }
+  }
+}

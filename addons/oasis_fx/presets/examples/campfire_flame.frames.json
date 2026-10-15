@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "asset_type": "sprite_frames",
+  "id": "campfire_flame",
+  "display_name": "Campfire Flame",
+  "description": "Hand-painted-looking flickering flame for campfires, stoves and torches.",
+  "tags": ["fire", "cooking", "loop", "sprite"],
+  "author": "OasisFx examples",
+  "texture": "res://addons/oasis_fx/presets/examples/sprites/flame_sheet.png",
+  "source_author": "OasisFx (procedural, tools/synth_example_sprites.gd)",
+  "source_license": "CC0",
+  "columns": 4,
+  "rows": 2,
+  "animations": [
+    {
+      "name": "burn",
+      "frames": [0, 1, 2, 3, 4, 5, 6, 7],
+      "fps": 12
+    },
+    {
+      "name": "flare",
+      "frames": [1, 5, 3, 7, 3, 1],
+      "fps": 18,
+      "loop": false
+    }
+  ]
+}
