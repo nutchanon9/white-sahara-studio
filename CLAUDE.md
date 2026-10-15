@@ -28,6 +28,11 @@ proves runtime errors make the supported test command fail; also check normal pa
 assertion failures, unloadable scripts and no discovered tests. Report real commands
 and updated test counts. The documentation change does not fix the implementation.
 
+**Status:** the review fix is implemented on `claude/cool-brown-hrne5t` (runner captures
+logged errors via `OS.add_logger`, per-test timeout, regression suite
+`tests/test_runner.gd`; full suite 53 passed, 0 failed on Godot 4.7.2). Phase 1A awaits
+owner acceptance.
+
 Stop after that review fix unless the user has requested a later milestone.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

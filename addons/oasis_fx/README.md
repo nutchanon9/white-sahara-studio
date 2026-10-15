@@ -10,10 +10,11 @@ generates `.tscn` files built only from built-in nodes (`Node2D`, `GPUParticles2
 runtime helpers come in Phase 1B. Phase 1C builds a standalone Windows desktop app
 with Godot, using this same core; an EditorPlugin panel is not the required UI.
 
-The repository's specification v1.1 is the current plan. At reviewed commit `4c6e7bf`,
-the existing suite ran as 41 passed / 0 failed, but an independent runtime-error probe
-exposed a false-PASS defect in the test runner. Fix that review issue before accepting
-Phase 1A or starting Phase 1B; documentation updates do not implement the fix.
+The repository's specification v1.1 is the current plan. The Phase 1A review found that
+the test runner could print PASS after a GDScript runtime error; the runner now fails
+any test during which a script or engine error is logged, with regression tests for it
+(see [CLI → Running the tests](docs/cli.md#running-the-tests)). Phase 1A awaits the
+owner's acceptance before Phase 1B starts.
 
 ## Install
 

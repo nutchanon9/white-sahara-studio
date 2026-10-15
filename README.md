@@ -21,7 +21,7 @@
 | Phase | เนื้อหา | สถานะ |
 |---|---|---|
 | 0 | สำรวจ repo และสภาพแวดล้อม ([AUDIT.md](AUDIT.md)) | ✅ เสร็จ |
-| 1A | schema, loader, validator, CLI `validate`/`generate`, Fire Burst, headless tests | ทำแล้ว; รอแก้ test runner ตาม review |
+| 1A | schema, loader, validator, CLI `validate`/`generate`, Fire Burst, headless tests | ทำแล้ว; แก้ test runner ตาม review แล้ว รอรับงาน |
 | 1B | หลาย emitter, preset ตัวอย่าง 4 แบบ, validate-all/generate-all, runtime lifecycle | ยังไม่เริ่ม |
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ยังไม่เริ่ม |
 | 2–4 | SFX, Animation, Rigging | ยังไม่เริ่ม |
@@ -77,9 +77,11 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd
 
 ที่ commit `4c6e7bf` รัน suite เดิมด้วย Godot 4.7.2 ได้ **41 passed, 0 failed**
 และไม่พบ script error ใน suite เดิม แต่การทดลองแยกพบว่า test runner ยังพิมพ์ PASS และ exit 0
-เมื่อ test เกิด runtime error ก่อนบันทึก assertion failure ได้ จึงต้องแก้และเพิ่ม regression
-ก่อนรับ Phase 1A/เริ่ม Phase 1B ดู reproduction และ acceptance ใน Spec หัวข้อ 13
-การแก้เอกสารรอบนี้ยังไม่ได้แก้ตัว runner; ต้องรายงานจำนวน tests ใหม่หลังแก้จริง
+เมื่อ test เกิด runtime error ก่อนบันทึก assertion failure ได้
+
+**แก้แล้ว:** runner ดักทุก script/engine error ด้วย `Logger` (`OS.add_logger`) แล้วนับเป็น test ล้มเหลว
+มี timeout ต่อ test และมี regression `tests/test_runner.gd` (12 tests) ที่รันคำสั่ง runner จริงกับ test ตัวอย่าง
+ที่ตั้งใจให้พัง ผลรันทั้งหมดตอนนี้ **53 passed, 0 failed** (exit 0) — รอเจ้าของ repo รับ Phase 1A ก่อนเริ่ม 1B
 
 ## License
 

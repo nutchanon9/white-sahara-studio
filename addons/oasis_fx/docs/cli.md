@@ -108,16 +108,23 @@ an image file (`texture: "file"`), import the project once so the texture can lo
 ## Running the tests
 
 ```bash
-godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd            # all tests
-godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd -- cli     # files containing "cli"
+godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd                 # all tests
+godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd -- cli          # files containing "cli"
+godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd -- --timeout 30 # per-test limit (s)
 ```
 
-**Review issue at commit `4c6e7bf`:** the current runner exits 0 when no assertion failure
-is recorded, but can incorrectly print PASS after an unhandled GDScript runtime error.
-The original suite was independently rerun: 41 passed, 0 failed, no observed script
-errors. A separate deliberate runtime-error probe reproduced the false PASS. Fix and
-regression-test this before relying on exit 0 as a release gate (see specification
-Section 13); inspect engine error output as well until the fix lands.
+The runner exits **0 only when every test passed** and **1** otherwise. A test fails when:
+
+- a `check`/`check_eq` fails;
+- **any script or engine error is logged while it runs** — GDScript has no exceptions, a
+  runtime error only aborts the current function, so the runner registers a `Logger`
+  (`OS.add_logger`, Godot 4.5+) and turns every logged error into a failure;
+- it does not finish within the time limit (default 120 s), e.g. a stuck `await`.
+
+The run also fails when a test file cannot be loaded or parsed, does not extend
+`oasis_test_case.gd` or has no `test_` methods, when no test files are found, an unknown
+option is given, an error is logged outside any test, or the runner itself hits an error. `tests/test_runner.gd` checks all of these cases by running the
+real runner command on throw-away test files in a separate Godot process.
 
 Tests write only under
 `user://oasis_fx_tests` and a temporary `res://_oasis_fx_test_output` folder, and remove
