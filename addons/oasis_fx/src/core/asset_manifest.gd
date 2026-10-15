@@ -40,26 +40,29 @@ static func preset_hash(preset: Dictionary) -> String:
 	return JSON.stringify(preset, "", true).sha256_text()
 
 
-func record(preset: Dictionary, preset_path: String, scene_path: String, dependencies: PackedStringArray) -> void:
+## `scene_file` is where the scene can be read for hashing when `scene_path`
+## (the path recorded, e.g. a target game's res:// path) is not readable here.
+func record(preset: Dictionary, preset_path: String, scene_path: String, dependencies: PackedStringArray, scene_file := "") -> void:
 	var deps := Array(dependencies)
 	deps.sort()
 	entries[preset.id] = {
 		"preset": preset_path,
 		"preset_sha256": preset_hash(preset),
 		"scene": scene_path,
-		"scene_sha256": FileAccess.get_sha256(scene_path),
+		"scene_sha256": FileAccess.get_sha256(scene_file if not scene_file.is_empty() else scene_path),
 		"dependencies": deps,
 	}
 
 
 ## "missing" (no file), "unknown" (file not in the manifest), "modified"
 ## (file changed since it was generated) or "unmodified".
-func scene_state(id: String, scene_path: String) -> String:
-	if not FileAccess.file_exists(scene_path):
+func scene_state(id: String, scene_path: String, scene_file := "") -> String:
+	var file := scene_file if not scene_file.is_empty() else scene_path
+	if not FileAccess.file_exists(file):
 		return "missing"
 	if not entries.has(id) or entries[id].get("scene") != scene_path:
 		return "unknown"
-	return "unmodified" if FileAccess.get_sha256(scene_path) == entries[id].get("scene_sha256") else "modified"
+	return "unmodified" if FileAccess.get_sha256(file) == entries[id].get("scene_sha256") else "modified"
 
 
 func save() -> Error:

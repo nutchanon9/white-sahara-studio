@@ -3,7 +3,8 @@ extends RefCounted
 ## Path helpers: resolve CLI arguments and keep all reads/writes inside the
 ## project (res://) or the user data folder (user://).
 
-const _SEGMENT_PATTERN := "^[A-Za-z0-9_][A-Za-z0-9_. -]*$"
+## Letters and digits of any script (so Thai folder names work), _ - . and spaces.
+const _SEGMENT_PATTERN := "^[\\p{L}\\p{N}_][\\p{L}\\p{N}\\p{M}_. -]*$"
 const _FORBIDDEN_OUTPUT_PREFIXES := ["res://.godot", "res://addons/oasis_fx"]
 
 

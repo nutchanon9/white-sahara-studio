@@ -37,7 +37,7 @@
       "amount": 6,
       "one_shot": true,
       "explosiveness": 0.3,
-      "lifetime_seconds": 1.0,
+      "lifetime_seconds": 1,
       "emission_shape": "rect",
       "emission_rect_size": [60, 0],
       "direction_degrees": -90,
@@ -102,11 +102,11 @@
       "angular_velocity_min": -540,
       "angular_velocity_max": 540,
       "scale_min": 0.6,
-      "scale_max": 1.0,
-      "hue_variation": 0.06,
+      "scale_max": 1,
       "color_start": "#FFB06AFF",
       "color_mid": "#FFB06AFF",
       "color_end": "#FFB06A00",
+      "hue_variation": 0.06,
       "texture": "square",
       "texture_size_px": 8
     }

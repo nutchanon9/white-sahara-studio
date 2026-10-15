@@ -34,6 +34,7 @@ Everything after `--` belongs to OasisFx; everything before it belongs to Godot.
 | `validate-all <dir>` | Validates every `*.vfx.json` under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across files. |
 | `generate <preset>` | Validates, then writes `<out>/<id>.tscn`, loads it back to verify it, and updates `<out>/oasis_fx_manifest.json`. |
 | `generate-all <dir>` | Generates every preset under `<dir>`. **All or nothing:** if any preset is invalid, two presets share an id, or (without `--force`) any output file exists, nothing is written and the presets that would have been fine are reported as `SKIP`. |
+| `format <preset\|dir> [--check]` | Rewrites presets in canonical form (field order, 2-space indent, whole numbers without `.0`) — the same text the desktop app saves. `--check` only reports files that are not canonical (exit 1). |
 | `schema [--write]` | Prints the JSON Schema built from the validator's field table; `--write` rewrites `schemas/vfx.v1.schema.json` (a test fails while the file is out of date). |
 | `version` | Prints the OasisFx version. |
 | `help` | Prints usage. |
@@ -47,6 +48,7 @@ Everything after `--` belongs to OasisFx; everything before it belongs to Godot.
 | `--dry-run` | generate, generate-all | Validate and report the target paths; write nothing (no folders either). |
 | `--json` | all | Print one JSON object on its own line instead of text. |
 | `--write` | schema | Write the schema file instead of printing it. |
+| `--check` | format | Report non-canonical files without rewriting them. |
 
 Preset paths and folders may be `res://…`, relative to the project root, or absolute paths
 inside the project.

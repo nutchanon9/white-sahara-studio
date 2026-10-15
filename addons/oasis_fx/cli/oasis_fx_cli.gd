@@ -11,6 +11,7 @@ extends SceneTree
 ##            [--force] [--dry-run]
 ##   generate-all <dir> [--out DIR]             generate every preset (all or nothing)
 ##            [--force] [--dry-run]
+##   format <preset|dir> [--check]              rewrite presets in canonical form
 ##   schema [--write]                           print (or rewrite) the JSON Schema
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
@@ -24,6 +25,8 @@ const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 const ErrorCapture := preload("res://addons/oasis_fx/src/core/error_capture.gd")
 const Schema := preload("res://addons/oasis_fx/src/core/vfx_schema.gd")
+const Serializer := preload("res://addons/oasis_fx/src/core/preset_serializer.gd")
+const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 
 const EXIT_OK := 0
 const EXIT_FAILED := 1
@@ -39,6 +42,8 @@ Commands:
   validate-all <dir>     Validate every *.vfx.json under <dir> (recursive) and check ids are unique.
   generate <preset>      Validate and write <out>/<id>.tscn.
   generate-all <dir>     Generate every preset under <dir>. Writes nothing unless all are valid.
+  format <preset|dir>    Rewrite presets in canonical form (key order, spacing, numbers).
+                         With --check, only report files that are not canonical.
   schema [--write]       Print the preset JSON Schema, or rewrite schemas/vfx.v1.schema.json.
   version                Print the OasisFx version.
   help                   Show this help.
@@ -103,6 +108,12 @@ func _run(args: PackedStringArray) -> int:
 			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
 				return _usage_error("--out, --force and --dry-run only apply to generate")
 			return _validate(rest[0])
+		"format":
+			if rest.size() != 1:
+				return _usage_error("format expects exactly one preset path or directory")
+			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out") or parsed.flags.has("write"):
+				return _usage_error("format only accepts --check")
+			return _format(rest[0], parsed.flags.has("check"))
 		"schema":
 			if not rest.is_empty() or parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
 				return _usage_error("schema takes no arguments except --write")
@@ -137,6 +148,53 @@ func _validate(arg: String) -> int:
 	lines.append_array(report.format_lines())
 	_emit(data, "\n".join(lines))
 	return EXIT_OK if report.is_ok() else EXIT_FAILED
+
+
+func _format(arg: String, check: bool) -> int:
+	var target := PathUtils.resolve_input_path(arg).trim_suffix("/")
+	var paths := PackedStringArray()
+	if DirAccess.dir_exists_absolute(target):
+		paths = Generator.find_presets(target)
+	elif FileAccess.file_exists(target):
+		paths.append(target)
+	else:
+		return _fail_message("format", "not found: %s" % target)
+	if paths.is_empty():
+		return _fail_message("format", "no *%s files found under %s" % [OasisFx.VFX_PRESET_SUFFIX, target])
+	var entries := []
+	var lines := PackedStringArray()
+	var ok := true
+	var changed := 0
+	for path in paths:
+		var report := Report.new(path)
+		var data: Variant = Loader.load_file(path, report)
+		var entry := report.to_dict()
+		var status := "failed"
+		if data != null:
+			var text := Serializer.to_text(data)
+			if FileAccess.get_file_as_string(path) == text:
+				status = "unchanged"
+			elif check:
+				status = "needs_format"
+				ok = false
+			else:
+				var file := FileAccess.open(path, FileAccess.WRITE)
+				if file == null:
+					report.error("", "cannot write: %s" % error_string(FileAccess.get_open_error()))
+				else:
+					file.store_string(text)
+					file.close()
+					status = "formatted"
+					changed += 1
+		ok = ok and report.is_ok()
+		entry = report.to_dict()
+		entry["action"] = status if report.is_ok() else "failed"
+		entries.append(entry)
+		lines.append("%-6s%s  (%s)" % ["OK" if report.is_ok() and status != "needs_format" else "FAIL", path, String(entry.action).replace("_", " ")])
+		lines.append_array(report.format_lines())
+	lines.append("%d file(s), %d %s" % [paths.size(), changed if not check else entries.filter(func(e): return e.action == "needs_format").size(), "formatted" if not check else "need formatting"])
+	_emit({"command": "format", "ok": ok, "check": check, "results": entries}, "\n".join(lines))
+	return EXIT_OK if ok else EXIT_FAILED
 
 
 func _schema(write: bool) -> int:
@@ -257,6 +315,8 @@ func _parse(args: PackedStringArray) -> Dictionary:
 			flags["dry_run"] = true
 		elif arg == "--write":
 			flags["write"] = true
+		elif arg == "--check":
+			flags["check"] = true
 		elif arg == "--out":
 			if i + 1 >= args.size():
 				return {"flags": flags, "positional": positional, "error": "--out needs a directory"}
