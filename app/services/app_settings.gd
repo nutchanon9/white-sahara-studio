@@ -8,6 +8,8 @@ const MAX_RECENT := 8
 
 var workspace_dir := ""
 var last_export_dir := ""
+## The game project whose res:// files presets reference ("" = none yet).
+var game_project_dir := ""
 var recent_files: PackedStringArray = []
 
 var _path := PATH
@@ -30,6 +32,7 @@ func load_settings() -> void:
 		return
 	workspace_dir = config.get_value("workspace", "dir", default_workspace_dir())
 	last_export_dir = config.get_value("export", "last_dir", "")
+	game_project_dir = config.get_value("game", "project_dir", "")
 	recent_files = PackedStringArray(config.get_value("files", "recent", PackedStringArray()))
 
 
@@ -37,6 +40,7 @@ func save_settings() -> Error:
 	var config := ConfigFile.new()
 	config.set_value("workspace", "dir", workspace_dir)
 	config.set_value("export", "last_dir", last_export_dir)
+	config.set_value("game", "project_dir", game_project_dir)
 	config.set_value("files", "recent", recent_files)
 	return config.save(_path)
 

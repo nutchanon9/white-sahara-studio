@@ -75,7 +75,8 @@ func _add_section(root: TreeItem, title: String, paths: PackedStringArray) -> vo
 		return
 	for path in paths:
 		var item := tree.create_item(section)
-		item.set_text(0, path.get_file().trim_suffix(OasisFx.VFX_PRESET_SUFFIX))
+		var sfx := path.ends_with(OasisFx.SFX_PRESET_SUFFIX)
+		item.set_text(0, ("♪ " if sfx else "") + path.get_file().trim_suffix(OasisFx.SFX_PRESET_SUFFIX if sfx else OasisFx.VFX_PRESET_SUFFIX))
 		item.set_tooltip_text(0, path)
 		item.set_metadata(0, path)
 

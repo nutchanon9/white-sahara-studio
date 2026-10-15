@@ -44,11 +44,11 @@ func test_starts_with_an_example_and_a_live_preview() -> void:
 
 func test_editing_through_controls_updates_document_preview_and_diagnostics() -> void:
 	var app := await _start("ui_edit")
-	app.inspector.select_emitter(1)
-	var amount: SpinBox = app.inspector.controls["emitter:amount"]
+	app.inspector.select_item(1)
+	var amount: SpinBox = app.inspector.controls["item:amount"]
 	amount.value = 22
 	check(app.document.dirty, "edit makes the document dirty")
-	check_eq(app.document.get_emitter_value(1, "amount"), 22, "value written as int")
+	check_eq(app.document.get_item_value(1, "amount"), 22, "value written as int")
 	check(app._title.text.contains("*"), "title shows unsaved changes")
 	await tree.create_timer(app.REVALIDATE_DELAY + 0.1).timeout
 	check_eq((app.preview.effect.get_node("flame") as GPUParticles2D).amount, 22, "preview rebuilt with the new amount")
@@ -69,15 +69,15 @@ func test_editing_through_controls_updates_document_preview_and_diagnostics() ->
 
 func test_emitter_buttons_and_selection() -> void:
 	var app := await _start("ui_emitters")
-	app.inspector._emitter_buttons.duplicate.pressed.emit()
-	check_eq(app.document.emitter_count(), 4, "duplicated")
-	check_eq(app.inspector.selected_emitter, 1, "copy selected")
-	check_eq(app.document.get_emitter_value(1, "id"), "smoke_2", "unique id")
-	app.inspector._emitter_buttons.remove.pressed.emit()
-	check_eq(app.document.emitter_count(), 3, "removed")
-	var color: ColorPickerButton = app.inspector.controls["emitter:color_start"]
+	app.inspector._item_buttons.duplicate.pressed.emit()
+	check_eq(app.document.item_count(), 4, "duplicated")
+	check_eq(app.inspector.selected_item, 1, "copy selected")
+	check_eq(app.document.get_item_value(1, "id"), "smoke_2", "unique id")
+	app.inspector._item_buttons.remove.pressed.emit()
+	check_eq(app.document.item_count(), 3, "removed")
+	var color: ColorPickerButton = app.inspector.controls["item:color_start"]
 	color.color_changed.emit(Color(1, 0, 0, 0.5))
-	check_eq(app.document.get_emitter_value(app.inspector.selected_emitter, "color_start"), "#FF000080", "color written as #RRGGBBAA")
+	check_eq(app.document.get_item_value(app.inspector.selected_item, "color_start"), "#FF000080", "color written as #RRGGBBAA")
 	await _stop(app)
 
 
@@ -160,4 +160,52 @@ func test_new_preset_from_toolbar() -> void:
 	var app := await _start("ui_new", "")
 	check_eq(app.document.display_name(), "Untitled", "empty startup gives a new preset")
 	check(app.validation.report.is_ok() and app.preview.effect != null, "new preset is valid and previews")
+	await _stop(app)
+
+
+func test_sound_preview_timeline_and_game_project() -> void:
+	var app := await _start("ui_sfx", "res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json")
+	check_eq(app.document.asset_type(), "sfx", "sound opened")
+	check(app.validation.report.is_ok(), "valid")
+	check(app.diagnostics.status.text.begins_with("Valid — 2 layer(s)"), "status: " + app.diagnostics.status.text)
+	check(app.preview.timeline.visible, "timeline shown for sounds")
+	var fx: Node = app.preview.effect
+	check(is_instance_valid(fx) and fx.has_method("get_players") and fx.is_playing(), "sound playing in the preview")
+	var rows: Array = app.preview.timeline.rows()
+	check_eq(rows.map(func(r): return r.name), ["whoosh", "impact"], "one timeline row per layer")
+	check(rows[1].start == 0.14 and rows[1].duration > 0.3, "impact row starts at 140 ms with the real length: %s" % [rows[1]])
+	check(app.inspector.controls.has("item:source") and app.inspector.controls.has("effect:bus"), "sfx fields in the inspector")
+	app.inspector.select_item(1)
+	var gain: SpinBox = app.inspector.controls["item:gain_db"]
+	gain.value = -9.0
+	check_eq(app.document.get_item_value(1, "gain_db"), -9.0, "edit written")
+	app._revalidate()
+	check_eq(app.preview.effect.get_node("impact").volume_db, -9.0, "preview rebuilt with the new gain")
+
+	var game := ProjectSettings.globalize_path(temp_dir("ui_sfx_game"))
+	DirAccess.make_dir_recursive_absolute(game.path_join("audio"))
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://addons/oasis_fx/presets/examples/audio/chime.wav"), game.path_join("audio/ding.wav"))
+	check(not app.set_game_project(game.path_join("audio")), "a folder without project.godot is refused")
+	await tree.process_frame
+	app._message.hide()
+	write_text(game.path_join("project.godot"), "config_version=5\n")
+	check(app.set_game_project(game), "game project set")
+	check_eq(app.res_path_in_game(game.path_join("audio/ding.wav")), "res://audio/ding.wav", "picked file becomes a res:// path")
+	check_eq(app.res_path_in_game("/elsewhere/x.wav"), "", "files outside the game are rejected")
+	# Layer 1 ("impact") has no variants, so the preview always plays its source.
+	app.document.set_item_value(1, "source", "res://audio/ding.wav")
+	app._revalidate()
+	check(app.validation.report.is_ok(), "audio from the game project validates")
+	check_eq(app.preview.timeline.rows()[1].file, "ding.wav", "and previews")
+	await _stop(app)
+
+
+func test_new_sound_from_toolbar() -> void:
+	var app := await _start("ui_new_sfx", "")
+	app.new_preset("sfx")
+	check_eq(app.document.display_name(), "Untitled", "new sound")
+	check(app.validation.report.is_ok() and app.preview.timeline.visible, "valid and shown as a timeline")
+	app.save()
+	check(app._save_dialog.current_file.ends_with(".sfx.json"), "Save As suggests .sfx.json")
+	app._save_dialog.hide()
 	await _stop(app)

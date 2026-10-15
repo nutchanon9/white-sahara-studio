@@ -1,11 +1,14 @@
 extends VBoxContainer
-## Effect preview in its own SubViewport (own World2D, isolated from
-## everything else). The effect is built by the shared builder, i.e. it is the
-## same node tree the generator saves, played by the same runtime script.
+## Preview of the open preset. VFX play in their own SubViewport (own World2D,
+## isolated from everything else); SFX play through audio players and are shown
+## as a timeline. Either way the node tree comes from the shared builders, i.e.
+## it is what the generator saves, played by the same runtime script.
 
 signal state_changed
 
 const Builder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
+const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
+const SfxTimeline := preload("res://app/ui/sfx_timeline.gd")
 const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 
 const BACKGROUNDS := {
@@ -21,6 +24,9 @@ const REPLAY_GAP := 0.4
 var effect: Node2D
 var loop_preview := true
 
+var timeline: SfxTimeline
+var _container: SubViewportContainer
+var _vfx_controls: Array[Control] = []
 var _viewport: SubViewport
 var _world_root: Node2D
 var _background: ColorRect
@@ -57,30 +63,38 @@ func _ready() -> void:
 		bg.add_item(name)
 	bg.item_selected.connect(func(i: int) -> void: _background.color = BACKGROUNDS.values()[i])
 	bar.add_child(bg)
+	_vfx_controls.append(bg)
 	var grid_check := CheckBox.new()
 	grid_check.text = "Grid"
 	grid_check.button_pressed = true
 	grid_check.toggled.connect(func(on: bool) -> void: _grid.visible = on)
 	bar.add_child(grid_check)
+	_vfx_controls.append(grid_check)
 	var zoom := OptionButton.new()
 	for z in ZOOMS:
 		zoom.add_item("%d%%" % int(z * 100))
 	zoom.select(1)
 	zoom.item_selected.connect(func(i: int) -> void: _camera.zoom = Vector2.ONE * ZOOMS[i])
 	bar.add_child(zoom)
+	_vfx_controls.append(zoom)
 	_time_label = Label.new()
 	_time_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	bar.add_child(_time_label)
 
-	var container := SubViewportContainer.new()
-	container.stretch = true
-	container.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	container.custom_minimum_size = Vector2(320, 240)
-	add_child(container)
+	_container = SubViewportContainer.new()
+	_container.stretch = true
+	_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_container.custom_minimum_size = Vector2(320, 240)
+	add_child(_container)
 	_viewport = SubViewport.new()
 	_viewport.handle_input_locally = false
-	container.add_child(_viewport)
+	_container.add_child(_viewport)
+	timeline = SfxTimeline.new()
+	timeline.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	timeline.custom_minimum_size = Vector2(320, 240)
+	timeline.visible = false
+	add_child(timeline)
 
 	var canvas_bg := CanvasLayer.new()
 	canvas_bg.layer = -1
@@ -107,21 +121,29 @@ func _ready() -> void:
 	add_child(_replay_timer)
 
 
-## Shows a validated, normalized preset. Keeps playing if it was playing.
-func show_preset(preset: Dictionary) -> void:
+## Shows a validated, normalized preset (vfx or sfx). `stream_provider`
+## loads audio for sfx presets (res:// path -> AudioStream).
+func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 	_preset = preset
 	_clear_effect()
+	var sfx: bool = preset.get("asset_type") == "sfx"
+	_container.visible = not sfx
+	timeline.visible = sfx
+	for control in _vfx_controls:
+		control.visible = not sfx
 	if preset.is_empty():
+		timeline.effect = null
 		_update_time()
 		return
 	var report := Report.new()
-	effect = Builder.build(preset, report)
+	effect = SfxBuilder.build(preset, report, stream_provider) if sfx else Builder.build(preset, report)
 	if effect == null:
 		return
 	effect.auto_play = false
 	effect.free_when_finished = false
 	effect.finished.connect(_on_finished)
 	_world_root.add_child(effect)
+	timeline.effect = effect if sfx else null
 	effect.play()
 	if _pause_button.button_pressed:
 		effect.set_paused(true)
@@ -175,7 +197,9 @@ func _update_time() -> void:
 	var state := "playing" if effect.is_playing() else "stopped"
 	if is_paused():
 		state = "paused"
-	if effect.loop:
+	if effect.has_method("is_looping") and effect.is_looping():
+		_time_label.text = "%s  %.2f s (looping)" % [state, effect.get_elapsed()]
+	elif not effect.has_method("is_looping") and effect.loop:
 		_time_label.text = "%s  %.2f s / loop %.2f s" % [state, effect.get_elapsed(), effect.duration_seconds]
 	else:
 		_time_label.text = "%s  %.2f / %.2f s" % [state, effect.get_elapsed(), effect.get_total_time()]
@@ -190,6 +214,7 @@ func _on_finished() -> void:
 func _clear_effect() -> void:
 	_replay_timer.stop()
 	if is_instance_valid(effect):
+		effect.stop()
 		_world_root.remove_child(effect)
 		effect.free()
 	effect = null

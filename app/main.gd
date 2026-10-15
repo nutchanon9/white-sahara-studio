@@ -5,8 +5,9 @@ extends Control
 ## (center), inspector (right). All preset logic lives in the shared core
 ## (addons/oasis_fx/src/core) and the app services; this script only wires UI.
 ##
-## Public methods (new_preset, open_file, save_to, plan_export, run_export…)
-## are what the toolbar uses and what the headless UI tests call.
+## Public methods (new_preset, open_file, save_to, set_game_project,
+## plan_export, run_export…) are what the toolbar uses and what the headless
+## UI tests call. Presets are vfx (particles) or sfx (layered sounds).
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const PresetDocument := preload("res://app/services/preset_document.gd")
@@ -16,6 +17,9 @@ const Inspector := preload("res://app/ui/inspector.gd")
 const PreviewPanel := preload("res://app/ui/preview_panel.gd")
 const PresetBrowser := preload("res://app/ui/preset_browser.gd")
 const DiagnosticsPanel := preload("res://app/ui/diagnostics_panel.gd")
+const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
+const VfxBuilder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
+const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 
 const STARTUP_PRESET := "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json"
 ## Delay between an edit and re-validation/preview rebuild.
@@ -34,6 +38,12 @@ var diagnostics: DiagnosticsPanel
 var validation: Dictionary = {}
 
 var _title: Label
+var _game_label: Label
+var _game_dialog: FileDialog
+var _asset_dialog: FileDialog
+var _asset_pick: Callable
+## Loaded preview audio: res path -> {"file", "time", "stream"}.
+var _audio_cache := {}
 var _save_button: Button
 var _export_button: Button
 var _open_dialog: FileDialog
@@ -56,6 +66,7 @@ func _ready() -> void:
 	settings.load_settings()
 	settings.ensure_workspace()
 	_build_ui()
+	_apply_game_project()
 	document.changed.connect(_on_document_changed)
 	browser.workspace_dir = settings.workspace_dir
 	browser.refresh()
@@ -77,9 +88,26 @@ func _notification(what: int) -> void:
 
 # --- Commands --------------------------------------------------------------
 
-func new_preset() -> void:
-	document.new_preset()
+## Starts a new preset: "vfx" (particle effect) or "sfx" (layered sound).
+func new_preset(type := "vfx") -> void:
+	document.new_preset(type)
 	_after_load()
+
+
+## Sets the game project folder used to find res:// audio/textures for
+## previews and validation (the folder containing project.godot).
+## Returns false (and explains) when it is not a Godot project.
+func set_game_project(dir: String) -> bool:
+	var root := Exporter.find_project_root(dir)
+	if root.is_empty() or Exporter.normalize(dir) != root:
+		show_message("Not a Godot project", "%s does not contain project.godot. Choose your game's project folder." % dir)
+		return false
+	settings.game_project_dir = root
+	settings.save_settings()
+	_apply_game_project()
+	_audio_cache.clear()
+	_revalidate()
+	return true
 
 
 ## Opens a preset file. Returns false (and shows why) when it cannot be read.
@@ -97,8 +125,9 @@ func open_file(path: String) -> bool:
 ## Saves to `path`. Returns OK or the error (shown to the user). The document
 ## stays dirty when saving fails, so no work is lost.
 func save_to(path: String) -> Error:
-	if not path.ends_with(OasisFx.VFX_PRESET_SUFFIX):
-		path = path.trim_suffix(".json") + OasisFx.VFX_PRESET_SUFFIX
+	var suffix: String = document.file_suffix()
+	if not path.ends_with(suffix):
+		path = path.trim_suffix(".json").trim_suffix(".vfx").trim_suffix(".sfx") + suffix
 	var err: Error = document.save(path)
 	if err != OK:
 		show_message("Save failed", "Could not save %s:\n%s" % [path, error_string(err)])
@@ -120,7 +149,7 @@ func save() -> void:
 
 func save_as() -> void:
 	_save_dialog.current_dir = settings.workspace_dir
-	_save_dialog.current_file = "%s%s" % [str(document.get_value("id")), OasisFx.VFX_PRESET_SUFFIX]
+	_save_dialog.current_file = "%s%s" % [str(document.get_value("id")), document.file_suffix()]
 	_save_dialog.popup_centered_ratio(0.6)
 
 
@@ -147,16 +176,17 @@ func run_export(planned: Dictionary, allow_overwrite: bool) -> Dictionary:
 		settings.last_export_dir = planned.files[0].path.get_base_dir()
 		settings.save_settings()
 		show_message("Exported", "Exported %s to %s\n\nIn the game, instantiate %s (it plays and frees itself).\nThe scene needs %s, which is now in the game project." % [
-			planned.preset.id, planned.project_root, planned.files[0].res_path, OasisFx.RUNTIME_SCRIPT_PATH])
+			planned.preset.id, planned.project_root, planned.files[0].res_path, planned.files[1].res_path])
 	else:
 		show_message("Export failed", "\n".join(PackedStringArray(result.errors)))
 	return result
 
 
-## First *.vfx.json argument (e.g. from "Open with OasisFx" on Windows), or "".
+## First *.vfx.json / *.sfx.json argument (e.g. from "Open with OasisFx" on
+## Windows), or "".
 static func preset_from_command_line(args: Array) -> String:
 	for arg in args:
-		if String(arg).ends_with(OasisFx.VFX_PRESET_SUFFIX):
+		if String(arg).ends_with(OasisFx.VFX_PRESET_SUFFIX) or String(arg).ends_with(OasisFx.SFX_PRESET_SUFFIX):
 			return arg
 	return ""
 
@@ -189,12 +219,26 @@ func _build_ui() -> void:
 
 	var toolbar := HBoxContainer.new()
 	column.add_child(toolbar)
-	_tool_button(toolbar, "New", "Ctrl+N", func() -> void: confirm_discard(new_preset))
+	_tool_button(toolbar, "New effect", "Ctrl+N", func() -> void: confirm_discard(new_preset.bind("vfx")))
+	_tool_button(toolbar, "New sound", "Ctrl+Shift+N", func() -> void: confirm_discard(new_preset.bind("sfx")))
 	_tool_button(toolbar, "Open…", "Ctrl+O", func() -> void: confirm_discard(_show_open_dialog))
 	_save_button = _tool_button(toolbar, "Save", "Ctrl+S", save)
 	_tool_button(toolbar, "Save As…", "Ctrl+Shift+S", save_as)
 	toolbar.add_child(VSeparator.new())
 	_export_button = _tool_button(toolbar, "Export to game…", "Ctrl+E", _show_export_dialog)
+	toolbar.add_child(VSeparator.new())
+	var game_button := Button.new()
+	game_button.text = "Game project…"
+	game_button.tooltip_text = "The Godot game whose res:// audio and textures you use in presets."
+	game_button.pressed.connect(func() -> void:
+		if not settings.game_project_dir.is_empty():
+			_game_dialog.current_dir = settings.game_project_dir
+		_game_dialog.popup_centered_ratio(0.6))
+	toolbar.add_child(game_button)
+	_game_label = Label.new()
+	_game_label.add_theme_font_size_override("font_size", 12)
+	_game_label.modulate = Color(1, 1, 1, 0.7)
+	toolbar.add_child(_game_label)
 	_title = Label.new()
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -227,7 +271,8 @@ func _build_ui() -> void:
 	inspector = Inspector.new()
 	inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(inspector)
-	diagnostics.emitter_requested.connect(inspector.select_emitter)
+	diagnostics.item_requested.connect(inspector.select_item)
+	inspector.pick_file_requested.connect(_pick_asset)
 
 	_revalidate_timer = Timer.new()
 	_revalidate_timer.one_shot = true
@@ -266,6 +311,10 @@ func _build_dialogs() -> void:
 			action.call())
 	_export_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_DIR, "Export to a folder in your Godot game")
 	_export_dialog.dir_selected.connect(_on_export_dir_selected)
+	_game_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_DIR, "Choose your game's project folder (contains project.godot)")
+	_game_dialog.dir_selected.connect(set_game_project)
+	_asset_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_FILE, "Choose a file in your game project")
+	_asset_dialog.file_selected.connect(_on_asset_selected)
 
 	_discard_dialog = ConfirmationDialog.new()
 	_discard_dialog.title = "Unsaved changes"
@@ -299,7 +348,7 @@ func _file_dialog(mode: FileDialog.FileMode, title: String) -> FileDialog:
 	dialog.title = title
 	dialog.use_native_dialog = true
 	if mode != FileDialog.FILE_MODE_OPEN_DIR:
-		dialog.filters = PackedStringArray(["*.vfx.json ; OasisFx VFX preset"])
+		dialog.filters = PackedStringArray(["*.vfx.json, *.sfx.json ; OasisFx presets"])
 	add_child(dialog)
 	return dialog
 
@@ -354,7 +403,7 @@ func _revalidate() -> void:
 	_revalidate_timer.stop()
 	validation = document.validate()
 	diagnostics.show_report(validation.report, validation.preset)
-	preview.show_preset(validation.preset)
+	preview.show_preset(validation.preset, Callable(self, "_load_audio"))
 
 
 func _update_title() -> void:
@@ -377,12 +426,75 @@ func _run_pending() -> void:
 		action.call()
 
 
+# --- Game project and assets -----------------------------------------------
+
+func _apply_game_project() -> void:
+	var roots := PackedStringArray()
+	if not settings.game_project_dir.is_empty():
+		roots.append(settings.game_project_dir)
+	roots.append("res://")
+	document.res_roots = roots
+	if _game_label:
+		_game_label.text = ("Game: " + settings.game_project_dir.get_file()) if not settings.game_project_dir.is_empty() else "No game project set"
+		_game_label.tooltip_text = settings.game_project_dir
+
+
+## Preview audio for an sfx preset: the file at `res_path` in the game
+## project (or the app's bundled examples), loaded from disk and cached
+## until the file changes.
+func _load_audio(res_path: String) -> AudioStream:
+	var file := Validator.resolve_res_path(res_path, document.res_roots)
+	if file.is_empty():
+		return null
+	var time := FileAccess.get_modified_time(file)
+	if _audio_cache.has(res_path) and _audio_cache[res_path].file == file and _audio_cache[res_path].time == time:
+		return _audio_cache[res_path].stream
+	var stream := SfxBuilder.load_stream_from_disk(file)
+	if stream != null:
+		stream.set_meta("source_file", res_path.get_file())
+		_audio_cache[res_path] = {"file": file, "time": time, "stream": stream}
+	return stream
+
+
+func _pick_asset(extensions: PackedStringArray, on_pick: Callable) -> void:
+	if settings.game_project_dir.is_empty():
+		show_message("Set the game project first", "Click \"Game project…\" and choose your game's folder; files are referenced by their res:// path in that game.")
+		return
+	_asset_pick = on_pick
+	var patterns := PackedStringArray()
+	for ext in extensions:
+		patterns.append("*." + ext)
+	_asset_dialog.filters = PackedStringArray([", ".join(patterns) + " ; Supported files"])
+	_asset_dialog.current_dir = settings.game_project_dir
+	_asset_dialog.popup_centered_ratio(0.6)
+
+
+## Converts a picked file inside the game project into its res:// path.
+func _on_asset_selected(file: String) -> void:
+	var res := res_path_in_game(file)
+	if res.is_empty():
+		show_message("File outside the game", "%s is not inside the game project %s. Copy it into the game first." % [file, settings.game_project_dir])
+		return
+	if _asset_pick.is_valid():
+		_asset_pick.call(res)
+
+
+## res:// path of an absolute file inside the game project, or "".
+func res_path_in_game(file: String) -> String:
+	var root := settings.game_project_dir
+	var normalized := Exporter.normalize(file)
+	if root.is_empty() or not normalized.begins_with(root + "/"):
+		return ""
+	return "res://" + normalized.substr(root.length() + 1)
+
+
 # --- Packaging check -------------------------------------------------------
 
 ## `OasisFx --headless -- --smoke-test <folder in a Godot game>` checks a
 ## packaged build end to end without a person: the bundled examples are
 ## listed and valid, the preview builds, settings live in user://, packaged
-## res:// refuses writes, and Fire Burst exports into the given game folder.
+## res:// refuses writes, Fire Burst exports into the given game folder, and
+## the Sword Slash sound previews with its bundled audio and exports with it.
 ## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
 func _smoke_test(export_dir: String) -> void:
 	var checks := {}
@@ -399,6 +511,20 @@ func _smoke_test(export_dir: String) -> void:
 		var result := Exporter.run(planned, true) if planned.ok else {"ok": false, "errors": planned.errors}
 		checks["export_ok"] = result.ok
 		checks["export_errors"] = result.errors
+		ok = ok and result.ok
+	# Sound: the bundled example audio is readable from the package (preview
+	# uses its real length) and a sound exports with its audio files.
+	var sound_opened := open_file(OasisFx.EXAMPLES_DIR.path_join("sword_slash_sfx.sfx.json"))
+	checks["sound_valid"] = sound_opened and validation.report.is_ok()
+	var rows: Array = preview.timeline.rows() if preview.timeline.visible else []
+	checks["sound_preview_layers"] = rows.size()
+	checks["sound_audio_loaded"] = rows.size() > 0 and rows.all(func(r): return r.duration > 0.0)
+	ok = ok and checks.sound_valid and checks.sound_audio_loaded
+	if not export_dir.is_empty():
+		var planned := plan_export(export_dir)
+		var result := Exporter.run(planned, true) if planned.ok else {"ok": false, "errors": planned.errors}
+		checks["sound_export_ok"] = result.ok
+		checks["sound_export_errors"] = result.errors
 		ok = ok and result.ok
 	checks["ok"] = ok
 	print("SMOKE " + JSON.stringify(checks))

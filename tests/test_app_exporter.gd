@@ -107,12 +107,11 @@ func test_rejections() -> void:
 	DirAccess.make_dir_recursive_absolute(game.path_join(".godot/imported"))
 	plan = Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, game.path_join(".godot/imported"))
 	check(not plan.ok, "cannot export into the game's .godot cache")
-	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIRE_BURST))
-	data.emitters[0].texture = "file"
-	data.emitters[0].erase("texture_size_px")
-	data.emitters[0].texture_path = "res://addons/oasis_fx/tests/fixtures/test_texture.tres"
-	plan = Exporter.plan(Validator.validate(data, Report.new()), "", game.path_join("vfx"))
-	check(not plan.ok and str(plan.errors).contains("cannot export file textures yet"), "file textures rejected with guidance")
+	var missing := _preset(FIRE_BURST)
+	missing.emitters[0].texture = "file"
+	missing.emitters[0].texture_path = "res://textures/not_anywhere.png"
+	plan = Exporter.plan(missing, "", game.path_join("vfx"))
+	check(not plan.ok and str(plan.errors).contains("res://textures/not_anywhere.png is not in the game project"), "a file neither in the game nor bundled is refused: %s" % [plan.errors])
 
 
 func test_thai_folder_in_game() -> void:
@@ -170,3 +169,109 @@ func _check():
 		check_eq(info.emitters, ["smoke", "flame", "embers"], "all emitters present")
 		check_eq(info.freed, true, "frees itself after finishing")
 		check_eq(info.parent_alive, true, "parent untouched")
+
+
+func test_file_texture_in_the_game_is_used_not_copied() -> void:
+	var game := _game("export_texture")
+	DirAccess.make_dir_recursive_absolute(game.path_join("art"))
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://addons/oasis_fx/tests/fixtures/test_texture.tres"), game.path_join("art/spark.tres"))
+	var preset := _preset(FIRE_BURST)
+	preset.emitters[2].texture = "file"
+	preset.emitters[2].texture_path = "res://art/spark.tres"
+	var plan := Exporter.plan(preset, "", game.path_join("vfx"))
+	check(plan.ok, "plan ok: %s" % [plan.errors])
+	var entry: Array = plan.files.filter(func(f): return f.res_path == "res://art/spark.tres")
+	check(entry.size() == 1 and entry[0].action == "use", "the game's own texture is used as is")
+	var before := FileAccess.get_file_as_string(game.path_join("art/spark.tres"))
+	check(Exporter.run(plan).ok, "export ok")
+	check_eq(FileAccess.get_file_as_string(game.path_join("art/spark.tres")), before, "game file untouched")
+	check(FileAccess.get_file_as_string(game.path_join("vfx/fire_burst.tscn")).contains("path=\"res://art/spark.tres\""), "scene references it")
+
+
+func test_sfx_export_copies_runtime_and_bundled_audio_and_runs() -> void:
+	var game := _game("export_sfx")
+	DirAccess.make_dir_recursive_absolute(game.path_join("sfx"))
+	var sword := "res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json"
+	var plan := Exporter.plan(_preset(sword), sword, game.path_join("sfx"))
+	check(plan.ok, "plan ok: %s" % [plan.errors])
+	var actions := {}
+	for f in plan.files:
+		actions[f.res_path] = f.action
+	check_eq(actions.get("res://sfx/sword_slash_sfx.tscn"), "create", "scene")
+	check_eq(actions.get(OasisFx.SFX_RUNTIME_SCRIPT_PATH), "create", "sfx runtime script")
+	check_eq(actions.get("res://addons/oasis_fx/presets/examples/audio/whoosh_2.wav"), "create", "bundled example audio is copied")
+	check(plan.warnings.any(func(w): return w.contains("copied from the OasisFx examples")), "copying example audio is pointed out")
+	check(Exporter.run(plan).ok, "export ok")
+	check_eq(FileAccess.get_sha256(game.path_join("addons/oasis_fx/presets/examples/audio/impact.wav")), FileAccess.get_sha256("res://addons/oasis_fx/presets/examples/audio/impact.wav"), "audio copied byte for byte")
+	var again := Exporter.plan(_preset(sword), sword, game.path_join("sfx"))
+	check(again.files.all(func(f): return f.action in ["unchanged", "use"]), "re-export changes nothing: %s" % [again.files.map(func(f): return [f.res_path, f.action])])
+	# The game project imports its audio, then plays the exported sound.
+	var output := []
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--import"]), output, true)
+	write_text(game.path_join("verify_sfx.gd"), """extends SceneTree
+func _initialize():
+	create_timer(15.0).timeout.connect(func():
+		print("RESULT timeout")
+		quit(2))
+	_check.call_deferred()
+func _check():
+	var scene = load("res://sfx/sword_slash_sfx.tscn")
+	var fx = scene.instantiate()
+	root.add_child(fx)
+	await process_frame
+	var info = {"script": fx.get_script().resource_path, "playing": fx.is_playing(), "total": fx.get_total_time(),
+		"layers": fx.get_players().map(func(p): return String(p.name))}
+	await create_timer(fx.get_total_time() + 0.3).timeout
+	info["freed"] = not is_instance_valid(fx)
+	print("RESULT " + JSON.stringify(info))
+	quit(0)
+""")
+	output = []
+	var code := OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--script", "res://verify_sfx.gd"]), output, true)
+	var text := "\n".join(PackedStringArray(output))
+	check_eq(code, 0, "verifier exit code; output:\n" + text)
+	check(not text.contains("SCRIPT ERROR") and not text.contains("ERROR:"), "no errors in the game project:\n" + text)
+	var line := ""
+	for l in text.split("\n"):
+		if l.begins_with("RESULT "):
+			line = l.substr(7)
+	var info: Variant = JSON.parse_string(line) if line.begins_with("{") else null
+	if check(info is Dictionary, "verifier result:\n" + text):
+		check_eq(info.script, OasisFx.SFX_RUNTIME_SCRIPT_PATH, "sfx runtime resolved in the game")
+		check_eq(info.layers, ["whoosh", "impact"], "layers")
+		check(info.total > 0.5, "real audio lengths in the game (%.2f s)" % info.total)
+		check_eq(info.freed, true, "frees itself")
+
+
+func test_game_audio_is_used_never_overwritten() -> void:
+	var game := _game("export_game_audio")
+	DirAccess.make_dir_recursive_absolute(game.path_join("addons/oasis_fx/presets/examples/audio"))
+	write_text(game.path_join("addons/oasis_fx/presets/examples/audio/chime.wav"), "the game's own file")
+	var success := "res://addons/oasis_fx/presets/examples/cooking_success_sfx.sfx.json"
+	var plan := Exporter.plan(_preset(success), success, game.path_join("vfx"))
+	var chime: Array = plan.files.filter(func(f): return f.res_path.ends_with("chime.wav"))
+	check(chime.size() == 1 and chime[0].action == "use", "existing game file is used")
+	check(Exporter.run(plan).ok, "export ok")
+	check_eq(FileAccess.get_file_as_string(game.path_join("addons/oasis_fx/presets/examples/audio/chime.wav")), "the game's own file", "never overwritten")
+
+
+## Packaged builds contain only the imported form of audio/images; the export
+## plugin adds the originals of the bundled examples so the packaged app can
+## preview them and copy them into a game. Every file an example references
+## must be on that list, and the plugin must be enabled for exports.
+func test_packaged_app_ships_the_audio_its_examples_use() -> void:
+	var RawFiles: GDScript = load("res://app/export/raw_files_export.gd")
+	var shipped: PackedStringArray = RawFiles.raw_files()
+	check(shipped.size() >= 8, "example audio found: %s" % [shipped])
+	for preset_path in Generator.find_presets(OasisFx.EXAMPLES_DIR):
+		var preset := _preset(preset_path)
+		for dep in Generator.dependencies(preset):
+			if dep.get_extension() in ["gd"]:
+				continue
+			check(dep in shipped, "%s needs %s in the package" % [preset_path.get_file(), dep])
+	var project := ConfigFile.new()
+	project.load("res://project.godot")
+	check("res://app/export/plugin.cfg" in PackedStringArray(project.get_value("editor_plugins", "enabled", PackedStringArray())), "export plugin enabled")
+	check_eq(OasisFx.raw_file_path("res://addons/oasis_fx/presets/examples/audio/impact.wav"),
+			ProjectSettings.globalize_path("res://addons/oasis_fx/presets/examples/audio/impact.wav"), "from source the real file is read")
+	check_eq(OasisFx.raw_file_path("res://missing.wav"), "res://missing.wav", "otherwise the res:// path (inside the package)")

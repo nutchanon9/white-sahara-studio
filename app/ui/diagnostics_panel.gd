@@ -1,9 +1,9 @@
 extends VBoxContainer
 ## Validation results from the shared validator: a one-line status plus every
-## error and warning with its field path. Clicking an emitter entry selects
-## that emitter in the inspector.
+## error and warning with its field path. Clicking an emitter/layer entry
+## selects it in the inspector.
 
-signal emitter_requested(index: int)
+signal item_requested(index: int)
 
 var status: Label
 var list: ItemList
@@ -22,11 +22,15 @@ func _ready() -> void:
 func show_report(report: RefCounted, preset: Dictionary) -> void:
 	list.clear()
 	if report.is_ok():
-		var total := 0
-		for e in preset.emitters:
-			total += e.amount
-		status.text = "Valid — %d emitter(s), %d particles%s" % [preset.emitters.size(), total,
-			"" if report.warnings.is_empty() else ", %d warning(s)" % report.warnings.size()]
+		var summary := ""
+		if preset.asset_type == "sfx":
+			summary = "%d layer(s)%s" % [preset.layers.size(), ", looping" if preset.layers.any(func(l): return l.loop) else ""]
+		else:
+			var total := 0
+			for e in preset.emitters:
+				total += e.amount
+			summary = "%d emitter(s), %d particles" % [preset.emitters.size(), total]
+		status.text = "Valid — %s%s" % [summary, "" if report.warnings.is_empty() else ", %d warning(s)" % report.warnings.size()]
 		status.add_theme_color_override("font_color", Color(0.55, 0.9, 0.6) if report.warnings.is_empty() else Color(1.0, 0.85, 0.45))
 	else:
 		status.text = "%d error(s) — fix them to preview, save cleanly and export" % report.errors.size()
@@ -46,6 +50,6 @@ func _add(kind: String, entry: Dictionary, color: Color) -> void:
 
 
 func _on_item_selected(index: int) -> void:
-	var found := RegEx.create_from_string("^emitters\\[(\\d+)\\]").search(str(list.get_item_metadata(index)))
+	var found := RegEx.create_from_string("^(emitters|layers)\\[(\\d+)\\]").search(str(list.get_item_metadata(index)))
 	if found:
-		emitter_requested.emit(int(found.get_string(1)))
+		item_requested.emit(int(found.get_string(2)))
