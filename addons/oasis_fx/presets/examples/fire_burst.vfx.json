@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "asset_type": "vfx",
+  "id": "fire_burst",
+  "display_name": "Fire Burst",
+  "description": "Short upward burst of flame for fire skills and impacts.",
+  "tags": ["fire", "combat", "impact"],
+  "author": "OasisFx examples",
+  "duration_seconds": 0.8,
+  "loop": false,
+  "emitters": [
+    {
+      "id": "flame",
+      "kind": "particles_2d",
+      "amount": 48,
+      "one_shot": true,
+      "explosiveness": 0.9,
+      "lifetime_seconds": 0.6,
+      "lifetime_randomness": 0.35,
+      "emission_shape": "circle",
+      "emission_radius": 6,
+      "direction_degrees": -90,
+      "spread_degrees": 55,
+      "initial_velocity_min": 140,
+      "initial_velocity_max": 280,
+      "gravity": [0, -220],
+      "damping_min": 90,
+      "damping_max": 160,
+      "scale_min": 0.35,
+      "scale_max": 0.8,
+      "scale_end_ratio": 0.25,
+      "color_start": "#FFE07AE6",
+      "color_mid": "#FF6A1A99",
+      "color_end": "#B8240C00",
+      "texture": "soft_circle",
+      "texture_size_px": 40,
+      "blend_mode": "add"
+    }
+  ]
+}

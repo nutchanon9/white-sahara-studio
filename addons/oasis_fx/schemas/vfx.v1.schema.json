@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/vfx.v1.schema.json",
+  "title": "OasisFx VFX preset v1",
+  "description": "Data-only description of a 2D particle effect that OasisFx turns into a Godot 4 scene. Mirrors addons/oasis_fx/src/core/vfx_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules listed in docs/preset_format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "asset_type", "id", "display_name", "duration_seconds", "loop", "emitters"],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1, "maximum": 1, "description": "Preset format version. Must be 1."},
+    "asset_type": {"enum": ["vfx"], "description": "Asset kind. Only \"vfx\" is supported in this version."},
+    "id": {"$ref": "#/$defs/id", "description": "Stable identifier; also the output file name (<id>.tscn)."},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 80},
+    "description": {"type": "string", "maxLength": 500, "default": ""},
+    "tags": {
+      "type": "array", "maxItems": 16, "uniqueItems": true, "default": [],
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"}
+    },
+    "author": {"type": "string", "maxLength": 120, "default": ""},
+    "notes": {"type": "string", "maxLength": 2000, "default": ""},
+    "duration_seconds": {"type": "number", "minimum": 0.05, "maximum": 30},
+    "loop": {"type": "boolean"},
+    "playback_speed": {"type": "number", "minimum": 0.1, "maximum": 4, "default": 1},
+    "z_index": {"type": "integer", "minimum": -1000, "maximum": 1000, "default": 0},
+    "emitters": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "description": "Particle emitters. OasisFx 0.1 (Phase 1A) supports exactly one.",
+      "items": {"$ref": "#/$defs/emitter"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "color": {"type": "string", "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"},
+    "emitter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "kind", "amount", "one_shot", "lifetime_seconds", "direction_degrees", "spread_degrees",
+        "initial_velocity_min", "initial_velocity_max", "scale_min", "scale_max", "color_start", "color_end"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["particles_2d"]},
+        "position": {
+          "type": "array", "minItems": 2, "maxItems": 2, "default": [0, 0],
+          "items": {"type": "number", "minimum": -4096, "maximum": 4096}
+        },
+        "amount": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "one_shot": {"type": "boolean"},
+        "explosiveness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
+        "randomness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
+        "lifetime_seconds": {"type": "number", "minimum": 0.01, "maximum": 10},
+        "lifetime_randomness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
+        "emission_shape": {"enum": ["point", "circle", "rect"], "default": "point"},
+        "emission_radius": {"type": "number", "minimum": 0, "maximum": 4096, "default": 0},
+        "emission_rect_size": {
+          "type": "array", "minItems": 2, "maxItems": 2, "default": [0, 0],
+          "items": {"type": "number", "minimum": 0, "maximum": 8192}
+        },
+        "direction_degrees": {"type": "number", "minimum": -360, "maximum": 360, "description": "0 = right, 90 = down, -90 = up."},
+        "spread_degrees": {"type": "number", "minimum": 0, "maximum": 180},
+        "initial_velocity_min": {"type": "number", "minimum": 0, "maximum": 5000},
+        "initial_velocity_max": {"type": "number", "minimum": 0, "maximum": 5000},
+        "gravity": {
+          "type": "array", "minItems": 2, "maxItems": 2, "default": [0, 0],
+          "items": {"type": "number", "minimum": -5000, "maximum": 5000}
+        },
+        "damping_min": {"type": "number", "minimum": 0, "maximum": 1000, "default": 0},
+        "damping_max": {"type": "number", "minimum": 0, "maximum": 1000, "default": 0},
+        "scale_min": {"type": "number", "minimum": 0.01, "maximum": 20},
+        "scale_max": {"type": "number", "minimum": 0.01, "maximum": 20},
+        "scale_end_ratio": {"type": "number", "minimum": 0, "maximum": 10, "default": 1},
+        "color_start": {"$ref": "#/$defs/color"},
+        "color_mid": {"anyOf": [{"$ref": "#/$defs/color"}, {"const": ""}], "default": ""},
+        "color_end": {"$ref": "#/$defs/color"},
+        "texture": {"enum": ["soft_circle", "hard_circle", "file"], "default": "soft_circle"},
+        "texture_size_px": {"type": "integer", "minimum": 4, "maximum": 256, "default": 32},
+        "texture_path": {
+          "type": "string", "default": "", "maxLength": 256,
+          "pattern": "^$|^res://.*\\.(png|webp|jpg|jpeg|svg|tres|res)$",
+          "description": "res:// path to a Texture2D; required when texture is \"file\". No \"..\" segments."
+        },
+        "blend_mode": {"enum": ["mix", "add", "sub", "mul", "premult_alpha"], "default": "mix"},
+        "local_coords": {"type": "boolean", "default": false},
+        "z_index": {"type": "integer", "minimum": -1000, "maximum": 1000, "default": 0},
+        "visibility_rect": {
+          "type": "array", "default": [],
+          "description": "[x, y, w, h] in pixels; [] = computed automatically.",
+          "anyOf": [
+            {"maxItems": 0},
+            {"minItems": 4, "maxItems": 4, "items": {"type": "number", "minimum": -16384, "maximum": 16384}}
+          ]
+        }
+      }
+    }
+  }
+}
