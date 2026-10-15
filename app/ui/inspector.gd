@@ -12,6 +12,8 @@ extends VBoxContainer
 signal item_selected(index: int)
 ## A res:// file field wants a file picked; call `on_pick(res_path)` with the result.
 signal pick_file_requested(extensions: PackedStringArray, on_pick: Callable)
+## Something the user should read (e.g. why a button did nothing).
+signal message(title: String, text: String)
 
 const VFX_GROUPS := [
 	["Effect", ["display_name", "id", "description", "tags", "author", "notes"]],
@@ -71,6 +73,8 @@ const REFERENCE_KEYS := ["upper", "lower", "bone", "part"]
 const ENTRY_NAME_KEYS := ["id", "name", "part", "bone"]
 
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
+const Serializer := preload("res://addons/oasis_fx/src/core/preset_serializer.gd")
+const RigWeights := preload("res://addons/oasis_fx/src/core/rig_weights.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
 var document: RefCounted
@@ -323,6 +327,19 @@ func _make_control(key: String, spec: Dictionary, value: Variant, setter: Callab
 			text.custom_minimum_size = Vector2(0, 90)
 			text.text_changed.connect(func() -> void: setter.call(parse_points(text.text)))
 			return text
+		"number_list":
+			var numbers := LineEdit.new()
+			numbers.text = ", ".join(PackedStringArray((value if value is Array else []).map(func(n): return Serializer.number(n) if n is float or n is int else str(n))))
+			numbers.placeholder_text = "one number per point: 1, 0.5, 0"
+			numbers.text_changed.connect(func(t: String) -> void: setter.call(parse_number_list(t)))
+			return numbers
+		"index_lists":
+			var lists := TextEdit.new()
+			lists.text = "\n".join(PackedStringArray((value if value is Array else []).map(func(l): return ", ".join(PackedStringArray(l.map(func(i): return str(i)))) if l is Array else str(l))))
+			lists.placeholder_text = "one piece per line: 0, 1, 2"
+			lists.custom_minimum_size = Vector2(0, 60)
+			lists.text_changed.connect(func() -> void: setter.call(parse_index_lists(lists.text)))
+			return lists
 		"frame_list":
 			var frames := LineEdit.new()
 			frames.text = ", ".join(PackedStringArray((value if value is Array else []).map(func(f): return str(int(f)) if f is float or f is int else str(f))))
@@ -524,6 +541,26 @@ func _list_editor(key: String, item_kind: String, value: Array, setter: Callable
 			refresh.call())
 		buttons.add_child(b)
 		controls["%s:%s" % [key, spec[1]]] = b
+	if key == "parts" and document != null and document.asset_type() == "rig":
+		var bend := Button.new()
+		bend.text = "Bend with bones"
+		bend.tooltip_text = "Make the selected polygon part bend (deform) with its nearest bones: it moves to the rig root at the same place and gets automatic weights (add points along the outline where it should bend)."
+		bend.pressed.connect(func() -> void:
+			var validated: Dictionary = document.validate().preset
+			if state.selected < 0 or validated.is_empty():
+				message.emit("Cannot bend the part", "Fix the errors in Diagnostics first; automatic weights need a valid rig.")
+				return
+			var part: Dictionary = validated.parts[state.selected]
+			if part.kind != "polygon":
+				message.emit("Cannot bend the part", "\"%s\" is a sprite; only polygon parts can bend. Use a polygon part with the image as its texture." % part.id)
+				return
+			var bent := RigWeights.make_deforming(validated, part)
+			for k in ["bone", "position", "rotation_degrees", "scale", "weights"]:
+				entries[state.selected][k] = bent[k]
+			commit.call()
+			refresh.call())
+		buttons.add_child(bend)
+		controls["parts:bend"] = bend
 	refresh.call()
 	controls["list:" + key] = list
 	return box
@@ -577,6 +614,26 @@ static func _unique_name(base: String, entries: Array, key: String) -> String:
 		candidate = "%s_%d" % [stem, n]
 		n += 1
 	return candidate
+
+
+## "1, 0.5, 0" -> [1.0, 0.5, 0.0]; anything that is not a number is kept as
+## text so the validator can point at it.
+static func parse_number_list(text: String) -> Array:
+	var out := []
+	for part in text.replace(" ", ",").split(",", false):
+		out.append(part.to_float() if part.is_valid_float() else part)
+	return out
+
+
+## One index list per line ("0, 1, 2"); a bad line is kept as text.
+static func parse_index_lists(text: String) -> Array:
+	var out := []
+	for line in text.split("\n", false):
+		if line.strip_edges().is_empty():
+			continue
+		var indices: Variant = parse_frame_list(line)
+		out.append(indices if indices.all(func(i): return i is int) else line.strip_edges())
+	return out
 
 
 ## "0, 1, 2" -> [0, 1, 2]; anything that is not a whole number is kept as

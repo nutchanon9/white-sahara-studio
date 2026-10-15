@@ -336,6 +336,7 @@ func _build_ui() -> void:
 	scroll.add_child(inspector)
 	diagnostics.item_requested.connect(inspector.select_item)
 	inspector.pick_file_requested.connect(_pick_asset)
+	inspector.message.connect(show_message)
 	inspector.item_selected.connect(preview.focus_item)
 	preview.track_selected.connect(inspector.select_item)
 	preview.texture_provider = Callable(self, "_load_texture")
@@ -605,7 +606,7 @@ func cli_output_mismatches() -> PackedStringArray:
 ## res:// refuses writes, Fire Burst exports into the given game folder, the
 ## Sword Slash sound previews with its bundled audio and exports with it, and
 ## the Chef Ladle Attack animation, Campfire Flame sprite frames and Oasis
-## Chef rig validate, preview and export.
+## Chef rig validate, preview and export, and the Sand Serpent's body bends.
 ## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
 func _smoke_test(export_dir: String) -> void:
 	var checks := {}
@@ -656,6 +657,18 @@ func _smoke_test(export_dir: String) -> void:
 			checks[key + "_export_ok"] = result.ok
 			checks[key + "_export_errors"] = result.errors
 			ok = ok and result.ok
+	# A bending part: the serpent's body follows its bones (CPU skinning in the
+	# packaged runtime) with its texture loaded from the package.
+	var bent := false
+	if open_file(OasisFx.EXAMPLES_DIR.path_join("sand_serpent.rig.json")) and is_instance_valid(preview.effect) and preview.effect.get("rig") != null:
+		var body: Polygon2D = preview.effect.rig.get_node_or_null("body")
+		if body != null and body.texture != null and body.texture.get_width() > 1:
+			var rest := body.polygon
+			preview.effect.set_pose("s_curve")
+			preview.effect.rig.update_deformation()
+			bent = body.polygon != rest
+	checks["rig_bending"] = bent
+	ok = ok and bent
 	# The generator in this build writes the same text as the CLI: every bundled
 	# example compared with the committed CLI output in examples/runtime_demo/fx.
 	var mismatches := cli_output_mismatches()

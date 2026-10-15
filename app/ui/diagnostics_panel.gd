@@ -24,7 +24,8 @@ func show_report(report: RefCounted, preset: Dictionary) -> void:
 	if report.is_ok():
 		var summary := ""
 		if preset.asset_type == "rig":
-			summary = "%d bone(s), %d part(s), %d IK chain(s), %d skin(s), %d pose(s)" % [preset.bones.size(), preset.parts.size(), preset.ik_chains.size(), preset.skins.size(), preset.poses.size()]
+			var bending: int = preset.parts.filter(func(p): return not p.weights.is_empty()).size()
+			summary = "%d bone(s), %d part(s)%s, %d IK chain(s), %d skin(s), %d pose(s)" % [preset.bones.size(), preset.parts.size(), " (%d bending)" % bending if bending > 0 else "", preset.ik_chains.size(), preset.skins.size(), preset.poses.size()]
 		elif preset.asset_type == "animation":
 			summary = "%d track(s), %d event(s), %s s%s" % [preset.tracks.size(), preset.events.size(), str(preset.duration_seconds), ", looping" if preset.loop else ""]
 		elif preset.asset_type == "sprite_frames":

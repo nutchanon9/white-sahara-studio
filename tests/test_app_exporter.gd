@@ -445,3 +445,60 @@ func _check():
 		check(absf(info.wave - 150.0) < 0.5, "wave pose applied (%s)" % info.wave)
 		check_eq(info.events, ["stir"], "the reach animation's event fired")
 		check(info.own_stacks, "each rig instance has its own IK stack")
+
+
+func test_bending_rig_export_runs_in_the_game() -> void:
+	var game := _game("export_bend")
+	DirAccess.make_dir_recursive_absolute(game.path_join("chars"))
+	var serpent := "res://addons/oasis_fx/presets/examples/sand_serpent.rig.json"
+	var plan := Exporter.plan(_preset(serpent), serpent, game.path_join("chars"))
+	if not check(plan.ok, "plan ok: %s" % [plan.errors]):
+		return
+	check(plan.files.any(func(f): return f.res_path.ends_with("rig_parts/serpent_skin.png")), "body texture copied")
+	check(Exporter.run(plan).ok, "export ok")
+	var slither := "res://addons/oasis_fx/presets/examples/sand_serpent_slither.anim.json"
+	var anim := _preset(slither)
+	anim.target_scene = "res://chars/sand_serpent.tscn"
+	var anim_plan := Exporter.plan(anim, slither, game.path_join("chars"))
+	check(anim_plan.ok and Exporter.run(anim_plan).ok, "animation exported: %s" % [anim_plan.errors])
+	var output := []
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--import"]), output, true)
+	write_text(game.path_join("verify_bend.gd"), """extends SceneTree
+func _initialize():
+	create_timer(15.0).timeout.connect(func():
+		print("RESULT timeout")
+		quit(2))
+	_check.call_deferred()
+func _check():
+	var serpent = load("res://chars/sand_serpent.tscn").instantiate()
+	root.add_child(serpent)
+	await process_frame
+	var body = serpent.get_node("body")
+	var rest = body.polygon
+	var lib = AnimationLibrary.new()
+	lib.add_animation("slither", load("res://chars/sand_serpent_slither.tres"))
+	serpent.get_animation_player().add_animation_library("demo", lib)
+	serpent.get_animation_player().play("demo/slither")
+	await create_timer(0.3).timeout
+	var moved = 0.0
+	for i in rest.size():
+		moved = max(moved, body.polygon[i].distance_to(rest[i]))
+	print("RESULT " + JSON.stringify({"moved": moved, "points": rest.size(), "uv": body.uv.size(), "texture": body.texture.resource_path}))
+	serpent.queue_free()
+	await process_frame
+	quit(0)
+""")
+	output = []
+	var code := OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--script", "res://verify_bend.gd"]), output, true)
+	var text := "\n".join(PackedStringArray(output))
+	check_eq(code, 0, "verifier exit code; output:\n" + text)
+	check(not text.contains("SCRIPT ERROR") and not text.contains("ERROR:"), "no errors in the game project:\n" + text)
+	var line := ""
+	for l in text.split("\n"):
+		if l.begins_with("RESULT "):
+			line = l.substr(7)
+	var info: Variant = JSON.parse_string(line) if line.begins_with("{") else null
+	if check(info is Dictionary, "verifier result:\n" + text):
+		check(info.moved > 2.0, "the body bends in the game (%s px)" % info.moved)
+		check_eq(info.uv, info.points, "texture pinned to the rest points")
+		check_eq(info.texture, "res://addons/oasis_fx/presets/examples/rig_parts/serpent_skin.png", "copied texture")

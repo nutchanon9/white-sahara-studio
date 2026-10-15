@@ -380,3 +380,51 @@ func test_new_rig_and_rig_from_a_scene() -> void:
 	app.import_rig("res://does/not/exist.tscn")
 	check_eq(app.document.get_value("bones").size(), 5, "a failed import keeps the document")
 	await _stop(app)
+
+
+func test_bending_parts_in_the_app() -> void:
+	var app := await _start("ui_bend", "res://addons/oasis_fx/presets/examples/sand_serpent.rig.json")
+	check(app.validation.report.is_ok(), "valid: " + " | ".join(app.validation.report.format_lines()))
+	check(app.diagnostics.status.text.contains("3 part(s) (1 bending)"), "status: " + app.diagnostics.status.text)
+	var preview: Node = app.preview.effect
+	var body: Polygon2D = preview.rig.get_node("body")
+	var rest := body.polygon
+	preview.set_pose("s_curve")
+	await tree.process_frame
+	await tree.process_frame
+	check(body.polygon != rest, "the body bends in the preview")
+	# The weights of the body appear as a nested list with one value per point.
+	var parts: ItemList = app.inspector.controls["list:parts"]
+	parts.select(1)
+	parts.item_selected.emit(1)
+	var values: LineEdit = app.inspector.controls.get("parts[1].weights[0].values")
+	if check(values != null, "weights editor of the body"):
+		check_eq(values.text.split(",").size(), 50, "one value per point")
+	# Bend a rigid part of the chef with the button.
+	app.open_file("res://addons/oasis_fx/presets/examples/oasis_chef.rig.json")
+	await tree.process_frame
+	var chef_parts: ItemList = app.inspector.controls["list:parts"]
+	var sleeve := -1
+	for i in chef_parts.item_count:
+		if chef_parts.get_item_text(i).ends_with("upper_arm_r_shape"):
+			sleeve = i
+	chef_parts.select(sleeve)
+	chef_parts.item_selected.emit(sleeve)
+	(app.inspector.controls["parts:bend"] as Button).pressed.emit()
+	var part: Dictionary = app.document.get_value("parts")[sleeve]
+	check_eq(part.bone, "", "moved to the rig root")
+	check(part.weights.size() >= 2, "weighted to its nearest bones: %s" % [part.weights.map(func(w): return w.bone)])
+	app._revalidate()
+	check(app.validation.report.is_ok(), "still valid: " + " | ".join(app.validation.report.format_lines()))
+	check(app.diagnostics.status.text.contains("(1 bending)"), "status: " + app.diagnostics.status.text)
+	var face := -1
+	for i in chef_parts.item_count:
+		if app.inspector.controls["list:parts"].get_item_text(i).ends_with(". face"):
+			face = i
+	app.inspector.controls["list:parts"].select(face)
+	app.inspector.controls["list:parts"].item_selected.emit(face)
+	(app.inspector.controls["parts:bend"] as Button).pressed.emit()
+	await tree.process_frame
+	check(app._message.visible and app._message.dialog_text.contains("only polygon parts can bend"), "a sprite part cannot bend: a message explains")
+	app._message.hide()
+	await _stop(app)

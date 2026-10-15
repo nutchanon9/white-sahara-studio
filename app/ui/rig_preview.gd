@@ -12,6 +12,7 @@ const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 
 const TARGET_RADIUS := 6.0
 const FIT_HEIGHT := 260.0
+const FIT_WIDTH := 420.0
 
 var auto_play := true
 var free_when_finished := false
@@ -41,15 +42,13 @@ func setup(rig_preset: Dictionary, texture_provider := Callable()) -> bool:
 	return true
 
 
-## Preview magnification so the rest pose is about FIT_HEIGHT px tall (1 … 4).
+## Preview magnification so the rest pose fits FIT_WIDTH × FIT_HEIGHT px (1 … 4).
 static func fit_scale(rig_preset: Dictionary) -> float:
-	var top := 0.0
-	var bottom := 0.0
+	var box := Rect2()
 	for bone in rig_preset.bones:
 		var tip: Array = RigBuilder.chain_tip(rig_preset, bone.id)
-		top = minf(top, tip[1])
-		bottom = maxf(bottom, tip[1])
-	return clampf(FIT_HEIGHT / maxf(1.0, bottom - top), 1.0, 4.0)
+		box = box.expand(Vector2(tip[0], tip[1]))
+	return clampf(minf(FIT_HEIGHT / maxf(1.0, box.size.y), FIT_WIDTH / maxf(1.0, box.size.x)), 1.0, 4.0)
 
 
 func set_skin(skin_name: String) -> bool:
@@ -140,6 +139,11 @@ func _draw_overlay() -> void:
 		var shape := PackedVector2Array([start, start.lerp(tip, 0.2) + side, tip, start.lerp(tip, 0.2) - side, start])
 		_overlay.draw_polyline(shape, Color(0.6, 0.85, 1.0, 0.9), 1.5)
 		_overlay.draw_circle(start, 2.0, Color(0.6, 0.85, 1.0))
+	# Points of bending parts, so the mesh that follows the bones is visible.
+	for poly: Polygon2D in rig.find_children("*", "Polygon2D", true, false):
+		if poly.get_bone_count() > 0 and poly.is_visible_in_tree():
+			for p in poly.polygon:
+				_overlay.draw_circle(to_local(poly.global_transform * (p + poly.offset)), 1.5, Color(0.55, 1.0, 0.6, 0.85))
 	for chain in preset.ik_chains:
 		var target: Node2D = rig.get_ik_target(chain.id)
 		if target == null:
