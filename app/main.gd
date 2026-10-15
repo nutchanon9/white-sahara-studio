@@ -7,7 +7,8 @@ extends Control
 ##
 ## Public methods (new_preset, open_file, save_to, set_game_project,
 ## plan_export, run_export…) are what the toolbar uses and what the headless
-## UI tests call. Presets are vfx (particles) or sfx (layered sounds).
+## UI tests call. Presets are vfx (particles), sfx (layered sounds),
+## animation (keyframes and events for a game scene) or sprite_frames.
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const PresetDocument := preload("res://app/services/preset_document.gd")
@@ -20,6 +21,15 @@ const DiagnosticsPanel := preload("res://app/ui/diagnostics_panel.gd")
 const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
 const VfxBuilder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
 const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
+
+## "New" menu entries: [label, asset type, shortcut].
+const NEW_ITEMS := [
+	["Effect (particles)", "vfx", "Ctrl+N"],
+	["Sound", "sfx", "Ctrl+Shift+N"],
+	["Animation (keyframes and events)", "animation", "Ctrl+Alt+N"],
+	["Sprite frames (sprite sheet)", "sprite_frames", ""],
+]
 
 const STARTUP_PRESET := "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json"
 ## Delay between an edit and re-validation/preview rebuild.
@@ -44,6 +54,8 @@ var _asset_dialog: FileDialog
 var _asset_pick: Callable
 ## Loaded preview audio: res path -> {"file", "time", "stream"}.
 var _audio_cache := {}
+## Loaded preview images: res path -> {"file", "time", "texture"}.
+var _texture_cache := {}
 var _save_button: Button
 var _export_button: Button
 var _open_dialog: FileDialog
@@ -88,7 +100,7 @@ func _notification(what: int) -> void:
 
 # --- Commands --------------------------------------------------------------
 
-## Starts a new preset: "vfx" (particle effect) or "sfx" (layered sound).
+## Starts a new preset of an asset type: "vfx", "sfx", "animation" or "sprite_frames".
 func new_preset(type := "vfx") -> void:
 	document.new_preset(type)
 	_after_load()
@@ -106,6 +118,7 @@ func set_game_project(dir: String) -> bool:
 	settings.save_settings()
 	_apply_game_project()
 	_audio_cache.clear()
+	_texture_cache.clear()
 	_revalidate()
 	return true
 
@@ -127,7 +140,10 @@ func open_file(path: String) -> bool:
 func save_to(path: String) -> Error:
 	var suffix: String = document.file_suffix()
 	if not path.ends_with(suffix):
-		path = path.trim_suffix(".json").trim_suffix(".vfx").trim_suffix(".sfx") + suffix
+		var base := path
+		for other in AssetTypes.suffixes():
+			base = base.trim_suffix(other)
+		path = base.trim_suffix(".json") + suffix
 	var err: Error = document.save(path)
 	if err != OK:
 		show_message("Save failed", "Could not save %s:\n%s" % [path, error_string(err)])
@@ -166,7 +182,7 @@ func confirm_discard(action: Callable) -> void:
 ## Builds an export plan for the current preset into `dest_dir` (see asset_exporter.gd).
 func plan_export(dest_dir: String) -> Dictionary:
 	_revalidate()
-	return Exporter.plan(validation.get("preset", {}), document.path, dest_dir)
+	return Exporter.plan(validation.get("preset", {}), document.path, dest_dir, document.res_roots)
 
 
 ## Writes a plan. Returns the exporter result and reports it to the user.
@@ -175,18 +191,29 @@ func run_export(planned: Dictionary, allow_overwrite: bool) -> Dictionary:
 	if result.ok:
 		settings.last_export_dir = planned.files[0].path.get_base_dir()
 		settings.save_settings()
-		show_message("Exported", "Exported %s to %s\n\nIn the game, instantiate %s (it plays and frees itself).\nThe scene needs %s, which is now in the game project." % [
-			planned.preset.id, planned.project_root, planned.files[0].res_path, planned.files[1].res_path])
+		show_message("Exported", "Exported %s to %s\n\n%s" % [planned.preset.id, planned.project_root, how_to_use(planned)])
 	else:
 		show_message("Export failed", "\n".join(PackedStringArray(result.errors)))
 	return result
 
 
-## First *.vfx.json / *.sfx.json argument (e.g. from "Open with OasisFx" on
-## Windows), or "".
+## A short note on using an exported file in the game.
+static func how_to_use(planned: Dictionary) -> String:
+	var res_path: String = planned.files[0].res_path
+	match planned.preset.asset_type:
+		"animation":
+			return "Add %s to the AnimationPlayer of %s (Animation panel > Manage Animations > Load).%s" % [res_path, planned.preset.target_scene,
+				"\nEvents need a child node \"OasisAnimationEvents\" with the script %s on the scene root." % planned.files[1].res_path if planned.files.size() > 1 and planned.files[1].kind == "runtime" else ""]
+		"sprite_frames":
+			return "Set the Sprite Frames of an AnimatedSprite2D to %s and play one of its animations." % res_path
+	return "In the game, instantiate %s (it plays and frees itself).\nThe scene needs %s, which is now in the game project." % [res_path, planned.files[1].res_path]
+
+
+## First preset file argument (*.vfx.json, *.sfx.json, *.anim.json,
+## *.frames.json; e.g. from "Open with OasisFx" on Windows), or "".
 static func preset_from_command_line(args: Array) -> String:
 	for arg in args:
-		if String(arg).ends_with(OasisFx.VFX_PRESET_SUFFIX) or String(arg).ends_with(OasisFx.SFX_PRESET_SUFFIX):
+		if not AssetTypes.type_for_file(String(arg)).is_empty():
 			return arg
 	return ""
 
@@ -219,8 +246,17 @@ func _build_ui() -> void:
 
 	var toolbar := HBoxContainer.new()
 	column.add_child(toolbar)
-	_tool_button(toolbar, "New effect", "Ctrl+N", func() -> void: confirm_discard(new_preset.bind("vfx")))
-	_tool_button(toolbar, "New sound", "Ctrl+Shift+N", func() -> void: confirm_discard(new_preset.bind("sfx")))
+	var new_menu := MenuButton.new()
+	new_menu.text = "New ▾"
+	new_menu.flat = false
+	new_menu.tooltip_text = "Start a new effect, sound, animation or sprite frames preset"
+	var popup := new_menu.get_popup()
+	for i in NEW_ITEMS.size():
+		popup.add_item(NEW_ITEMS[i][0], i)
+		if not NEW_ITEMS[i][2].is_empty():
+			popup.set_item_shortcut(i, _shortcut(NEW_ITEMS[i][2]), true)
+	popup.id_pressed.connect(func(id: int) -> void: confirm_discard(new_preset.bind(NEW_ITEMS[id][1])))
+	toolbar.add_child(new_menu)
 	_tool_button(toolbar, "Open…", "Ctrl+O", func() -> void: confirm_discard(_show_open_dialog))
 	_save_button = _tool_button(toolbar, "Save", "Ctrl+S", save)
 	_tool_button(toolbar, "Save As…", "Ctrl+Shift+S", save_as)
@@ -273,6 +309,10 @@ func _build_ui() -> void:
 	scroll.add_child(inspector)
 	diagnostics.item_requested.connect(inspector.select_item)
 	inspector.pick_file_requested.connect(_pick_asset)
+	inspector.item_selected.connect(preview.focus_item)
+	preview.track_selected.connect(inspector.select_item)
+	preview.texture_provider = Callable(self, "_load_texture")
+	preview.outline_provider = func() -> Dictionary: return document.target_outline()
 
 	_revalidate_timer = Timer.new()
 	_revalidate_timer.one_shot = true
@@ -287,17 +327,23 @@ func _tool_button(parent: Control, text: String, shortcut_text: String, action: 
 	button.text = text
 	button.tooltip_text = shortcut_text
 	button.pressed.connect(action)
+	button.shortcut = _shortcut(shortcut_text)
+	parent.add_child(button)
+	return button
+
+
+## "Ctrl+Shift+S" -> Shortcut (Ctrl is Cmd on macOS).
+static func _shortcut(text: String) -> Shortcut:
 	var shortcut := Shortcut.new()
 	var key := InputEventKey.new()
-	var parts := shortcut_text.split("+")
+	var parts := text.split("+")
 	key.keycode = OS.find_keycode_from_string(parts[parts.size() - 1])
 	key.ctrl_pressed = parts.has("Ctrl")
 	key.shift_pressed = parts.has("Shift")
+	key.alt_pressed = parts.has("Alt")
 	key.command_or_control_autoremap = true
 	shortcut.events = [key]
-	button.shortcut = shortcut
-	parent.add_child(button)
-	return button
+	return shortcut
 
 
 func _build_dialogs() -> void:
@@ -348,7 +394,8 @@ func _file_dialog(mode: FileDialog.FileMode, title: String) -> FileDialog:
 	dialog.title = title
 	dialog.use_native_dialog = true
 	if mode != FileDialog.FILE_MODE_OPEN_DIR:
-		dialog.filters = PackedStringArray(["*.vfx.json, *.sfx.json ; OasisFx presets"])
+		var patterns := Array(AssetTypes.suffixes()).map(func(s): return "*" + s)
+		dialog.filters = PackedStringArray([", ".join(PackedStringArray(patterns)) + " ; OasisFx presets"])
 	add_child(dialog)
 	return dialog
 
@@ -434,6 +481,8 @@ func _apply_game_project() -> void:
 		roots.append(settings.game_project_dir)
 	roots.append("res://")
 	document.res_roots = roots
+	if preview:
+		preview.res_roots = roots
 	if _game_label:
 		_game_label.text = ("Game: " + settings.game_project_dir.get_file()) if not settings.game_project_dir.is_empty() else "No game project set"
 		_game_label.tooltip_text = settings.game_project_dir
@@ -454,6 +503,22 @@ func _load_audio(res_path: String) -> AudioStream:
 		stream.set_meta("source_file", res_path.get_file())
 		_audio_cache[res_path] = {"file": file, "time": time, "stream": stream}
 	return stream
+
+
+## Preview image (sprite sheets, textures of the animation's scene): the file
+## at `res_path` in the game project or the app, loaded from disk and cached
+## until the file changes.
+func _load_texture(res_path: String) -> Texture2D:
+	var file := Validator.resolve_res_path(res_path, document.res_roots)
+	if file.is_empty():
+		return null
+	var time := FileAccess.get_modified_time(file)
+	if _texture_cache.has(res_path) and _texture_cache[res_path].file == file and _texture_cache[res_path].time == time:
+		return _texture_cache[res_path].texture
+	var texture := VfxBuilder.load_texture_from_disk(res_path, document.res_roots)
+	if texture != null:
+		_texture_cache[res_path] = {"file": file, "time": time, "texture": texture}
+	return texture
 
 
 func _pick_asset(extensions: PackedStringArray, on_pick: Callable) -> void:
@@ -493,8 +558,10 @@ func res_path_in_game(file: String) -> String:
 ## `OasisFx --headless -- --smoke-test <folder in a Godot game>` checks a
 ## packaged build end to end without a person: the bundled examples are
 ## listed and valid, the preview builds, settings live in user://, packaged
-## res:// refuses writes, Fire Burst exports into the given game folder, and
-## the Sword Slash sound previews with its bundled audio and exports with it.
+## res:// refuses writes, Fire Burst exports into the given game folder, the
+## Sword Slash sound previews with its bundled audio and exports with it, and
+## the Chef Ladle Attack animation and Campfire Flame sprite frames validate,
+## preview and export.
 ## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
 func _smoke_test(export_dir: String) -> void:
 	var checks := {}
@@ -526,6 +593,24 @@ func _smoke_test(export_dir: String) -> void:
 		checks["sound_export_ok"] = result.ok
 		checks["sound_export_errors"] = result.errors
 		ok = ok and result.ok
+	# Animation: the example rig and effect scenes are readable as text from the
+	# package (validation, preview proxy) and the animation exports with the
+	# effect scenes its events show. Sprite frames: the sheet loads from the package.
+	for spec in [["animation", "chef_ladle_attack.anim.json"], ["sprite_frames", "campfire_flame.frames.json"]]:
+		var key: String = spec[0]
+		var opened := open_file(OasisFx.EXAMPLES_DIR.path_join(spec[1]))
+		checks[key + "_valid"] = opened and validation.report.is_ok()
+		if opened and not validation.report.is_ok():
+			checks[key + "_errors"] = validation.report.format_lines()
+		var effect := preview.effect
+		checks[key + "_preview"] = is_instance_valid(effect) and (effect.get("proxy") != null and effect.proxy.get_child_count() > 0 or effect.get("sheet") != null)
+		ok = ok and checks[key + "_valid"] and checks[key + "_preview"]
+		if not export_dir.is_empty():
+			var planned := plan_export(export_dir)
+			var result := Exporter.run(planned, true) if planned.ok else {"ok": false, "errors": planned.errors}
+			checks[key + "_export_ok"] = result.ok
+			checks[key + "_export_errors"] = result.errors
+			ok = ok and result.ok
 	checks["ok"] = ok
 	print("SMOKE " + JSON.stringify(checks))
 	get_tree().quit(0 if ok else 1)

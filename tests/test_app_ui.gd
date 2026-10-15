@@ -209,3 +209,78 @@ func test_new_sound_from_toolbar() -> void:
 	check(app._save_dialog.current_file.ends_with(".sfx.json"), "Save As suggests .sfx.json")
 	app._save_dialog.hide()
 	await _stop(app)
+
+
+func test_animation_preview_timeline_and_key_editing() -> void:
+	var app := await _start("ui_anim", "res://addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json")
+	check_eq(app.document.asset_type(), "animation", "animation opened")
+	check(app.validation.report.is_ok(), "valid: " + " | ".join(app.validation.report.format_lines()))
+	check(app.diagnostics.status.text.begins_with("Valid — 4 track(s), 2 event(s)"), "status: " + app.diagnostics.status.text)
+	check(app.preview.anim_timeline.visible and not app.preview.timeline.visible, "track timeline shown")
+	var preview: Node = app.preview.effect
+	if not check(is_instance_valid(preview) and preview.has_method("seek"), "animation preview built"):
+		await _stop(app)
+		return
+	var rows: Array = app.preview.anim_timeline.rows()
+	check_eq(rows.map(func(r): return r.label), ["ArmR · rotation_degrees", "Chest · rotation_degrees", "Hips · position", "ArmL · rotation_degrees", "events"], "rows")
+	check_eq(rows[4].names, ["attack_start", "hit_frame"], "event markers")
+	var arm: Node2D = preview.proxy.get_node("Body/Skeleton/Hips/Chest/ArmR")
+	check(arm is Bone2D, "the proxy keeps the scene's node classes")
+	check(preview.proxy.get_node("Body/Skeleton/Hips/Chest/Torso") is Polygon2D, "and its polygons")
+	preview.seek(0.18)
+	check(absf(arm.rotation_degrees - 150.0) < 0.5, "pose at 0.18 s (%.1f°)" % arm.rotation_degrees)
+	preview.play()
+	preview.advance(0.31)
+	check_eq(preview.fired_events.map(func(e): return e.name), ["attack_start", "hit_frame"], "events reached in the preview")
+	preview.advance(0.4)
+	check(not preview.is_playing(), "one-shot animation finished")
+
+	# Click a timeline row: the inspector selects that track.
+	app.preview.anim_timeline.track_clicked.emit(2)
+	check_eq(app.inspector.selected_item, 2, "timeline row selects the track")
+	check(app.inspector.controls.has("item:node") and app.inspector.controls.has("key:0"), "track fields and key rows")
+	app.inspector.select_item(0)
+	var row: HBoxContainer = app.inspector.controls["key:1"]
+	var value: SpinBox = row.get_child(1)
+	value.value = 120.0
+	check_eq(app.document.get_item_value(0, "keys")[1].value, 120.0, "key value written")
+	app._revalidate()
+	app.preview.effect.seek(0.18)
+	check(absf(app.preview.effect.proxy.get_node("Body/Skeleton/Hips/Chest/ArmR").rotation_degrees - 120.0) < 0.5, "preview rebuilt with the new key")
+	(app.inspector.controls["keys:add"] as Button).pressed.emit()
+	check_eq(app.document.get_item_value(0, "keys").size(), 6, "key added")
+	app._revalidate()
+	check(app.validation.report.is_ok(), "a key added to a full track goes into its largest gap: " + " | ".join(app.validation.report.format_lines()))
+	check_eq(app.document.get_item_value(0, "keys").map(func(k): return k.time), [0.0, 0.09, 0.18, 0.3, 0.45, 0.6], "inserted in the middle of the largest gap (0 … 0.18 s)")
+	(app.inspector.controls["events:add"] as Button).pressed.emit()
+	check_eq(app.document.get_value("events").size(), 3, "event added")
+	var node_field: HBoxContainer = app.inspector.controls["item:node"]
+	var picker: MenuButton = node_field.get_child(1)
+	check(picker.get_popup().item_count > 20 and not picker.disabled, "node picker lists the rig's nodes")
+	await _stop(app)
+
+
+func test_sprite_frames_preview_and_new_presets() -> void:
+	var app := await _start("ui_frames", "res://addons/oasis_fx/presets/examples/campfire_flame.frames.json")
+	check(app.validation.report.is_ok(), "valid")
+	check(app.diagnostics.status.text.begins_with("Valid — 2 animation(s) from a 4 × 2 sheet"), "status: " + app.diagnostics.status.text)
+	var preview: Node = app.preview.effect
+	if check(is_instance_valid(preview) and "animation_name" in preview, "sprite preview built"):
+		check_eq(preview.animation_name, "burn", "first animation plays")
+		check(preview.sheet != null and preview.sheet.get_width() == 256, "sheet loaded from disk")
+		app.inspector.select_item(1)
+		check_eq(app.preview.effect.animation_name, "flare", "selecting an animation plays it")
+		var frames: LineEdit = app.inspector.controls["item:frames"]
+		frames.text = "0, 2, 4"
+		frames.text_changed.emit(frames.text)
+		check_eq(app.document.get_item_value(1, "frames"), [0, 2, 4], "frames parsed")
+		app._revalidate()
+		check_eq(app.preview.effect.animation_name, "flare", "the selected animation stays after a rebuild")
+	for type in ["animation", "sprite_frames"]:
+		app.new_preset(type)
+		check(app.validation.report.is_ok(), "new %s is valid: %s" % [type, " | ".join(app.validation.report.format_lines())])
+		check(is_instance_valid(app.preview.effect), "new %s previews" % type)
+		app.save()
+		check(app._save_dialog.current_file.ends_with(".anim.json" if type == "animation" else ".frames.json"), "Save As suggests the right suffix")
+		app._save_dialog.hide()
+	await _stop(app)

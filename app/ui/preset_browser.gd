@@ -6,6 +6,9 @@ signal open_requested(path: String)
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
+## Marks in front of preset names per asset type (vfx has none).
+const MARKS := {"vfx": "", "sfx": "♪ ", "animation": "▶ ", "sprite_frames": "▦ "}
 
 var workspace_dir := ""
 var tree: Tree
@@ -75,8 +78,8 @@ func _add_section(root: TreeItem, title: String, paths: PackedStringArray) -> vo
 		return
 	for path in paths:
 		var item := tree.create_item(section)
-		var sfx := path.ends_with(OasisFx.SFX_PRESET_SUFFIX)
-		item.set_text(0, ("♪ " if sfx else "") + path.get_file().trim_suffix(OasisFx.SFX_PRESET_SUFFIX if sfx else OasisFx.VFX_PRESET_SUFFIX))
+		var type := AssetTypes.type_for_file(path)
+		item.set_text(0, MARKS.get(type, "") + path.get_file().trim_suffix(AssetTypes.suffix(type)))
 		item.set_tooltip_text(0, path)
 		item.set_metadata(0, path)
 

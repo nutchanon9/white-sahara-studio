@@ -255,23 +255,114 @@ func test_game_audio_is_used_never_overwritten() -> void:
 	check_eq(FileAccess.get_file_as_string(game.path_join("addons/oasis_fx/presets/examples/audio/chime.wav")), "the game's own file", "never overwritten")
 
 
-## Packaged builds contain only the imported form of audio/images; the export
-## plugin adds the originals of the bundled examples so the packaged app can
-## preview them and copy them into a game. Every file an example references
-## must be on that list, and the plugin must be enabled for exports.
-func test_packaged_app_ships_the_audio_its_examples_use() -> void:
+## Packaged builds contain only the imported form of audio/images and text
+## scenes converted to binary; the export plugin adds the originals of the
+## bundled examples so the packaged app can preview, validate and export them.
+## Every file an example references (and every target scene) must be on that
+## list or be a script (exported as text), the folders must not be excluded,
+## and the plugin must be enabled for exports.
+func test_packaged_app_ships_the_files_its_examples_use() -> void:
 	var RawFiles: GDScript = load("res://app/export/raw_files_export.gd")
 	var shipped: PackedStringArray = RawFiles.raw_files()
 	check(shipped.size() >= 8, "example audio found: %s" % [shipped])
+	var presets_cfg := ConfigFile.new()
+	presets_cfg.load("res://export_presets.cfg")
+	var excluded := String(presets_cfg.get_value("preset.0", "exclude_filter")).split(", ")
+	var included := String(presets_cfg.get_value("preset.0", "include_filter")).split(", ")
+	var needed := {}
 	for preset_path in Generator.find_presets(OasisFx.EXAMPLES_DIR):
 		var preset := _preset(preset_path)
 		for dep in Generator.dependencies(preset):
-			if dep.get_extension() in ["gd"]:
-				continue
-			check(dep in shipped, "%s needs %s in the package" % [preset_path.get_file(), dep])
+			needed[dep] = preset_path.get_file()
+		if preset.asset_type == "animation":
+			needed[preset.target_scene] = preset_path.get_file()
+	for dep in needed:
+		var local: String = dep.trim_prefix("res://")
+		check(not Array(excluded).any(func(pattern): return local.match(pattern)), "%s (used by %s) is not excluded from the package" % [dep, needed[dep]])
+		if dep.get_extension() != "gd":
+			check(dep in shipped, "%s needs %s in the package" % [needed[dep], dep])
+	check(Array(included).any(func(pattern): return "examples/runtime_demo/fx/oasis_fx_manifest.json".match(pattern)), "the example effects' manifest is included (it lists what they need)")
 	var project := ConfigFile.new()
 	project.load("res://project.godot")
 	check("res://app/export/plugin.cfg" in PackedStringArray(project.get_value("editor_plugins", "enabled", PackedStringArray())), "export plugin enabled")
 	check_eq(OasisFx.raw_file_path("res://addons/oasis_fx/presets/examples/audio/impact.wav"),
 			ProjectSettings.globalize_path("res://addons/oasis_fx/presets/examples/audio/impact.wav"), "from source the real file is read")
 	check_eq(OasisFx.raw_file_path("res://missing.wav"), "res://missing.wav", "otherwise the res:// path (inside the package)")
+
+
+func test_animation_and_sprite_frames_export_and_run_in_the_game() -> void:
+	var game := _game("export_anim")
+	DirAccess.make_dir_recursive_absolute(game.path_join("anim"))
+	var attack := "res://addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json"
+	var plan := Exporter.plan(_preset(attack), attack, game.path_join("anim"))
+	if not check(plan.ok, "plan ok: %s" % [plan.errors]):
+		return
+	var actions := {}
+	for f in plan.files:
+		actions[f.res_path] = f.action
+	check_eq(plan.files[0].res_path, "res://anim/chef_ladle_attack.tres", "animation resource first")
+	check_eq(actions.get("res://addons/oasis_fx/src/runtime/oasis_animation_events.gd"), "create", "event receiver script")
+	for dep in ["res://examples/runtime_demo/fx/fire_burst.tscn", "res://examples/runtime_demo/fx/fire_burst_sfx.tscn",
+			OasisFx.RUNTIME_SCRIPT_PATH, OasisFx.SFX_RUNTIME_SCRIPT_PATH, "res://addons/oasis_fx/presets/examples/audio/fire_crackle.wav"]:
+		check_eq(actions.get(dep), "create", "bundled dependency " + dep)
+	check(Exporter.run(plan).ok, "export ok")
+	var flame := "res://addons/oasis_fx/presets/examples/campfire_flame.frames.json"
+	var frames_plan := Exporter.plan(_preset(flame), flame, game.path_join("anim"))
+	check(frames_plan.ok and frames_plan.files.size() == 2, "sprite frames: the resource and its sheet (no runtime): %s" % [frames_plan.files.map(func(f): return f.res_path)])
+	check(Exporter.run(frames_plan).ok, "sprite frames export ok")
+	var again := Exporter.plan(_preset(attack), attack, game.path_join("anim"))
+	check(again.files.all(func(f): return f.action in ["unchanged", "use"]), "re-export changes nothing: %s" % [again.files.map(func(f): return [f.res_path, f.action])])
+	# A game has its own character; for this check copy the example rig in.
+	DirAccess.make_dir_recursive_absolute(game.path_join("addons/oasis_fx/presets/examples/rigs"))
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn"), game.path_join("addons/oasis_fx/presets/examples/rigs/chef_rig.tscn"))
+	var output := []
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--import"]), output, true)
+	write_text(game.path_join("verify_anim.gd"), """extends SceneTree
+func _initialize():
+	create_timer(15.0).timeout.connect(func():
+		print("RESULT timeout")
+		quit(2))
+	_check.call_deferred()
+func _check():
+	var world = Node2D.new()
+	root.add_child(world)
+	var rig = load("res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn").instantiate()
+	world.add_child(rig)
+	var lib = AnimationLibrary.new()
+	lib.add_animation("attack", load("res://anim/chef_ladle_attack.tres"))
+	var player = rig.get_node("AnimationPlayer")
+	player.add_animation_library("", lib)
+	var names = []
+	rig.get_node("OasisAnimationEvents").event_triggered.connect(func(n, _at): names.append(String(n)))
+	player.play("attack")
+	await create_timer(0.5).timeout
+	var effects = world.get_children().filter(func(c): return c != rig).map(func(c): return c.get_script().resource_path.get_file())
+	var frames = load("res://anim/campfire_flame.tres")
+	var sprite = AnimatedSprite2D.new()
+	sprite.sprite_frames = frames
+	world.add_child(sprite)
+	sprite.play("burn")
+	print("RESULT " + JSON.stringify({"events": names, "effects": effects, "animations": Array(frames.get_animation_names()),
+		"sheet": frames.get_frame_texture("burn", 0).atlas.get_width()}))
+	for c in world.get_children():
+		if c.has_method("stop"):
+			c.stop()
+	world.queue_free()
+	await process_frame
+	quit(0)
+""")
+	output = []
+	var code := OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--script", "res://verify_anim.gd"]), output, true)
+	var text := "\n".join(PackedStringArray(output))
+	check_eq(code, 0, "verifier exit code; output:\n" + text)
+	check(not text.contains("SCRIPT ERROR"), "no script errors in the game project:\n" + text)
+	var line := ""
+	for l in text.split("\n"):
+		if l.begins_with("RESULT "):
+			line = l.substr(7)
+	var info: Variant = JSON.parse_string(line) if line.begins_with("{") else null
+	if check(info is Dictionary, "verifier result:\n" + text):
+		check_eq(info.events, ["attack_start", "hit_frame"], "events fired in the game")
+		check(info.effects.has("oasis_fx_effect.gd") and info.effects.has("oasis_sfx_effect.gd"), "the hit showed the fire burst and its sound: %s" % [info.effects])
+		check_eq(info.animations, ["burn", "flare"], "sprite frames load in the game")
+		check_eq(info.sheet, 256, "with the copied, imported sheet")

@@ -8,8 +8,8 @@ config_version=5
 [application]
 
 config/name="OasisFx"
-config/description="OasisFx: create and preview Godot VFX and SFX presets, export them to a game."
-config/version="0.4.0"
+config/description="OasisFx: create and preview Godot VFX, SFX, animation and sprite-frame presets, export them to a game."
+config/version="0.5.0"
 run/main_scene="res://app/main.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="OasisFx"

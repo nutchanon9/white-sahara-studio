@@ -1,14 +1,21 @@
 extends VBoxContainer
 ## Preview of the open preset. VFX play in their own SubViewport (own World2D,
 ## isolated from everything else); SFX play through audio players and are shown
-## as a timeline. Either way the node tree comes from the shared builders, i.e.
-## it is what the generator saves, played by the same runtime script.
+## as a timeline; animations play on a stand-in of their target scene with a
+## track timeline below; sprite frames show the animated sprite and its sheet.
+## The content always comes from the shared builders, i.e. it is what the
+## generator saves.
 
 signal state_changed
+## The user clicked a track row of the animation timeline.
+signal track_selected(index: int)
 
 const Builder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
 const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
 const SfxTimeline := preload("res://app/ui/sfx_timeline.gd")
+const AnimationTimeline := preload("res://app/ui/animation_timeline.gd")
+const AnimationPreview := preload("res://app/ui/animation_preview.gd")
+const SpriteFramesPreview := preload("res://app/ui/sprite_frames_preview.gd")
 const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 
 const BACKGROUNDS := {
@@ -25,6 +32,13 @@ var effect: Node2D
 var loop_preview := true
 
 var timeline: SfxTimeline
+var anim_timeline: AnimationTimeline
+## res:// image path -> Texture2D (images of the game or the app); set by main.
+var texture_provider := Callable()
+## () -> outline of the animation's target scene (see scene_outline.gd); set by main.
+var outline_provider := Callable()
+## Where res:// files are looked up (game first); set by main.
+var res_roots: PackedStringArray = []
 var _container: SubViewportContainer
 var _vfx_controls: Array[Control] = []
 var _viewport: SubViewport
@@ -95,6 +109,17 @@ func _ready() -> void:
 	timeline.custom_minimum_size = Vector2(320, 240)
 	timeline.visible = false
 	add_child(timeline)
+	anim_timeline = AnimationTimeline.new()
+	anim_timeline.custom_minimum_size = Vector2(320, 150)
+	anim_timeline.visible = false
+	anim_timeline.track_clicked.connect(func(i: int) -> void:
+		anim_timeline.selected_track = i
+		track_selected.emit(i))
+	anim_timeline.seek_requested.connect(func(t: float) -> void:
+		if is_instance_valid(effect) and effect.has_method("seek"):
+			effect.seek(t)
+			state_changed.emit())
+	add_child(anim_timeline)
 
 	var canvas_bg := CanvasLayer.new()
 	canvas_bg.layer = -1
@@ -121,22 +146,43 @@ func _ready() -> void:
 	add_child(_replay_timer)
 
 
-## Shows a validated, normalized preset (vfx or sfx). `stream_provider`
+## Shows a validated, normalized preset of any type. `stream_provider`
 ## loads audio for sfx presets (res:// path -> AudioStream).
 func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
+	var previous_sprite_animation: String = effect.animation_name if is_instance_valid(effect) and "animation_name" in effect else ""
 	_preset = preset
 	_clear_effect()
-	var sfx: bool = preset.get("asset_type") == "sfx"
+	var type: String = preset.get("asset_type", "")
+	var sfx := type == "sfx"
 	_container.visible = not sfx
 	timeline.visible = sfx
+	anim_timeline.visible = type == "animation"
 	for control in _vfx_controls:
 		control.visible = not sfx
 	if preset.is_empty():
 		timeline.effect = null
+		anim_timeline.preview = null
 		_update_time()
 		return
 	var report := Report.new()
-	effect = SfxBuilder.build(preset, report, stream_provider) if sfx else Builder.build(preset, report)
+	match type:
+		"sfx":
+			effect = SfxBuilder.build(preset, report, stream_provider)
+		"animation":
+			var anim_preview := AnimationPreview.new()
+			var outline: Dictionary = outline_provider.call() if outline_provider.is_valid() else {}
+			if outline.is_empty() or not anim_preview.setup(preset, outline, texture_provider):
+				anim_preview.free()
+				return
+			effect = anim_preview
+		"sprite_frames":
+			var frames_preview := SpriteFramesPreview.new()
+			if not frames_preview.setup(preset, texture_provider, res_roots):
+				frames_preview.free()
+				return
+			effect = frames_preview
+		_:
+			effect = Builder.build(preset, report)
 	if effect == null:
 		return
 	effect.auto_play = false
@@ -144,10 +190,24 @@ func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 	effect.finished.connect(_on_finished)
 	_world_root.add_child(effect)
 	timeline.effect = effect if sfx else null
+	anim_timeline.preview = effect if type == "animation" else null
 	effect.play()
+	if type == "sprite_frames" and not previous_sprite_animation.is_empty():
+		effect.show_animation(previous_sprite_animation)
 	if _pause_button.button_pressed:
 		effect.set_paused(true)
 	state_changed.emit()
+
+
+## The inspector selected item `index`: highlights that track, or plays that
+## sprite animation.
+func focus_item(index: int) -> void:
+	if not is_instance_valid(effect):
+		return
+	if _preset.get("asset_type") == "animation":
+		anim_timeline.selected_track = index
+	elif _preset.get("asset_type") == "sprite_frames" and index < _preset.animations.size():
+		effect.show_animation(_preset.animations[index].name)
 
 
 func play() -> void:

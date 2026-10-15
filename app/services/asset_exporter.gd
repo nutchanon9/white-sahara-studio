@@ -10,16 +10,17 @@ extends RefCounted
 ## 2. run(): write the planned files. Overwriting needs allow_overwrite, which
 ##    the UI only passes after the user confirmed the listed files.
 ##
-## The exported scene is byte-identical to what the CLI writes when run inside
+## The exported file is byte-identical to what the CLI writes when run inside
 ## that game at the same res:// path (same stable uid). Files written:
-##   <folder>/<id>.tscn                          the effect or sound
+##   <folder>/<id>.tscn or <id>.tres             the effect, sound, animation or sprite frames
 ##   <folder>/oasis_fx_manifest.json             merged entry
-##   <game>/addons/oasis_fx/src/runtime/<script> the runtime script the scene
-##        needs, only if missing or different (listed, never silent)
-## Other files the preset references (audio, textures) keep their res:// path:
-## a file the game already has is used as is (never overwritten); a file the
-## game lacks is copied from the app only when the app bundles it (the example
-## sounds); otherwise the export is refused with the missing path.
+##   <game>/addons/oasis_fx/src/runtime/<script> the runtime script the file
+##        needs (if any), only if missing or different (listed, never silent)
+## Other files the preset references (audio, textures, effect scenes of
+## animation events and what those need) keep their res:// path: a file the
+## game already has is used as is (never overwritten); a file the game lacks
+## is copied from the app only when the app bundles it (the examples);
+## otherwise the export is refused with the missing path.
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
@@ -33,9 +34,10 @@ const MAX_PARENT_LEVELS := 64
 
 ## Returns a plan: {"ok", "errors": [], "warnings": [], "project_root",
 ## "res_dir", "files": [{"path", "res_path", "kind", "action", "content"}]}.
-## `preset` must be a validated, normalized preset.
-static func plan(preset: Dictionary, preset_path: String, dest_dir: String) -> Dictionary:
-	var result := {"ok": false, "errors": [], "warnings": [], "project_root": "", "res_dir": "", "files": [], "preset": preset, "preset_path": preset_path}
+## files[0] is the generated file. `preset` must be a validated, normalized
+## preset; `roots` are where its res:// references were found (game first).
+static func plan(preset: Dictionary, preset_path: String, dest_dir: String, roots := PackedStringArray()) -> Dictionary:
+	var result := {"ok": false, "errors": [], "warnings": [], "project_root": "", "res_dir": "", "files": [], "preset": preset, "preset_path": preset_path, "roots": roots}
 	if preset.is_empty():
 		result.errors.append("The preset has validation errors; fix them before exporting.")
 		return result
@@ -59,24 +61,27 @@ static func plan(preset: Dictionary, preset_path: String, dest_dir: String) -> D
 	# Generate with the shared core into staging, then add the uid Godot would
 	# give the file at its res:// path in the game.
 	_clear_staging()
-	var staged := Generator.generate_preset(preset, STAGING_DIR, {"force": true}, Report.new(preset_path), preset_path)
+	var staging_report := Report.new(preset_path)
+	staging_report.res_roots = roots
+	var staged := Generator.generate_preset(preset, STAGING_DIR, {"force": true}, staging_report, preset_path)
 	if not staged.ok:
 		for e in staged.report.errors:
 			result.errors.append(Report._format_entry(e))
 		return result
-	var scene_res := Generator.scene_path_for(checked.path, preset.id)
+	var scene_res := Generator.output_path_for(checked.path, preset)
 	var scene_text := with_uid(FileAccess.get_file_as_string(staged.output_path), Generator.stable_uid(scene_res))
-	var scene_file := dest.path_join(preset.id + OasisFx.SCENE_EXTENSION)
+	var scene_file := dest.path_join(scene_res.get_file())
 	result.files.append(_file_entry(scene_file, scene_res, "scene", scene_text))
 
 	var runtime_path := Generator.runtime_script_for(preset)
-	var runtime_source := FileAccess.get_file_as_string(runtime_path)
-	if runtime_source.is_empty():
-		result.errors.append("The runtime script source is not available in this build (%s)." % runtime_path)
-		return result
-	result.files.append(_file_entry(root.path_join(runtime_path.trim_prefix("res://")), runtime_path, "runtime", runtime_source))
+	if not runtime_path.is_empty():
+		var runtime_source := FileAccess.get_file_as_string(runtime_path)
+		if runtime_source.is_empty():
+			result.errors.append("The runtime script source is not available in this build (%s)." % runtime_path)
+			return result
+		result.files.append(_file_entry(root.path_join(runtime_path.trim_prefix("res://")), runtime_path, "runtime", runtime_source))
 
-	for dep in Generator.dependencies(preset):
+	for dep in Generator.dependencies(preset, roots):
 		if dep == runtime_path:
 			continue
 		var target := root.path_join(dep.trim_prefix("res://"))
@@ -84,6 +89,8 @@ static func plan(preset: Dictionary, preset_path: String, dest_dir: String) -> D
 			result.files.append({"path": target, "res_path": dep, "kind": "asset", "action": "use", "content": ""})
 			continue
 		var bundled := FileAccess.get_file_as_bytes(dep) if FileAccess.file_exists(dep) else PackedByteArray()
+		if dep.get_extension() == "gd" and bundled.is_empty():
+			bundled = FileAccess.get_file_as_string(dep).to_utf8_buffer()
 		if bundled.is_empty():
 			result.errors.append("%s is not in the game project (%s) and is not one of the files bundled with OasisFx. Put the file in the game at that path, or change the preset." % [dep, root])
 			return result
@@ -96,12 +103,11 @@ static func plan(preset: Dictionary, preset_path: String, dest_dir: String) -> D
 			result.warnings.append("%s was edited after it was generated; overwriting replaces those edits." % scene_res)
 		"unknown":
 			result.warnings.append("%s exists but was not exported by OasisFx; overwriting replaces it." % scene_res)
-	var runtime_entry: Dictionary = result.files[1]
-	if runtime_entry.action == "overwrite":
-		result.warnings.append("The game has a different OasisFx runtime script; exporting replaces it with this app's version (%s)." % OasisFx.VERSION)
 	for f in result.files:
+		if f.kind == "runtime" and f.action == "overwrite":
+			result.warnings.append("The game has a different OasisFx runtime script; exporting replaces it with this app's version (%s)." % OasisFx.VERSION)
 		if f.kind == "asset" and f.action == "create":
-			result.warnings.append("%s is copied from the OasisFx examples into the game; replace it with your own audio when you can." % f.res_path)
+			result.warnings.append("%s is copied from the OasisFx examples into the game; replace it with your own file when you can." % f.res_path)
 	result.ok = true
 	return result
 
@@ -136,7 +142,7 @@ static func run(planned: Dictionary, allow_overwrite := false) -> Dictionary:
 	var scene: Dictionary = planned.files[0]
 	var manifest := Manifest.new()
 	manifest.load_dir(scene.path.get_base_dir())
-	manifest.record(planned.preset, planned.preset_path, scene.res_path, Generator.dependencies(planned.preset), scene.path)
+	manifest.record(planned.preset, planned.preset_path, scene.res_path, Generator.dependencies(planned.preset, planned.get("roots", PackedStringArray())), scene.path)
 	var err := manifest.save()
 	if err != OK:
 		result.errors.append("Cannot write %s: %s" % [manifest.path, error_string(err)])
@@ -175,7 +181,7 @@ static func normalize(path: String) -> String:
 	return p
 
 
-## Adds uid="..." to the [gd_scene ...] header (replacing an existing one).
+## Adds uid="..." to the [gd_scene ...] / [gd_resource ...] header (replacing an existing one).
 static func with_uid(scene_text: String, uid: int) -> String:
 	var header_end := scene_text.find("]")
 	var header := scene_text.substr(0, header_end)

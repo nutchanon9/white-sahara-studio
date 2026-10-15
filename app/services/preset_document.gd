@@ -1,11 +1,13 @@
 extends RefCounted
-## The preset being edited in the desktop app (vfx or sfx).
+## The preset being edited in the desktop app (any asset type in asset_types.gd).
 ##
 ## `raw` is the editable JSON dictionary (exactly what will be saved). Every
 ## edit goes through set_value()/item helpers so the document knows it is
-## dirty. "Items" are the preset's list entries: emitters of a vfx preset,
-## layers of an sfx preset. Validation and building always use the shared
-## core, never a copy of its rules.
+## dirty. "Items" are the entries of the preset's main list: emitters (vfx),
+## layers (sfx), tracks (animation) or animations (sprite_frames). Other
+## lists (animation events, track keys) are edited as whole arrays with
+## set_value()/set_item_value(). Validation and building always use the
+## shared core, never a copy of its rules.
 ##
 ## Presets inside res:// (the shipped examples) are read-only: packaged res://
 ## cannot be written, so they are saved with "Save As" into the workspace.
@@ -19,8 +21,12 @@ const Serializer := preload("res://addons/oasis_fx/src/core/preset_serializer.gd
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
 const EXAMPLE_AUDIO := "res://addons/oasis_fx/presets/examples/audio/"
+const EXAMPLE_RIG := "res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn"
+const EXAMPLE_SHEET := "res://addons/oasis_fx/presets/examples/sprites/flame_sheet.png"
+const Outline := preload("res://addons/oasis_fx/src/core/scene_outline.gd")
 
 var raw: Dictionary = {}
 ## File the document was opened from or saved to; "" for a new, unsaved preset.
@@ -29,6 +35,22 @@ var dirty := false
 ## Where res:// references (audio, textures) are looked up when validating:
 ## the game project folder first, then the app's own files.
 var res_roots: PackedStringArray = []
+
+var _outline_cache := {}
+
+
+## Node outline of an animation's target_scene (see scene_outline.gd), read
+## again when the path, the roots or the file change; {} for other types.
+func target_outline() -> Dictionary:
+	if asset_type() != "animation" or typeof(raw.get("target_scene")) != TYPE_STRING:
+		return {}
+	var path: String = raw.target_scene
+	var file := Validator.resolve_res_path(path, res_roots) if path.begins_with("res://") else ""
+	var key := "%s|%s|%d" % [path, ",".join(res_roots), FileAccess.get_modified_time(file) if not file.is_empty() else 0]
+	if _outline_cache.get("key") != key:
+		_outline_cache = {"key": key, "outline": Outline.load_outline(path, res_roots) if not file.is_empty() else {}}
+	var outline: Dictionary = _outline_cache.outline
+	return outline if outline.get("ok", false) else {}
 
 
 func is_read_only() -> bool:
@@ -41,38 +63,74 @@ func display_name() -> String:
 	return path.get_file()
 
 
+## The preset's asset type; unknown or missing types are edited as "vfx".
 func asset_type() -> String:
-	return "sfx" if raw.get("asset_type") == "sfx" else "vfx"
+	var type: Variant = raw.get("asset_type")
+	return type if AssetTypes.has(type) else "vfx"
 
 
 ## Field tables of the current asset type: [effect fields, item fields].
 func field_tables() -> Array:
-	if asset_type() == "sfx":
-		return [SfxSpec.EFFECT_FIELDS, SfxSpec.LAYER_FIELDS]
-	return [Spec.EFFECT_FIELDS, Spec.EMITTER_FIELDS]
+	var info: Dictionary = AssetTypes.TYPES[asset_type()]
+	return [info.fields, AssetTypes.item_fields(info.item)]
 
 
-## "emitters" or "layers".
+## Key of the main list: "emitters", "layers", "tracks" or "animations".
 func items_key() -> String:
-	return "layers" if asset_type() == "sfx" else "emitters"
+	return AssetTypes.TYPES[asset_type()].items_key
 
 
-## "emitter" or "layer".
+## Kind of the main list's entries: "emitter", "layer", "track" or "sprite_animation".
 func item_name() -> String:
-	return "layer" if asset_type() == "sfx" else "emitter"
+	return AssetTypes.TYPES[asset_type()].item
 
 
 func max_items() -> int:
-	return SfxSpec.MAX_LAYERS if asset_type() == "sfx" else Spec.MAX_EMITTERS
+	return field_tables()[0][items_key()].max_items
+
+
+## Fewest items the preset may have (animations may have no tracks, only events).
+func min_items() -> int:
+	return field_tables()[0][items_key()].min_items
 
 
 func file_suffix() -> String:
-	return OasisFx.PRESET_SUFFIXES[asset_type()]
+	return AssetTypes.suffix(asset_type())
 
 
-## Starts a new, unsaved preset of `type` ("vfx" or "sfx") with one item.
+## Starts a new, unsaved preset of `type` (vfx, sfx, animation or
+## sprite_frames) with one item, using the bundled examples so it previews.
 func new_preset(type := "vfx") -> void:
-	if type == "sfx":
+	if type == "animation":
+		raw = {
+			"schema_version": 1,
+			"asset_type": "animation",
+			"id": "new_animation",
+			"display_name": "New Animation",
+			"description": "",
+			"tags": [],
+			"target_scene": EXAMPLE_RIG,
+			"duration_seconds": 1.0,
+			"loop": false,
+			"tracks": [default_track()],
+			"events": [],
+		}
+	elif type == "sprite_frames":
+		raw = {
+			"schema_version": 1,
+			"asset_type": "sprite_frames",
+			"id": "new_sprite_frames",
+			"display_name": "New Sprite Frames",
+			"description": "",
+			"tags": [],
+			"texture": EXAMPLE_SHEET,
+			"source_author": "OasisFx (procedural)",
+			"source_license": "CC0",
+			"columns": 4,
+			"rows": 2,
+			"animations": [default_sprite_animation("default")],
+		}
+	elif type == "sfx":
 		raw = {
 			"schema_version": 1,
 			"asset_type": "sfx",
@@ -133,6 +191,19 @@ static func default_layer(id: String) -> Dictionary:
 	}
 
 
+## A track on the example rig's right arm; change node/property for your scene.
+static func default_track() -> Dictionary:
+	return {
+		"node": "Body/Skeleton/Hips/Chest/ArmR",
+		"property": "rotation_degrees",
+		"keys": [{"time": 0, "value": 0}, {"time": 0.5, "value": 45}, {"time": 1, "value": 0}],
+	}
+
+
+static func default_sprite_animation(name: String) -> Dictionary:
+	return {"name": name, "frames": [0, 1, 2, 3], "fps": 12}
+
+
 ## Opens a preset file. Returns a report; on JSON errors the document is left
 ## unchanged. A preset that parses but is invalid still opens, so it can be fixed.
 func open(file_path: String) -> RefCounted:
@@ -176,7 +247,7 @@ func validate() -> Dictionary:
 	report.res_roots = res_roots
 	var preset := Validator.validate(raw.duplicate(true), report)
 	if not preset.is_empty() and path.ends_with(".json"):
-		var suffix: String = OasisFx.PRESET_SUFFIXES[preset.asset_type]
+		var suffix: String = AssetTypes.suffix(preset.asset_type)
 		if not path.ends_with(suffix):
 			report.warn("asset_type", "a \"%s\" preset should be saved as <id>%s" % [preset.asset_type, suffix])
 		elif path.get_file().trim_suffix(suffix) != preset.id:
@@ -224,7 +295,15 @@ func set_item_value(index: int, key: String, value: Variant) -> void:
 func add_item() -> int:
 	var list := items()
 	var base := item_name()
-	list.append(default_layer(unique_item_id(base)) if asset_type() == "sfx" else default_emitter(unique_item_id(base)))
+	match asset_type():
+		"sfx":
+			list.append(default_layer(unique_item_id(base)))
+		"animation":
+			list.append(default_track())
+		"sprite_frames":
+			list.append(default_sprite_animation(unique_item_id("animation")))
+		_:
+			list.append(default_emitter(unique_item_id(base)))
 	raw[items_key()] = list
 	_touch()
 	return list.size() - 1
@@ -233,7 +312,9 @@ func add_item() -> int:
 func duplicate_item(index: int) -> int:
 	var list := items()
 	var copy: Dictionary = list[index].duplicate(true)
-	copy["id"] = unique_item_id(str(copy.get("id", item_name())))
+	var id_key := item_id_key()
+	if copy.has(id_key):
+		copy[id_key] = unique_item_id(str(copy[id_key]))
 	list.insert(index + 1, copy)
 	_touch()
 	return index + 1
@@ -257,11 +338,18 @@ func move_item(index: int, delta: int) -> int:
 	return target
 
 
+## Field that names an item: "id", or "name" for sprite animations ("" for tracks).
+func item_id_key() -> String:
+	var fields: Dictionary = field_tables()[1]
+	return "id" if fields.has("id") else ("name" if fields.has("name") else "")
+
+
 func unique_item_id(base: String) -> String:
 	var used := {}
+	var id_key := item_id_key()
 	for item in items():
 		if item is Dictionary:
-			used[str(item.get("id", ""))] = true
+			used[str(item.get(id_key, ""))] = true
 	var stem := base.rstrip("0123456789").trim_suffix("_")
 	if stem.is_empty():
 		stem = item_name()

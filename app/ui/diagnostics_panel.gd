@@ -1,7 +1,7 @@
 extends VBoxContainer
 ## Validation results from the shared validator: a one-line status plus every
-## error and warning with its field path. Clicking an emitter/layer entry
-## selects it in the inspector.
+## error and warning with its field path. Clicking an entry of an item
+## (emitter, layer, track, sprite animation) selects it in the inspector.
 
 signal item_requested(index: int)
 
@@ -23,7 +23,11 @@ func show_report(report: RefCounted, preset: Dictionary) -> void:
 	list.clear()
 	if report.is_ok():
 		var summary := ""
-		if preset.asset_type == "sfx":
+		if preset.asset_type == "animation":
+			summary = "%d track(s), %d event(s), %s s%s" % [preset.tracks.size(), preset.events.size(), str(preset.duration_seconds), ", looping" if preset.loop else ""]
+		elif preset.asset_type == "sprite_frames":
+			summary = "%d animation(s) from a %d × %d sheet" % [preset.animations.size(), preset.columns, preset.rows]
+		elif preset.asset_type == "sfx":
 			summary = "%d layer(s)%s" % [preset.layers.size(), ", looping" if preset.layers.any(func(l): return l.loop) else ""]
 		else:
 			var total := 0
@@ -50,6 +54,6 @@ func _add(kind: String, entry: Dictionary, color: Color) -> void:
 
 
 func _on_item_selected(index: int) -> void:
-	var found := RegEx.create_from_string("^(emitters|layers)\\[(\\d+)\\]").search(str(list.get_item_metadata(index)))
+	var found := RegEx.create_from_string("^(emitters|layers|tracks|animations)\\[(\\d+)\\]").search(str(list.get_item_metadata(index)))
 	if found:
 		item_requested.emit(int(found.get_string(2)))
