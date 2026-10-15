@@ -16,6 +16,7 @@
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 **Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
 **Phase 4 ทำแล้ว:** rig ตัวละคร 2D แบบ cutout — bone, ชิ้นส่วน PNG/polygon, IK สองท่อน, skin (เปลี่ยนชุด), pose และนำเข้า rig จาก scene เดิม (ดู [rig_format.md](addons/oasis_fx/docs/rig_format.md))
+**0.7.0 ทำแล้ว:** ชิ้นส่วนที่ **บิดงอตาม bone** (deformation / bone weights) — คำนวณ weight อัตโนมัติ, นำเข้า weight จาก scene เดิม, ตัวอย่างงูทะเลทรายที่เลื้อยได้
 
 ![OasisFx desktop app](docs/images/desktop_app.png)
 
@@ -24,6 +25,8 @@
 ![OasisFx — แก้ animation](docs/images/desktop_animation.png)
 
 ![OasisFx — แก้ rig](docs/images/desktop_rig.png)
+
+![OasisFx — rig ที่ลำตัวบิดงอได้](docs/images/desktop_rig_bend.png)
 
 รายละเอียดและคำสั่งงานล่าสุดอยู่ใน [Spec v1.1](Godot_Asset_Studio_Claude_Code_Implementation_Spec.md)
 และ [CLAUDE.md](CLAUDE.md) ซึ่งใช้แทนทิศทาง UI เดิมใน audit
@@ -38,7 +41,7 @@
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
 | 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
 | 3 | Animation Timeline: keyframe ของ node ใน scene เดิม (bone, sprite, polygon), event ที่เรียก VFX/SFX, sprite frames, timeline + preview ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองกับตัวละครจริงของ White Sahara — repo เกมไม่อยู่ใน session นี้) |
-| 4 | Rigging: สร้าง/นำเข้า rig (Skeleton2D/Bone2D), ชิ้นส่วน PNG/polygon, marker, IK สองท่อน, skin, pose, ลาก IK ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองนำเข้า mannequin จริงของ White Sahara; ไม่มี mesh deformation / bone weight) |
+| 4 | Rigging: สร้าง/นำเข้า rig (Skeleton2D/Bone2D), ชิ้นส่วน PNG/polygon, marker, IK สองท่อน, skin, pose, ลาก IK ในแอป; 0.7.0: ชิ้นส่วนบิดงอตาม bone (weights) | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองนำเข้า mannequin จริงของ White Sahara; ไม่มีแปรงระบาย weight) |
 
 ## โครงสร้าง repo
 
@@ -75,7 +78,7 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd
 
 ดู effect ทำงานจริง: เปิดโปรเจกต์ใน Godot → เปิด `examples/runtime_demo/runtime_demo.tscn` → กด F6
 (คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร, A = เชฟฟาดทัพพี, S = เชฟดีใจ,
-R = rig เอื้อมคน (IK), K = เปลี่ยน skin, P = เปลี่ยน pose) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
+R = rig เอื้อมคน (IK), K = เปลี่ยน skin, P = เปลี่ยน pose, G = เปลี่ยน skin ของงู — งูเลื้อยตลอดและลำตัวบิดงอตาม bone) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
 
 ภาพหน้าจอจริงของเดโม (render ใน cloud ด้วย software OpenGL ผ่าน Xvfb):
 
@@ -264,6 +267,29 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` รวม rig (`matches_cli: true`, export เข้าโฟลเดอร์ชื่อไทย),
   ไฟล์ที่ export จากแอปแพ็กแล้ว 5 ชนิดตรงกับ CLI ทุก byte, ภาพหน้าจอจริงใน `docs/images/desktop_rig.png` และ `runtime_demo.png`
 - **NOT RUN:** เปิด .exe บน Windows, นำเข้า `mannequin.tscn` จริงของ White Sahara (repo เกมไม่อยู่ใน session นี้), GPU จริง
+
+## 0.7.0: ชิ้นส่วนบิดงอตาม bone (deformation)
+
+- **ทดลองก่อน (spike):** GPU skinning ของ Godot (`Polygon2D.skeleton`) ใน renderer แบบ Compatibility
+  (ที่แอปและโปรเจกต์นี้ใช้; ทดสอบด้วย Mesa llvmpipe) วาดจุดที่ผูกกับ bone ตัวที่ 2 เป็นต้นไปผิดตำแหน่ง แม้ในท่าปกติ
+  → OasisFx จึง **ดัดจุดบน CPU** ใน `oasis_rig.gd` ทุกเฟรมด้วยสูตรเดียวกับ Godot (ทดสอบแบบ headless ได้ด้วย);
+  ถ้าเกมใช้ GPU ที่ทำงานถูกต้อง ตั้ง `gpu_deform = true` ได้ (ยังไม่ได้ทดสอบบน GPU จริง)
+- **field ใหม่ของ part (เพิ่มแบบ optional ใน schema v1 เดิม):** `weights` (bone + ค่า 0…1 ต่อจุด), `uv`,
+  `internal_vertex_count`, `polygons` — เก็บในรูปแบบมาตรฐานของ Godot (`Polygon2D.bones`)
+- **weight อัตโนมัติ:** `auto-weights <rig> --part ID [--bones a,b]` (CLI) หรือปุ่ม **Bend with bones** ในแอป —
+  ผูกแต่ละจุดกับ bone ที่ใกล้ที่สุด 2 ตัวตามระยะ และย้าย part ไปที่ root โดยตำแหน่งไม่เปลี่ยน
+- **นำเข้า:** `import-rig` เก็บ weight/uv/จุดภายใน/polygons ของ Polygon2D ที่ผูกกับ Skeleton2D (เดิมทิ้ง weight)
+- **ตัวอย่าง:** Sand Serpent (ลำตัวมี texture 50 จุด ผูก 6 bone, หัวเป็น sprite, IK ที่คอ, skin สีซีด, 2 ท่า)
+  + animation `sand_serpent_slither` (คลื่นวิ่งตามกระดูกสันหลัง, event "hiss")
+- **แอป:** แก้ weight เป็นตัวเลขได้, ปุ่ม Bend with bones, preview บิดงอจริงและแสดงจุดเป็นสีเขียว
+
+**ผลการตรวจ 0.7.0:**
+- เทสต์ทั้งหมด **191 passed, 0 failed** (exit 0) และได้ผลเดียวกันบนสำเนาใหม่ที่ไม่มี `.godot/`
+- เทสต์ตรวจตำแหน่งจุดหลังดัดเทียบกับสูตร (จุดบน bone เดียว, จุดที่ข้อต่อ, bone พ่อขยับ, rig อยู่ใต้ node ที่หมุน/ย่อขยาย),
+  `auto-weights` ได้ผลตรงกับไฟล์ตัวอย่าง, นำเข้า scene ที่ใช้ skinning แล้วดัดได้เหมือนต้นฉบับ, export ไปโปรเจกต์แยกแล้วงูเลื้อยได้
+- build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` (`rig_bending: true`, `matches_cli: true` ครบ 17 ตัวอย่าง)
+- ภาพหน้าจอจริง: `docs/images/desktop_rig_bend.png`, `runtime_demo.png`
+- **NOT RUN:** `gpu_deform` บน GPU จริง, เปิด .exe บน Windows, นำเข้า mannequin จริงของ White Sahara
 
 ## License
 

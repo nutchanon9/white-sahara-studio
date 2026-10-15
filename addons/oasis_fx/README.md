@@ -7,13 +7,19 @@ and generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D
 `ParticleProcessMaterial`, `AudioStreamPlayer`, …) plus one small runtime script that
 handles playback.
 
-**Status: 0.6.0 — Phase 4.** Rig presets (`*.rig.json`): 2D cutout characters built from
+**Status: 0.7.0 — Phase 4 with bending parts.** Polygon parts can bend with several bones
+(`weights`, plus `uv`, internal points and custom pieces): `OasisRig` moves their points on
+the CPU with Godot's skinning math (GPU skinning drew wrong in the Compatibility renderer
+tested), `auto-weights` computes weights, `import-rig` keeps the weights of skinned
+polygons. Example: Sand Serpent with a looping slither; see
+[docs/rig_format.md](docs/rig_format.md#bending-parts-deformation).
+
+0.6.0: rig presets (`*.rig.json`): 2D cutout characters built from
 `Skeleton2D` / `Bone2D` with rigid `Sprite2D` (layered PNG) and `Polygon2D` parts, markers,
 two-bone IK chains, skins (costume swaps) and poses, generated as a scene whose root runs
 `OasisRig`; `import-rig` creates a rig preset from an existing character scene (read as text,
 never changed). Example: Oasis Chef (CC0 part images) and an animation that drives its IK;
-see [docs/rig_format.md](docs/rig_format.md). Mesh deformation / bone weights are not
-supported.
+see [docs/rig_format.md](docs/rig_format.md).
 
 Phase 3 (0.5.1: files exported by the packaged desktop app are byte-identical to CLI output). Animation presets (`*.anim.json`): keyframe tracks for nodes
 of an existing scene (bones, sprites, polygons …) and events that show OasisFx effects and
@@ -118,12 +124,12 @@ registered class names (e.g. `--script` tools on a fresh clone), use
 
 ```
 addons/oasis_fx/
-  cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], format, schema, import-rig)
+  cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], format, schema, import-rig, auto-weights)
   src/core/                      shared loader, validator, builder, generator, manifest
   src/runtime/oasis_fx_effect.gd playback script attached to generated effect scenes
   src/runtime/oasis_sfx_effect.gd playback script attached to generated sound scenes
   src/runtime/oasis_animation_events.gd  receives animation events (shows their effects)
-  src/runtime/oasis_rig.gd       root script of generated rigs (skins, poses, IK lookups)
+  src/runtime/oasis_rig.gd       root script of generated rigs (skins, poses, IK lookups, bending parts)
   schemas/                       JSON Schemas vfx/sfx/animation/sprite_frames/rig v1 (generated from the field tables)
   presets/examples/              example presets; audio/, sprites/ and rig_parts/ hold CC0 example files,
                                  rigs/chef_rig.tscn is the example character for the animations
@@ -136,7 +142,7 @@ addons/oasis_fx/
 - [Preset format](docs/preset_format.md) — every field, unit, range, rule and the runtime behavior
 - [Sound preset format](docs/sfx_format.md) — `sfx` fields, rules, runtime, export and licensing
 - [Animation and sprite frames formats](docs/animation_format.md) — tracks, keys, events, sprite sheets
-- [Rig format](docs/rig_format.md) — bones, parts, markers, IK, skins, poses, import, runtime API
+- [Rig format](docs/rig_format.md) — bones, parts, bending parts, markers, IK, skins, poses, import, runtime API
 - [CLI](docs/cli.md) — commands, options, exit codes, manifest, CI setup, tests
 - [AI authoring guide](docs/ai_authoring_guide.md) — prompt, rules, examples and edit recipes for ChatGPT/Claude
 - [Desktop app](docs/desktop.md) — using, building and verifying the standalone app

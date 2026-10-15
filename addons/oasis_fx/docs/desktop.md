@@ -4,7 +4,7 @@ OasisFx is also a standalone desktop application, built with Godot 4.7.2 from th
 repository (`app/`, entry scene `app/main.tscn`). It needs neither Godot Editor nor the
 game project to run. It edits particle effects (`.vfx.json`), layered sound effects
 (`.sfx.json`, Phase 2), animations (`.anim.json`) and sprite frames (`.frames.json`,
-Phase 3), and 2D cutout rigs (`.rig.json`, Phase 4). It uses the same core as the CLI (`addons/oasis_fx/src/core/`): the
+Phase 3), and 2D cutout rigs (`.rig.json`, Phase 4; bending parts in 0.7.0). It uses the same core as the CLI (`addons/oasis_fx/src/core/`): the
 inspector is generated from the validator's field table, the preview is built by the
 generator's builder, and export calls the generator.
 
@@ -35,6 +35,13 @@ the frames the animation uses and the current frame (right).*
 *Oasis Chef (Phase 4) with the `night_shift` skin and the `wave` pose; the right arm's IK
 target was moved, so the arm reaches up and the elbow bends. Bones (blue) and IK targets
 (orange circles) are drawn on top; the inspector shows the parts list editor.*
+
+![OasisFx desktop app with a bending rig](../../../docs/images/desktop_rig_bend.png)
+
+*Sand Serpent (0.7.0) in the `s_curve` pose: the textured body polygon bends with the six
+spine bones; its points are shown as green dots, the neck's IK target in orange. The
+inspector shows the selected `body` part and **Bend with bones**; further down are its
+weights (one value per point for each bone).*
 
 ## Using it
 
@@ -76,8 +83,15 @@ scene is never changed. A message lists what was not imported (bone weights, IK,
 sprite regions, animations, renamed nodes); the preset opens unsaved, ready for IK chains,
 skins and poses. Export it as a **new** scene. Details: [rig_format.md](rig_format.md).
 
+**Bending parts.** Select a polygon part under **Parts** and click **Bend with bones**: the
+part moves to the rig root (it stays where it is) and gets automatic weights for its nearest
+bones; its **Weights** list then shows one value per point for each bone, editable by hand.
+The preview bends it with the bones (points drawn as green dots with **Bones** on). Add
+points along the outline where it should bend first: a 4-point rectangle cannot bend. See
+[rig_format.md](rig_format.md#bending-parts-deformation).
+
 The preview is the generated rig itself (same builder, same runtime script), so skins,
-poses and IK behave as in the game. Moving a target in the preview does not change the
+poses, IK and bending behave as in the game. Moving a target in the preview does not change the
 preset; IK targets start where the preset says (`target`, or the rest pose).
 
 ### The game project and its files
@@ -218,7 +232,8 @@ bundled, Fire Burst exports into the given folder, the Sword Slash SFX example
 validates, loads its audio from the package (real lengths on the timeline) and exports
 with its runtime and audio files, the Chef Ladle Attack animation, Campfire Flame
 sprite frames and Oasis Chef rig validate, preview (rig stand-in / sheet / rig with its part
-images) and export, and every bundled
+images) and export, the Sand Serpent's body bends in the preview (`"rig_bending": true`),
+and every bundled
 example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 `OasisFx.console.exe` (same arguments) to see the output in a console.
 
@@ -289,6 +304,20 @@ example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 | Launching `OasisFx.exe` on Windows; dragging IK targets with a real mouse | **NOT RUN** (no Windows; dragging was driven by code) |
 | Importing White Sahara's real `mannequin.tscn` | **NOT RUN** — the game repository is not in this session |
 
+## Verification status (0.7.0 — bending parts, 2026-10-15)
+
+| Check | Result |
+|---|---|
+| Spike: Godot's GPU skinning (`Polygon2D.skeleton`) in the Compatibility renderer, Xvfb + Mesa llvmpipe | **FAIL** (engine/driver) — points weighted to a non-first bone drawn in the wrong place even at rest; hence CPU bending by default |
+| Full suite (`run_tests.gd`, 18 test files incl. `test_rig_deform.gd`) | **PASS** — 191 passed, 0 failed; same result on a fresh copy without `.godot/` |
+| CPU bending matches the skinning math (points on one bone, joint points, parent moves, rest pose; rig under a moved/rotated/scaled parent) (automated) | **PASS** |
+| `auto-weights` reproduces the shipped serpent weights; import of a scene with Godot skinning (weights, uv, internal points, pieces) bends like the original; generate → import round trip (automated) | **PASS** |
+| Bending rig exported into a separate project, animated there (automated) | **PASS** |
+| App: weights editor, **Bend with bones**, sprite refusal message, bending preview (automated) | **PASS** |
+| Packaged Linux build `--smoke-test` incl. `"rig_bending": true` and `"matches_cli": true` for all 17 examples | **PASS** |
+| Rendered with a window (Xvfb, software OpenGL): serpent at rest, in poses, pale skin, IK moved; app preview; runtime demo | **PASS** — images above and in README |
+| `gpu_deform = true` on a real GPU / Forward+ renderer; Windows launch | **NOT RUN** |
+
 ## Manual QA checklist (Windows)
 
 Run these on a Windows 10/11 PC and note the results:
@@ -357,7 +386,15 @@ Rigs (Phase 4):
 25. **New ▾ → Rig**: a two-bone figure; *Add* a bone and a part; Save As suggests `.rig.json`.
 26. **Game project…** → the White Sahara project. **New ▾ → Rig from a scene in the game…** →
     the mannequin `.tscn`: a message lists what was not imported; the preview shows the
-    mannequin (rigid parts). Add `ik_chains` for the legs and try them.
+    mannequin (parts weighted to its skeleton bend). Add `ik_chains` for the legs and try them.
 27. Export `oasis_chef` to `chars` in the test game: the list shows the scene, `oasis_rig.gd`,
     `oasis_animation_events.gd` and the part images. In Godot, instantiate
     `res://chars/oasis_chef.tscn` twice and call `apply_skin` / `set_pose` from a script.
+
+Bending parts (0.7.0):
+
+28. Click **✦ sand_serpent**: the body is a smooth textured strip with green points. Pick
+    `wave` / `s_curve`: the body bends with the spine. Drag the `head` target: the neck bends.
+29. Open **✦ oasis_chef**, select part `upper_arm_r_shape`, click **Bend with bones**: the
+    status shows "(1 bending)"; drag the `arm_r` target: the sleeve's lower end now follows the
+    forearm part of the way (a softer elbow; its outline has only 4 points).

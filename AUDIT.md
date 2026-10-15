@@ -228,3 +228,16 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 - IK ใน headless ทำงาน (ทดสอบก่อนเริ่ม); modification stack ต้อง `enabled = true` และ target เป็น path เทียบกับ Skeleton2D
 - import: ถ้า z ของชิ้นส่วนติดลบ ชิ้นส่วนจะไปอยู่หลังพื้นหลังของเกม → เริ่มที่ 0
 - แอป: แถบ preview ยาวเกินหน้าจอเมื่อเพิ่มตัวเลือก skin/pose → ย้ายไปแถวของตัวเอง (เห็นจากภาพหน้าจอ); list editor ซ้อนกันวางเต็มความกว้าง
+
+---
+
+## 13. ภาคผนวก (2026-10-15): 0.7.0 — ชิ้นส่วนบิดงอตาม bone (optional deformation ของ Phase 4)
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| วิธีดัด | ดัดจุดบน CPU ใน `oasis_rig.gd` (`update_deformation()`, `process_priority` 1000 ให้ทำหลัง animation/IK) ด้วยสูตร skinning ของ Godot; ตัวเลือก `gpu_deform` สำหรับใช้ GPU | spike: GPU skinning ใน Compatibility renderer (Mesa llvmpipe) วาดจุดของ bone ตัวที่ 2 ขึ้นไปผิด แม้ในท่าปกติ — ตรวจด้วยภาพจริงหลายแบบ (ภาพ spike ไม่ได้ commit); CPU ตรวจด้วยเทสต์ headless ได้ |
+| ที่เก็บ weight | `Polygon2D.bones` แบบมาตรฐาน (path เทียบกับ Skeleton2D) และปล่อย `skeleton` ว่าง | scene ยังเป็นรูปแบบของ Godot; เปิด GPU ได้ภายหลังโดยไม่ต้องแปลงข้อมูล |
+| schema | field optional ใหม่ใน part: `weights`, `uv`, `internal_vertex_count`, `polygons`; ชนิด field ใหม่ `number_list`, `index_lists` | ไม่ต้องขึ้น schema_version; preset เดิมยังถูกต้องและไฟล์ scene ที่สร้างเหมือนเดิมทุก byte (hash ของ preset ใน manifest เปลี่ยนเพราะมีค่า default ใหม่) |
+| part ที่บิดงอ | ต้องติดกับ root (`bone` "") | จุดของมันขยับตาม bone หลายตัวอยู่แล้ว ถ้าติดกับ bone ด้วยจะถูกขยับซ้ำ |
+| weight อัตโนมัติ | 2 bone ที่ใกล้ที่สุดต่อจุด, 1/d⁴ แล้ว normalize, ปัดเศษ 0.001 | เรียบง่ายและคาดเดาได้; จุดบนข้อต่อได้ครึ่งต่อครึ่ง; ไม่มีแปรงระบาย (เกินขอบเขต) |
+| นำเข้า | เก็บ weight เมื่อ `skeleton` ของ Polygon2D ชี้ไปที่ Skeleton2D ที่นำเข้า (หรือว่างใน rig ของ OasisFx); ข้าม IKTargets ของ rig ที่ OasisFx สร้าง | weight ที่ไม่มี skeleton ไม่ทำให้ Godot ดัดอยู่แล้ว → นำเข้าแบบแข็งพร้อม note |

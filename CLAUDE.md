@@ -80,6 +80,14 @@ row, list editors). Full suite 179 passed, 0 failed (also on a fresh copy); pack
 passed, packaged exports byte-identical to CLI; Windows launch and importing White Sahara's real `mannequin.tscn`
 NOT RUN; mesh deformation / bone weights not implemented. Awaiting owner acceptance; all spec phases now exist.
 
+**0.7.0 bending parts (user requested "continue", 2026-10-15):** Phase 4's optional deformation —
+polygon part `weights` (+ `uv`, `internal_vertex_count`, `polygons`; additive schema v1 fields) stored as
+standard `Polygon2D.bones`, bent on the CPU by `oasis_rig.gd` (GPU skinning drew wrong in the Compatibility
+renderer under llvmpipe; `gpu_deform` opt-in), `rig_weights.gd` + CLI `auto-weights`, importer keeps skinning,
+example `sand_serpent` + `sand_serpent_slither`, app weights editor / Bend with bones. Full suite 191 passed,
+0 failed (also on a fresh copy); packaged Linux smoke test incl. `rig_bending` passed; GPU skinning on real
+hardware, Windows launch and the real mannequin import NOT RUN. Awaiting owner acceptance.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.
