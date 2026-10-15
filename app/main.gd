@@ -23,6 +23,7 @@ const VfxBuilder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
 const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
+const RigImporter := preload("res://addons/oasis_fx/src/core/rig_importer.gd")
 
 ## "New" menu entries: [label, asset type, shortcut].
 const NEW_ITEMS := [
@@ -30,6 +31,8 @@ const NEW_ITEMS := [
 	["Sound", "sfx", "Ctrl+Shift+N"],
 	["Animation (keyframes and events)", "animation", "Ctrl+Alt+N"],
 	["Sprite frames (sprite sheet)", "sprite_frames", ""],
+	["Rig (cutout character)", "rig", ""],
+	["Rig from a scene in the game…", "import_rig", ""],
 ]
 
 const STARTUP_PRESET := "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json"
@@ -124,6 +127,23 @@ func set_game_project(dir: String) -> bool:
 	return true
 
 
+## Starts a new, unsaved rig preset made from the scene `res_path` (a .tscn
+## with a Skeleton2D in the game project or the app). The scene is only read.
+## Returns false (and shows why) when it cannot be imported.
+func import_rig(res_path: String) -> bool:
+	var imported := RigImporter.import_scene(res_path, document.res_roots)
+	if not imported.ok:
+		show_message("Cannot import the rig", imported.error)
+		return false
+	document.raw = imported.preset
+	document.path = ""
+	document.dirty = true
+	_after_load()
+	if not imported.notes.is_empty():
+		show_message("Rig imported", "Imported %s. Not imported:\n\n- %s\n\nThe scene was not changed. Save the preset, then export the rig as a new scene." % [res_path, "\n- ".join(imported.notes)])
+	return true
+
+
 ## Opens a preset file. Returns false (and shows why) when it cannot be read.
 func open_file(path: String) -> bool:
 	var report: RefCounted = document.open(path)
@@ -207,6 +227,8 @@ static func how_to_use(planned: Dictionary) -> String:
 				"\nEvents need a child node \"OasisAnimationEvents\" with the script %s on the scene root." % planned.files[1].res_path if planned.files.size() > 1 and planned.files[1].kind == "runtime" else ""]
 		"sprite_frames":
 			return "Set the Sprite Frames of an AnimatedSprite2D to %s and play one of its animations." % res_path
+		"rig":
+			return "Instance %s in your scenes. Its OasisRig script switches skins (apply_skin) and poses (set_pose); move IKTargets/<chain> to bend IK chains. Animation presets can target it." % res_path
 	return "In the game, instantiate %s (it plays and frees itself).\nThe scene needs %s, which is now in the game project." % [res_path, planned.files[1].res_path]
 
 
@@ -256,7 +278,11 @@ func _build_ui() -> void:
 		popup.add_item(NEW_ITEMS[i][0], i)
 		if not NEW_ITEMS[i][2].is_empty():
 			popup.set_item_shortcut(i, _shortcut(NEW_ITEMS[i][2]), true)
-	popup.id_pressed.connect(func(id: int) -> void: confirm_discard(new_preset.bind(NEW_ITEMS[id][1])))
+	popup.id_pressed.connect(func(id: int) -> void:
+		if NEW_ITEMS[id][1] == "import_rig":
+			confirm_discard(func() -> void: _pick_asset(PackedStringArray(["tscn"]), import_rig))
+		else:
+			confirm_discard(new_preset.bind(NEW_ITEMS[id][1])))
 	toolbar.add_child(new_menu)
 	_tool_button(toolbar, "Open…", "Ctrl+O", func() -> void: confirm_discard(_show_open_dialog))
 	_save_button = _tool_button(toolbar, "Save", "Ctrl+S", save)
@@ -578,8 +604,8 @@ func cli_output_mismatches() -> PackedStringArray:
 ## listed and valid, the preview builds, settings live in user://, packaged
 ## res:// refuses writes, Fire Burst exports into the given game folder, the
 ## Sword Slash sound previews with its bundled audio and exports with it, and
-## the Chef Ladle Attack animation and Campfire Flame sprite frames validate,
-## preview and export.
+## the Chef Ladle Attack animation, Campfire Flame sprite frames and Oasis
+## Chef rig validate, preview and export.
 ## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
 func _smoke_test(export_dir: String) -> void:
 	var checks := {}
@@ -614,14 +640,15 @@ func _smoke_test(export_dir: String) -> void:
 	# Animation: the example rig and effect scenes are readable as text from the
 	# package (validation, preview proxy) and the animation exports with the
 	# effect scenes its events show. Sprite frames: the sheet loads from the package.
-	for spec in [["animation", "chef_ladle_attack.anim.json"], ["sprite_frames", "campfire_flame.frames.json"]]:
+	for spec in [["animation", "chef_ladle_attack.anim.json"], ["sprite_frames", "campfire_flame.frames.json"], ["rig", "oasis_chef.rig.json"]]:
 		var key: String = spec[0]
 		var opened := open_file(OasisFx.EXAMPLES_DIR.path_join(spec[1]))
 		checks[key + "_valid"] = opened and validation.report.is_ok()
 		if opened and not validation.report.is_ok():
 			checks[key + "_errors"] = validation.report.format_lines()
 		var effect := preview.effect
-		checks[key + "_preview"] = is_instance_valid(effect) and (effect.get("proxy") != null and effect.proxy.get_child_count() > 0 or effect.get("sheet") != null)
+		checks[key + "_preview"] = is_instance_valid(effect) and (effect.get("proxy") != null and effect.proxy.get_child_count() > 0 or effect.get("sheet") != null \
+				or effect.get("rig") != null and effect.rig.find_children("*", "Sprite2D", true, false).all(func(s): return s.texture != null and s.texture.get_width() > 1))
 		ok = ok and checks[key + "_valid"] and checks[key + "_preview"]
 		if not export_dir.is_empty():
 			var planned := plan_export(export_dir)

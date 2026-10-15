@@ -115,6 +115,23 @@ func new_preset(type := "vfx") -> void:
 			"tracks": [default_track()],
 			"events": [],
 		}
+	elif type == "rig":
+		raw = {
+			"schema_version": 1,
+			"asset_type": "rig",
+			"id": "new_rig",
+			"display_name": "New Rig",
+			"description": "",
+			"tags": [],
+			"bones": [
+				{"id": "hips", "position": [0, -40], "angle_degrees": -90, "length": 10},
+				{"id": "body", "parent": "hips", "position": [0, -4], "angle_degrees": -90, "length": 40},
+			],
+			"parts": [
+				{"id": "body_shape", "bone": "body", "polygon": [[-14, 0], [14, 0], [12, -40], [-12, -40]], "color": "#7FA7D9FF"},
+				{"id": "legs", "bone": "hips", "polygon": [[-12, 0], [12, 0], [10, 40], [-10, 40]], "color": "#5B4636FF"},
+			],
+		}
 	elif type == "sprite_frames":
 		raw = {
 			"schema_version": 1,
@@ -302,6 +319,9 @@ func add_item() -> int:
 			list.append(default_track())
 		"sprite_frames":
 			list.append(default_sprite_animation(unique_item_id("animation")))
+		"rig":
+			var parent: String = str(list.back().get("id", "")) if not list.is_empty() and list.back() is Dictionary else ""
+			list.append({"id": unique_item_id("bone"), "parent": parent, "position": [0, 16] if not parent.is_empty() else [0, 0]})
 		_:
 			list.append(default_emitter(unique_item_id(base)))
 	raw[items_key()] = list

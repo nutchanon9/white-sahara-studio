@@ -8,7 +8,7 @@ const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 ## Marks in front of preset names per asset type (vfx has none).
-const MARKS := {"vfx": "", "sfx": "♪ ", "animation": "▶ ", "sprite_frames": "▦ "}
+const MARKS := {"vfx": "", "sfx": "♪ ", "animation": "▶ ", "sprite_frames": "▦ ", "rig": "✦ "}
 
 var workspace_dir := ""
 var tree: Tree

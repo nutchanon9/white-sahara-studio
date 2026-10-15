@@ -156,3 +156,16 @@ func test_animation_and_sprite_frames_documents() -> void:
 	check_eq(doc.get_item_value(copy, "name"), "default_2", "duplicate gets a unique name")
 	check(doc.validate().report.is_ok(), "sprite frames valid: " + " | ".join(doc.validate().report.format_lines()))
 	check_eq(doc.file_suffix(), ".frames.json", "suffix")
+
+
+func test_rig_documents() -> void:
+	var doc := PresetDocument.new()
+	doc.new_preset("rig")
+	check_eq(doc.items_key(), "bones", "bones are the items")
+	check_eq(doc.file_suffix(), ".rig.json", "suffix")
+	check(doc.validate().report.is_ok(), "new rig valid: " + " | ".join(doc.validate().report.format_lines()))
+	var added := doc.add_item()
+	check_eq(doc.get_item_value(added, "parent"), "body", "a new bone hangs from the last bone")
+	check(doc.validate().report.is_ok(), "still valid with the added bone")
+	doc.set_value("parts", doc.get_value("parts") + [{"id": "hips", "bone": "hips", "polygon": [[0, 0], [1, 0], [0, 1]]}])
+	check(not doc.validate().report.is_ok(), "a part may not reuse a bone id")

@@ -16,6 +16,7 @@ const SfxTimeline := preload("res://app/ui/sfx_timeline.gd")
 const AnimationTimeline := preload("res://app/ui/animation_timeline.gd")
 const AnimationPreview := preload("res://app/ui/animation_preview.gd")
 const SpriteFramesPreview := preload("res://app/ui/sprite_frames_preview.gd")
+const RigPreview := preload("res://app/ui/rig_preview.gd")
 const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 
 const BACKGROUNDS := {
@@ -41,6 +42,11 @@ var outline_provider := Callable()
 var res_roots: PackedStringArray = []
 var _container: SubViewportContainer
 var _vfx_controls: Array[Control] = []
+## Skin / pose pickers and the bones toggle, shown for rigs.
+var skin_option: OptionButton
+var pose_option: OptionButton
+var _rig_controls: Array[Control] = []
+var _show_bones := true
 var _viewport: SubViewport
 var _world_root: Node2D
 var _background: ColorRect
@@ -91,10 +97,46 @@ func _ready() -> void:
 	zoom.item_selected.connect(func(i: int) -> void: _camera.zoom = Vector2.ONE * ZOOMS[i])
 	bar.add_child(zoom)
 	_vfx_controls.append(zoom)
+	# Rig controls get their own row so the toolbar fits narrow windows.
+	var rig_bar := HBoxContainer.new()
+	var rig_label := Label.new()
+	rig_label.text = "Rig:"
+	rig_bar.add_child(rig_label)
+	skin_option = OptionButton.new()
+	skin_option.tooltip_text = "Skin (costume) of the rig"
+	skin_option.item_selected.connect(func(i: int) -> void:
+		if is_instance_valid(effect) and effect.has_method("set_skin"):
+			effect.set_skin(skin_option.get_item_metadata(i)))
+	rig_bar.add_child(skin_option)
+	pose_option = OptionButton.new()
+	pose_option.tooltip_text = "Pose of the rig"
+	pose_option.item_selected.connect(func(i: int) -> void:
+		if is_instance_valid(effect) and effect.has_method("set_pose"):
+			effect.set_pose(pose_option.get_item_metadata(i)))
+	rig_bar.add_child(pose_option)
+	var bones_check := CheckBox.new()
+	bones_check.text = "Bones"
+	bones_check.tooltip_text = "Show bones and IK targets (drag a target to move its chain)"
+	bones_check.button_pressed = true
+	bones_check.toggled.connect(func(on: bool) -> void:
+		_show_bones = on
+		if is_instance_valid(effect) and "show_bones" in effect:
+			effect.show_bones = on)
+	rig_bar.add_child(bones_check)
+	var hint := Label.new()
+	hint.text = "drag an IK target (circle) to bend its chain"
+	hint.modulate = Color(1, 1, 1, 0.6)
+	hint.clip_text = true
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rig_bar.add_child(hint)
 	_time_label = Label.new()
 	_time_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_time_label.clip_text = true
 	bar.add_child(_time_label)
+	add_child(rig_bar)
+	_rig_controls.assign([rig_bar])
+	rig_bar.visible = false
 
 	_container = SubViewportContainer.new()
 	_container.stretch = true
@@ -150,6 +192,8 @@ func _ready() -> void:
 ## loads audio for sfx presets (res:// path -> AudioStream).
 func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 	var previous_sprite_animation: String = effect.animation_name if is_instance_valid(effect) and "animation_name" in effect else ""
+	var previous_skin: String = skin_option.get_item_metadata(skin_option.selected) if skin_option.selected >= 0 else ""
+	var previous_pose: String = pose_option.get_item_metadata(pose_option.selected) if pose_option.selected >= 0 else ""
 	_preset = preset
 	_clear_effect()
 	var type: String = preset.get("asset_type", "")
@@ -159,6 +203,8 @@ func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 	anim_timeline.visible = type == "animation"
 	for control in _vfx_controls:
 		control.visible = not sfx
+	for control in _rig_controls:
+		control.visible = type == "rig"
 	if preset.is_empty():
 		timeline.effect = null
 		anim_timeline.preview = null
@@ -175,6 +221,13 @@ func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 				anim_preview.free()
 				return
 			effect = anim_preview
+		"rig":
+			var rig_preview := RigPreview.new()
+			if not rig_preview.setup(preset, texture_provider):
+				rig_preview.free()
+				return
+			rig_preview.show_bones = _show_bones
+			effect = rig_preview
 		"sprite_frames":
 			var frames_preview := SpriteFramesPreview.new()
 			if not frames_preview.setup(preset, texture_provider, res_roots):
@@ -194,9 +247,22 @@ func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 	effect.play()
 	if type == "sprite_frames" and not previous_sprite_animation.is_empty():
 		effect.show_animation(previous_sprite_animation)
+	if type == "rig":
+		_fill_option(skin_option, [""] + preset.skins.map(func(s): return s.name), "(as defined)", previous_skin)
+		_fill_option(pose_option, [""] + preset.poses.map(func(p): return p.name), "(rest)", previous_pose)
+		effect.set_skin(skin_option.get_item_metadata(skin_option.selected))
+		effect.set_pose(pose_option.get_item_metadata(pose_option.selected))
 	if _pause_button.button_pressed:
 		effect.set_paused(true)
 	state_changed.emit()
+
+
+static func _fill_option(option: OptionButton, names: Array, empty_label: String, keep: String) -> void:
+	option.clear()
+	for name in names:
+		option.add_item(name if not name.is_empty() else empty_label)
+		option.set_item_metadata(option.item_count - 1, name)
+	option.select(maxi(0, names.find(keep)))
 
 
 ## The inspector selected item `index`: highlights that track, or plays that
@@ -253,6 +319,9 @@ func _process(_delta: float) -> void:
 func _update_time() -> void:
 	if not is_instance_valid(effect):
 		_time_label.text = "no preview (fix the errors below)" if _preset.is_empty() else ""
+		return
+	if "rig" in effect:
+		_time_label.text = ""  # a rig has no clock; skin and pose are in the rig row
 		return
 	var state := "playing" if effect.is_playing() else "stopped"
 	if is_paused():

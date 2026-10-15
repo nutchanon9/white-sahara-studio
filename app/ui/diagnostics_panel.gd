@@ -23,7 +23,9 @@ func show_report(report: RefCounted, preset: Dictionary) -> void:
 	list.clear()
 	if report.is_ok():
 		var summary := ""
-		if preset.asset_type == "animation":
+		if preset.asset_type == "rig":
+			summary = "%d bone(s), %d part(s), %d IK chain(s), %d skin(s), %d pose(s)" % [preset.bones.size(), preset.parts.size(), preset.ik_chains.size(), preset.skins.size(), preset.poses.size()]
+		elif preset.asset_type == "animation":
 			summary = "%d track(s), %d event(s), %s s%s" % [preset.tracks.size(), preset.events.size(), str(preset.duration_seconds), ", looping" if preset.loop else ""]
 		elif preset.asset_type == "sprite_frames":
 			summary = "%d animation(s) from a %d × %d sheet" % [preset.animations.size(), preset.columns, preset.rows]
@@ -54,6 +56,6 @@ func _add(kind: String, entry: Dictionary, color: Color) -> void:
 
 
 func _on_item_selected(index: int) -> void:
-	var found := RegEx.create_from_string("^(emitters|layers|tracks|animations)\\[(\\d+)\\]").search(str(list.get_item_metadata(index)))
+	var found := RegEx.create_from_string("^(emitters|layers|tracks|animations|bones)\\[(\\d+)\\]").search(str(list.get_item_metadata(index)))
 	if found:
 		item_requested.emit(int(found.get_string(2)))

@@ -366,3 +366,82 @@ func _check():
 		check(info.effects.has("oasis_fx_effect.gd") and info.effects.has("oasis_sfx_effect.gd"), "the hit showed the fire burst and its sound: %s" % [info.effects])
 		check_eq(info.animations, ["burn", "flare"], "sprite frames load in the game")
 		check_eq(info.sheet, 256, "with the copied, imported sheet")
+
+
+func test_rig_export_and_run_in_the_game() -> void:
+	var game := _game("export_rig")
+	DirAccess.make_dir_recursive_absolute(game.path_join("chars"))
+	var chef := "res://addons/oasis_fx/presets/examples/oasis_chef.rig.json"
+	var plan := Exporter.plan(_preset(chef), chef, game.path_join("chars"))
+	if not check(plan.ok, "plan ok: %s" % [plan.errors]):
+		return
+	var actions := {}
+	for f in plan.files:
+		actions[f.res_path] = f.action
+	check_eq(plan.files[0].res_path, "res://chars/oasis_chef.tscn", "rig scene first")
+	for dep in ["res://addons/oasis_fx/src/runtime/oasis_rig.gd", "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
+			"res://addons/oasis_fx/presets/examples/rig_parts/torso.png", "res://addons/oasis_fx/presets/examples/rig_parts/torso_night.png",
+			"res://addons/oasis_fx/presets/examples/rig_parts/hat_beret.png"]:
+		check_eq(actions.get(dep), "create", "copied " + dep)
+	check(Exporter.run(plan).ok, "export ok")
+	var reach := "res://addons/oasis_fx/presets/examples/oasis_chef_reach.anim.json"
+	var reach_preset := _preset(reach)
+	reach_preset.target_scene = "res://chars/oasis_chef.tscn"
+	var reach_plan := Exporter.plan(reach_preset, reach, game.path_join("chars"))
+	check(reach_plan.ok, "the reach animation targets the exported rig: %s" % [reach_plan.errors])
+	check(Exporter.run(reach_plan).ok, "animation export ok")
+	var again := Exporter.plan(_preset(chef), chef, game.path_join("chars"))
+	check(again.files.all(func(f): return f.action in ["unchanged", "use"]), "re-export changes nothing: %s" % [again.files.map(func(f): return [f.res_path, f.action])])
+	var output := []
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--import"]), output, true)
+	write_text(game.path_join("verify_rig.gd"), """extends SceneTree
+func _initialize():
+	create_timer(15.0).timeout.connect(func():
+		print("RESULT timeout")
+		quit(2))
+	_check.call_deferred()
+func _check():
+	var world = Node2D.new()
+	root.add_child(world)
+	var chefs = []
+	for i in 2:
+		var chef = load("res://chars/oasis_chef.tscn").instantiate()
+		chef.position = Vector2(200 * i, 300)
+		world.add_child(chef)
+		chefs.append(chef)
+	await process_frame
+	chefs[0].apply_skin("night_shift")
+	chefs[1].set_pose("wave")
+	var lib = AnimationLibrary.new()
+	lib.add_animation("reach", load("res://chars/oasis_chef_reach.tres"))
+	var player = chefs[0].get_animation_player()
+	player.add_animation_library("demo", lib)
+	var names = []
+	chefs[0].get_node("OasisAnimationEvents").event_triggered.connect(func(n, _at): names.append(String(n)))
+	player.play("demo/reach")
+	await create_timer(0.75).timeout
+	var torso = chefs[0].find_child("torso", true, false)
+	print("RESULT " + JSON.stringify({"skins": Array(chefs[0].get_skin_names()), "poses": Array(chefs[1].get_pose_names()),
+		"torso": torso.texture.resource_path, "wave": chefs[1].get_bone("upper_arm_l").rotation_degrees, "events": names,
+		"own_stacks": chefs[0].get_skeleton().get_modification_stack() != chefs[1].get_skeleton().get_modification_stack()}))
+	world.queue_free()
+	await process_frame
+	quit(0)
+""")
+	output = []
+	var code := OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--script", "res://verify_rig.gd"]), output, true)
+	var text := "\n".join(PackedStringArray(output))
+	check_eq(code, 0, "verifier exit code; output:\n" + text)
+	check(not text.contains("SCRIPT ERROR") and not text.contains("ERROR:"), "no errors in the game project:\n" + text)
+	var line := ""
+	for l in text.split("\n"):
+		if l.begins_with("RESULT "):
+			line = l.substr(7)
+	var info: Variant = JSON.parse_string(line) if line.begins_with("{") else null
+	if check(info is Dictionary, "verifier result:\n" + text):
+		check_eq(info.skins.size(), 3, "skins in the game")
+		check(info.poses.has("wave") and info.poses.has("crouch"), "poses in the game: %s" % [info.poses])
+		check_eq(info.torso, "res://addons/oasis_fx/presets/examples/rig_parts/torso_night.png", "skin swapped the torso image")
+		check(absf(info.wave - 150.0) < 0.5, "wave pose applied (%s)" % info.wave)
+		check_eq(info.events, ["stir"], "the reach animation's event fired")
+		check(info.own_stacks, "each rig instance has its own IK stack")

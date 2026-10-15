@@ -284,3 +284,99 @@ func test_sprite_frames_preview_and_new_presets() -> void:
 		check(app._save_dialog.current_file.ends_with(".anim.json" if type == "animation" else ".frames.json"), "Save As suggests the right suffix")
 		app._save_dialog.hide()
 	await _stop(app)
+
+
+func test_rig_preview_skins_poses_ik_and_list_editors() -> void:
+	var app := await _start("ui_rig", "res://addons/oasis_fx/presets/examples/oasis_chef.rig.json")
+	check_eq(app.document.asset_type(), "rig", "rig opened")
+	check(app.validation.report.is_ok(), "valid: " + " | ".join(app.validation.report.format_lines()))
+	check(app.diagnostics.status.text.begins_with("Valid — 11 bone(s), 18 part(s)"), "status: " + app.diagnostics.status.text)
+	var preview: Node = app.preview.effect
+	if not check(is_instance_valid(preview) and "rig" in preview and preview.rig != null, "rig preview built"):
+		await _stop(app)
+		return
+	check(app.preview.skin_option.is_visible_in_tree() and app.preview.pose_option.is_visible_in_tree(), "skin and pose pickers shown")
+	check_eq(app.preview.skin_option.item_count, 4, "(as defined) + 3 skins")
+	check_eq(app.preview.pose_option.item_count, 3, "(rest) + 2 poses")
+	var sprites: Array = preview.rig.find_children("*", "Sprite2D", true, false)
+	check(sprites.size() == 3 and sprites.all(func(s): return s.texture != null), "part images loaded from the game folder")
+	var hat: Sprite2D = preview.rig.find_child("hat", true, false)
+	app.preview.skin_option.select(3)
+	app.preview.skin_option.item_selected.emit(3)
+	check_eq(preview.rig.current_skin, app.preview.skin_option.get_item_metadata(3), "skin applied from the picker")
+	app.preview.skin_option.select(0)
+	app.preview.skin_option.item_selected.emit(0)
+	check(hat.visible, "(as defined) restores the hat")
+	var wave := -1
+	for i in app.preview.pose_option.item_count:
+		if app.preview.pose_option.get_item_metadata(i) == "wave":
+			wave = i
+	app.preview.pose_option.select(wave)
+	app.preview.pose_option.item_selected.emit(wave)
+	var arm: Bone2D = preview.rig.get_bone("upper_arm_l")
+	check(absf(arm.rotation_degrees) > 90.0, "wave pose raises the left arm (%.1f°)" % arm.rotation_degrees)
+
+	# Dragging an IK target: move_target is what the mouse drag calls.
+	var target: Marker2D = preview.rig.get_ik_target("arm_r")
+	var hand := func() -> Vector2:
+		var forearm: Bone2D = preview.rig.get_bone("forearm_r")
+		return forearm.global_position + Vector2.from_angle(forearm.global_rotation + forearm.get_bone_angle()) * forearm.get_length() * forearm.global_scale.x
+	var goal: Vector2 = target.global_position + Vector2(12, -10)
+	preview.move_target("arm_r", goal)
+	for i in 3:
+		await tree.process_frame
+	check(hand.call().distance_to(goal) < 2.0, "IK hand follows the dragged target (%s vs %s)" % [hand.call(), goal])
+
+	# Edit a skin through the list editor; the picker keeps the selected pose.
+	check(app.inspector.controls.has("list:parts") and app.inspector.controls.has("list:skins"), "list editors for parts and skins")
+	(app.inspector.controls["skins:add"] as Button).pressed.emit()
+	var skins: Array = app.document.get_value("skins")
+	check_eq(skins.size(), 4, "skin added")
+	check_eq(skins[3].name, "skin", "new skin gets a unique name")
+	check_eq(skins[3].parts[0].part, app.document.get_value("parts")[0].id, "its first change names an existing part")
+	var change_visible: OptionButton = app.inspector.controls.get("skins[3].parts[0].visible")
+	if check(change_visible != null, "nested list editor for the skin's changes"):
+		change_visible.select(2)
+		change_visible.item_selected.emit(2)
+		check_eq(app.document.get_value("skins")[3].parts[0].visible, "hide", "nested change written")
+	app._revalidate()
+	check_eq(app.preview.skin_option.item_count, 5, "the new skin is offered in the preview")
+	check_eq(app.preview.pose_option.get_item_metadata(app.preview.pose_option.selected), "wave", "pose kept across the rebuild")
+	(app.inspector.controls["ik_chains:add"] as Button).pressed.emit()
+	app._revalidate()
+	var chains: Array = app.document.get_value("ik_chains")
+	check_eq(chains.size(), 4, "IK chain added")
+	check(not app.validation.report.is_ok(), "the new chain reuses bones of another chain, which is reported")
+	(app.inspector.controls["ik_chains:remove"] as Button).pressed.emit()
+	app._revalidate()
+	check(app.validation.report.is_ok(), "removed again: " + " | ".join(app.validation.report.format_lines()))
+	var part_id: LineEdit = app.inspector.controls["parts[0].id"]
+	part_id.text = "Bad Part"
+	part_id.text_changed.emit(part_id.text)
+	app._revalidate()
+	check(not app.validation.report.is_ok(), "an invalid part id is reported")
+	await _stop(app)
+
+
+func test_new_rig_and_rig_from_a_scene() -> void:
+	var app := await _start("ui_rig_new")
+	app.new_preset("rig")
+	check(app.validation.report.is_ok(), "new rig valid: " + " | ".join(app.validation.report.format_lines()))
+	check(is_instance_valid(app.preview.effect) and app.preview.effect.rig != null, "new rig previews")
+	(app.inspector.controls["parts:add"] as Button).pressed.emit()
+	app._revalidate()
+	check(app.validation.report.is_ok(), "an added part is valid: " + " | ".join(app.validation.report.format_lines()))
+	check_eq(app.document.get_value("parts").back().bone, "hips", "added part attached to the first bone")
+	app.save()
+	check(app._save_dialog.current_file.ends_with(".rig.json"), "Save As suggests .rig.json")
+	app._save_dialog.hide()
+	app.document.dirty = false
+	app.import_rig("res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn")
+	check_eq(app.document.asset_type(), "rig", "imported as a rig")
+	check(app.document.dirty and app.document.path.is_empty(), "imported rig is new and unsaved")
+	check(app.validation.report.is_ok(), "imported rig valid: " + " | ".join(app.validation.report.format_lines()))
+	check_eq(app.document.get_value("bones").size(), 5, "bones of chef_rig.tscn")
+	check(is_instance_valid(app.preview.effect) and app.preview.effect.rig != null, "imported rig previews")
+	app.import_rig("res://does/not/exist.tscn")
+	check_eq(app.document.get_value("bones").size(), 5, "a failed import keeps the document")
+	await _stop(app)

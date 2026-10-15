@@ -54,8 +54,21 @@ const GROUPS := {
 	"sfx": [SFX_GROUPS, LAYER_GROUPS],
 	"animation": [ANIMATION_GROUPS, TRACK_GROUPS],
 	"sprite_frames": [SPRITE_FRAMES_GROUPS, SPRITE_ANIMATION_GROUPS],
+	"rig": [RIG_GROUPS, BONE_GROUPS],
 }
-const ITEM_TITLES := {"vfx": "Emitters", "sfx": "Layers", "animation": "Tracks", "sprite_frames": "Animations"}
+const RIG_GROUPS := [
+	["Rig", ["display_name", "id", "description", "tags", "author", "notes"]],
+	["Art", ["source_author", "source_license"]],
+	["Parts, markers, IK, skins, poses", ["parts", "markers", "ik_chains", "skins", "poses"]],
+]
+const BONE_GROUPS := [
+	["Bone", ["id", "parent", "position", "rotation_degrees", "length", "angle_degrees"]],
+]
+const ITEM_TITLES := {"vfx": "Emitters", "sfx": "Layers", "animation": "Tracks", "sprite_frames": "Animations", "rig": "Bones"}
+## Fields of type id that name another entry (offered as a pick list).
+const REFERENCE_KEYS := ["upper", "lower", "bone", "part"]
+## Field naming an entry in the list editors' item lists.
+const ENTRY_NAME_KEYS := ["id", "name", "part", "bone"]
 
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
@@ -148,6 +161,9 @@ func _refresh_buttons() -> void:
 
 
 func _item_label(i: int) -> String:
+	if document.asset_type() == "rig":
+		var parent := str(document.get_item_value(i, "parent"))
+		return "%d. %s%s" % [i + 1, str(document.get_item_value(i, "id")), "  ← " + parent if not parent.is_empty() else "  (root)"]
 	if document.asset_type() == "animation":
 		var keys: Variant = document.get_item_value(i, "keys")
 		return "%d. %s · %s  (%d keys)" % [i + 1, str(document.get_item_value(i, "node")).get_file(), str(document.get_item_value(i, "property")),
@@ -191,22 +207,41 @@ func _group(title: String, keys: Array, fields: Dictionary, item: int) -> Contro
 	var container := FoldableContainer.new()
 	var id_key: String = document.item_id_key()
 	container.title = title if item < 0 or id_key.is_empty() else "%s — %s" % [title, str(document.get_item_value(item, id_key))]
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
-	container.add_child(grid)
+	var rows := VBoxContainer.new()
+	container.add_child(rows)
 	for key in keys:
 		var label := Label.new()
 		label.text = key.capitalize()
 		label.tooltip_text = "%s\n%s" % [key, fields[key].doc]
 		label.mouse_filter = Control.MOUSE_FILTER_PASS
-		grid.add_child(label)
 		var control := _control_for(key, fields[key], item)
-		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		control.tooltip_text = label.tooltip_text
-		grid.add_child(control)
+		_add_row(rows, label, control, fields[key].type == "list")
 		controls[("effect:" if item < 0 else "item:") + key] = control
 	return container
+
+
+## Adds a label and its control to `rows`: side by side in a two-column grid,
+## or (`wide`, for list editors) the label above a full-width control, so
+## nested editors do not make the inspector wider than its panel.
+static func _add_row(rows: VBoxContainer, label: Label, control: Control, wide: bool) -> void:
+	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if wide:
+		label.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+		rows.add_child(label)
+		var indent := MarginContainer.new()
+		indent.add_theme_constant_override("margin_left", 8)
+		indent.add_child(control)
+		rows.add_child(indent)
+		return
+	var grid: GridContainer = rows.get_child(rows.get_child_count() - 1) if rows.get_child_count() > 0 and rows.get_child(rows.get_child_count() - 1) is GridContainer else null
+	if grid == null:
+		grid = GridContainer.new()
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 10)
+		rows.add_child(grid)
+	grid.add_child(label)
+	grid.add_child(control)
 
 
 func _control_for(key: String, spec: Dictionary, item: int) -> Control:
@@ -216,10 +251,16 @@ func _control_for(key: String, spec: Dictionary, item: int) -> Control:
 			document.set_value(key, v)
 		else:
 			document.set_item_value(item, key, v)
-			if key in ["id", "amount", "start_ms", "source", "variants", "loop", "node", "property", "name", "frames", "fps"]:
+			if key in ["id", "amount", "start_ms", "source", "variants", "loop", "node", "property", "name", "frames", "fps", "parent"]:
 				_item_list.set_item_text(item, _item_label(item))
 			if key == "property":
 				_rebuild_item.call_deferred()
+	return _make_control(key, spec, value, setter)
+
+
+## A control for one field value; `setter(new_value)` stores edits. `path`
+## names a nested list editor's controls (e.g. "skins[0].parts"; default `key`).
+func _make_control(key: String, spec: Dictionary, value: Variant, setter: Callable, path := "") -> Control:
 	match spec.type:
 		"int", "number":
 			return _spin(spec, value, setter)
@@ -228,6 +269,8 @@ func _control_for(key: String, spec: Dictionary, item: int) -> Control:
 			check.button_pressed = value == true
 			check.toggled.connect(func(on: bool) -> void: setter.call(on))
 			return check
+		"list":
+			return _list_editor(path if not path.is_empty() else key, spec.item, value if value is Array else [], setter)
 		"enum":
 			var option := OptionButton.new()
 			for v in spec.values:
@@ -266,6 +309,20 @@ func _control_for(key: String, spec: Dictionary, item: int) -> Control:
 			return _path_list_field(spec, value if value is Array else [], setter)
 		"node_path":
 			return _node_path_field(str(value if value != null else ""), setter)
+		"id_ref":
+			return _id_pick_field(str(value if value != null else ""), _id_choices(key), setter, true)
+		"id":
+			var choices := _id_choices(key)
+			if not choices.is_empty() or key in REFERENCE_KEYS:
+				return _id_pick_field(str(value if value != null else ""), choices, setter, false)
+			return _line(value, setter)
+		"points":
+			var text := TextEdit.new()
+			text.text = "\n".join(PackedStringArray((value if value is Array else []).map(func(p): return "%s, %s" % [str(p[0]), str(p[1])] if p is Array and p.size() == 2 else str(p))))
+			text.placeholder_text = "one point per line: x, y"
+			text.custom_minimum_size = Vector2(0, 90)
+			text.text_changed.connect(func() -> void: setter.call(parse_points(text.text)))
+			return text
 		"frame_list":
 			var frames := LineEdit.new()
 			frames.text = ", ".join(PackedStringArray((value if value is Array else []).map(func(f): return str(int(f)) if f is float or f is int else str(f))))
@@ -335,6 +392,191 @@ func _path_list_field(spec: Dictionary, value: Array, setter: Callable) -> Contr
 			commit.call()))
 	box.add_child(add)
 	return box
+
+
+## "x, y" per line -> [[x, y], …]; lines that are not two numbers are kept as
+## text so the validator can point at them.
+static func parse_points(text: String) -> Array:
+	var out := []
+	for line in text.split("\n", false):
+		var parts := line.replace(";", ",").split(",", false)
+		if parts.size() == 2 and parts[0].strip_edges().is_valid_float() and parts[1].strip_edges().is_valid_float():
+			out.append([parts[0].strip_edges().to_float(), parts[1].strip_edges().to_float()])
+		elif not line.strip_edges().is_empty():
+			out.append(line.strip_edges())
+	return out
+
+
+## Ids a reference field can name: bones for parent/bone/upper/lower, parts for part.
+func _id_choices(key: String) -> Array:
+	if document == null or document.asset_type() != "rig":
+		return []
+	var list_key := "parts" if key == "part" else ("bones" if key in ["parent", "bone", "upper", "lower"] else "")
+	if list_key.is_empty():
+		return []
+	var list: Variant = document.get_value(list_key)
+	return (list if list is Array else []).filter(func(e): return e is Dictionary).map(func(e): return str(e.get("id", "")))
+
+
+## An id typed or picked from `choices` ("" = none when `allow_empty`).
+func _id_pick_field(value: String, choices: Array, setter: Callable, allow_empty: bool) -> Control:
+	var row := HBoxContainer.new()
+	var line := LineEdit.new()
+	line.text = value
+	line.placeholder_text = "(none)" if allow_empty else ""
+	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.text_changed.connect(func(t: String) -> void: setter.call(t))
+	row.add_child(line)
+	var pick := MenuButton.new()
+	pick.text = "▾"
+	pick.flat = false
+	var options := ([""] if allow_empty else []) + choices
+	for c in options:
+		pick.get_popup().add_item(c if not c.is_empty() else "(none)")
+	pick.disabled = options.is_empty()
+	pick.get_popup().index_pressed.connect(func(i: int) -> void:
+		line.text = options[i]
+		setter.call(options[i]))
+	row.add_child(pick)
+	return row
+
+
+## Edits a list of objects (rig parts, skins, their nested lists …): a list of
+## entries, the selected entry's fields, and Add / Duplicate / Remove. Every
+## edit passes a changed copy of the whole list to `setter`.
+func _list_editor(key: String, item_kind: String, value: Array, setter: Callable) -> Control:
+	var fields: Dictionary = AssetTypes.item_fields(item_kind)
+	var entries: Array = value.duplicate(true)
+	var box := VBoxContainer.new()
+	var list := ItemList.new()
+	list.custom_minimum_size = Vector2(0, 76)
+	list.auto_height = true
+	box.add_child(list)
+	var buttons := HBoxContainer.new()
+	box.add_child(buttons)
+	var detail := VBoxContainer.new()
+	box.add_child(detail)
+	var state := {"selected": 0 if not entries.is_empty() else -1}
+	var label_of := func(i: int) -> String:
+		var entry: Variant = entries[i]
+		if not entry is Dictionary:
+			return "%d. (not an object)" % (i + 1)
+		for name_key in ENTRY_NAME_KEYS:
+			if entry.has(name_key):
+				return "%d. %s" % [i + 1, str(entry[name_key])]
+		return "%d." % (i + 1)
+	var commit := func() -> void: setter.call(entries.duplicate(true))
+	var show_entry := func(index: int) -> void:
+		_clear(detail)
+		state.selected = index
+		if index < 0 or index >= entries.size() or not entries[index] is Dictionary:
+			return
+		var entry: Dictionary = entries[index]
+		for field in fields:
+			var spec: Dictionary = fields[field]
+			var label := Label.new()
+			label.text = field.capitalize()
+			label.tooltip_text = "%s\n%s" % [field, spec.doc]
+			label.mouse_filter = Control.MOUSE_FILTER_PASS
+			var current: Variant = entry.get(field, spec.get("default"))
+			var control := _make_control(field, spec, current, func(v: Variant) -> void:
+				entry[field] = v
+				if field in ENTRY_NAME_KEYS:
+					list.set_item_text(index, label_of.call(index))
+				commit.call(), "%s[%d].%s" % [key, index, field])
+			control.tooltip_text = label.tooltip_text
+			_add_row(detail, label, control, spec.type == "list")
+			controls["%s[%d].%s" % [key, index, field]] = control
+	var refresh := func() -> void:
+		list.clear()
+		for i in entries.size():
+			list.add_item(label_of.call(i))
+		# Long lists (a rig's parts) scroll instead of pushing the fields down.
+		list.auto_height = entries.size() <= 6
+		list.custom_minimum_size.y = 76 if list.auto_height else 160
+		if state.selected >= entries.size():
+			state.selected = entries.size() - 1
+		if state.selected >= 0:
+			list.select(state.selected)
+		show_entry.call(state.selected)
+	list.item_selected.connect(func(i: int) -> void: show_entry.call(i))
+	for spec in [["Add", "add"], ["Duplicate", "duplicate"], ["Remove", "remove"]]:
+		var b := Button.new()
+		b.text = spec[0]
+		b.pressed.connect(func() -> void:
+			match spec[1]:
+				"add":
+					entries.append(_new_entry(fields, entries, item_kind))
+					state.selected = entries.size() - 1
+				"duplicate":
+					if state.selected >= 0:
+						var copy: Variant = entries[state.selected].duplicate(true) if entries[state.selected] is Dictionary else entries[state.selected]
+						if copy is Dictionary:
+							for name_key in ["id", "name"]:
+								if copy.has(name_key):
+									copy[name_key] = _unique_name(str(copy[name_key]), entries, name_key)
+						entries.insert(state.selected + 1, copy)
+						state.selected += 1
+				"remove":
+					if state.selected >= 0:
+						entries.remove_at(state.selected)
+			commit.call()
+			refresh.call())
+		buttons.add_child(b)
+		controls["%s:%s" % [key, spec[1]]] = b
+	refresh.call()
+	controls["list:" + key] = list
+	return box
+
+
+# A new entry: required fields with a starting value, unique id/name.
+func _new_entry(fields: Dictionary, entries: Array, base: String) -> Dictionary:
+	var entry := {}
+	for field in fields:
+		var spec: Dictionary = fields[field]
+		if not spec.get("required", false):
+			continue
+		match spec.type:
+			"id":
+				var choices := _id_choices(field)
+				entry[field] = choices[0] if not choices.is_empty() else _unique_name(field, entries, field)
+			"number", "int":
+				entry[field] = clampf(0.0, spec.min, spec.max)
+			"list":
+				entry[field] = [_new_entry(AssetTypes.item_fields(spec.item), [], spec.item)]
+			"points":
+				entry[field] = [[-5.0, -5.0], [5.0, -5.0], [5.0, 5.0], [-5.0, 5.0]]
+	for name_key in ["id", "name"]:
+		if fields.has(name_key) and not (fields[name_key].type == "id" and name_key in REFERENCE_KEYS):
+			entry[name_key] = _unique_name(base.get_slice("_", 0) if base != "ik_chain" else "chain", entries, name_key)
+	if fields.has("polygon") and not entry.has("polygon"):
+		entry["polygon"] = [[-5.0, -5.0], [5.0, -5.0], [5.0, 5.0], [-5.0, 5.0]]
+	if fields.has("bone") and not entry.has("bone") and not _id_choices("bone").is_empty():
+		entry["bone"] = _id_choices("bone")[0]
+	if base == "ik_chain":
+		# Start with a bone that has a child bone, and that child.
+		var bones: Variant = document.get_value("bones") if document else []
+		for bone in (bones if bones is Array else []):
+			if bone is Dictionary and bone.get("parent", "") != "":
+				entry["upper"] = bone.parent
+				entry["lower"] = str(bone.get("id", ""))
+	return entry
+
+
+static func _unique_name(base: String, entries: Array, key: String) -> String:
+	var used := {}
+	for e in entries:
+		if e is Dictionary:
+			used[str(e.get(key, ""))] = true
+	var stem := base.rstrip("0123456789").trim_suffix("_")
+	if stem.is_empty():
+		stem = "new"
+	var candidate := stem
+	var n := 2
+	while used.has(candidate):
+		candidate = "%s_%d" % [stem, n]
+		n += 1
+	return candidate
 
 
 ## "0, 1, 2" -> [0, 1, 2]; anything that is not a whole number is kept as
