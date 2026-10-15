@@ -145,8 +145,8 @@ godot --headless --path . --export-release "Windows Desktop" build/windows/Oasis
 
 **Export เข้าเกม:**
 - เลือกโฟลเดอร์ในโปรเจกต์เกม แอปหา `project.godot` เอง แล้วแสดงรายการไฟล์ที่จะเขียนก่อน
-- รันจาก source: ไฟล์ที่ได้เหมือนกับที่ CLI สร้างทุก byte; **build ที่แพ็กแล้วได้ scene ที่ทำงานเหมือนกันแต่ข้อความไม่ตรงกันทุก byte**
-  (id ของ ext_resource เป็นตัวเลข และเขียนค่า default ลงไปด้วย เพราะ Godot release build ไม่มีข้อมูลฝั่ง editor — พบตอนทำ Phase 2)
+- ไฟล์ที่ได้เหมือนกับที่ CLI สร้างทุก byte ทั้งตอนรันจาก source และจาก build ที่แพ็กแล้ว
+  (Phase 2 พบว่า build ที่แพ็กแล้วเขียน id เป็นตัวเลขและเขียนค่า default ด้วย — **แก้แล้วใน 0.5.1** ดูด้านล่าง)
 - copy runtime script ให้เฉพาะเมื่อเกมยังไม่มี
 
 **ผลการตรวจ:**
@@ -218,6 +218,19 @@ OasisFx ไม่ได้สร้างเสียงเองหรือด
 - animation ที่สร้างเล่นบน rig จริงใน Godot (ท่า, event, effect เกิดที่ปลายทัพพี) และ export เข้าโปรเจกต์แยกแล้วเล่นได้
 - build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` ครบทั้ง 4 ชนิด (export เข้าโฟลเดอร์ชื่อไทย), ภาพหน้าจอจริงอยู่ใน `docs/images/`
 - **NOT RUN:** เปิด .exe บน Windows, ลองกับตัวละครจริงของ White Sahara, GPU จริง
+
+
+## 0.5.1: export จากแอปที่แพ็กแล้วตรงกับ CLI ทุก byte
+
+- เดิม Godot release build (แอปที่แพ็กแล้ว) ไม่รองรับ `set_id_for_path()` และไม่รู้ค่า default ของ script
+  เลยเขียน id ของ ext_resource เป็นตัวเลขและเขียนค่า default ลงไปด้วย → สลับ export ระหว่างแอปกับ CLI แล้วขึ้น OVERWRITE
+- ตอนนี้ generator จัดข้อความไฟล์เองหลังบันทึก (`normalize_saved_text()`): ใช้ id คงที่เรียงตาม id และตัด property ที่เท่าค่า default
+  ออก ไฟล์จาก editor ไม่เปลี่ยน (golden ทั้งหมดเหมือนเดิม)
+- **ตรวจแล้ว:** เทสต์ใช้ไฟล์จริงที่แอปแพ็กรุ่นก่อนเขียนไว้ (`tests/fixtures/release_build/`) แปลงแล้วตรงกับ CLI;
+  `--smoke-test` ของ build Linux ที่แพ็กแล้วสร้างตัวอย่างทั้ง 13 ไฟล์ได้ตรงกับ CLI (`matches_cli: true`);
+  ไฟล์ที่ export จากแอปแพ็กแล้วกับไฟล์ที่ CLI สร้างในเกมเดียวกันตรงกันทุก byte (4 ชนิด)
+- เทสต์ทั้งหมด **164 passed, 0 failed (also on a fresh copy)**
+- **NOT RUN:** เทียบแบบเดียวกันบน build Windows (ไม่มีเครื่อง Windows)
 
 ## License
 

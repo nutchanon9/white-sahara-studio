@@ -22,6 +22,7 @@ const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
 const VfxBuilder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
 const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
+const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
 
 ## "New" menu entries: [label, asset type, shortcut].
 const NEW_ITEMS := [
@@ -555,6 +556,23 @@ func res_path_in_game(file: String) -> String:
 
 # --- Packaging check -------------------------------------------------------
 
+## Files where this build's generator output differs from the CLI output
+## committed in examples/runtime_demo/fx (uid lines ignored: they depend on
+## the output path). [] when everything matches.
+func cli_output_mismatches() -> PackedStringArray:
+	const GOLDEN := "res://examples/runtime_demo/fx/"
+	const OUT := "user://oasis_fx_cli_compare"
+	var out := PackedStringArray()
+	var strip_uid := func(t: String) -> String: return RegEx.create_from_string(" uid=\"uid://[a-z0-9]+\"").sub(t, "", true)
+	var batch := Generator.generate_many(Generator.find_presets(OasisFx.EXAMPLES_DIR), OUT, {"force": true})
+	for result in batch.results:
+		var golden := GOLDEN + String(result.output_path).get_file()
+		if not result.ok or not FileAccess.file_exists(golden):
+			out.append(golden)
+		elif strip_uid.call(FileAccess.get_file_as_string(golden)) != FileAccess.get_file_as_string(result.output_path):
+			out.append(golden)
+	return out
+
 ## `OasisFx --headless -- --smoke-test <folder in a Godot game>` checks a
 ## packaged build end to end without a person: the bundled examples are
 ## listed and valid, the preview builds, settings live in user://, packaged
@@ -611,6 +629,12 @@ func _smoke_test(export_dir: String) -> void:
 			checks[key + "_export_ok"] = result.ok
 			checks[key + "_export_errors"] = result.errors
 			ok = ok and result.ok
+	# The generator in this build writes the same text as the CLI: every bundled
+	# example compared with the committed CLI output in examples/runtime_demo/fx.
+	var mismatches := cli_output_mismatches()
+	checks["matches_cli"] = mismatches.is_empty()
+	checks["cli_mismatches"] = mismatches
+	ok = ok and mismatches.is_empty()
 	checks["ok"] = ok
 	print("SMOKE " + JSON.stringify(checks))
 	get_tree().quit(0 if ok else 1)

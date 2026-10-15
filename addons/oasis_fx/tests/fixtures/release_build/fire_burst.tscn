@@ -1,0 +1,181 @@
+[gd_scene format=3 uid="uid://cvlada05i2ql"]
+
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="1"]
+
+[sub_resource type="Gradient" id="smoke_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="smoke_texture"]
+gradient = SubResource("smoke_texture_gradient")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="smoke_color_gradient"]
+colors = PackedColorArray(0.2901961, 0.22745098, 0.20392157, 0.4, 0.16470589, 0.13333334, 0.1254902, 0)
+
+[sub_resource type="GradientTexture1D" id="smoke_color_ramp"]
+gradient = SubResource("smoke_color_gradient")
+
+[sub_resource type="Curve" id="smoke_scale_curve"]
+_limits = [0.0, 1.8, 0.0, 1.0]
+_data = [Vector2(0, 1), 0.0, 0.79999995, 1, 1, Vector2(1, 1.8), 0.79999995, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="smoke_scale_curve_texture"]
+curve = SubResource("smoke_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="smoke_process"]
+lifetime_randomness = 0.3
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 10.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+direction = Vector3(0, -1, 0)
+spread = 35.0
+initial_velocity_min = 30.0
+initial_velocity_max = 70.0
+gravity = Vector3(0, -60, 0)
+damping_min = 10.0
+damping_max = 20.0
+scale_min = 0.6
+scale_curve = SubResource("smoke_scale_curve_texture")
+color_ramp = SubResource("smoke_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="flame_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="flame_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="flame_texture"]
+gradient = SubResource("flame_texture_gradient")
+width = 40
+height = 40
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="flame_color_gradient"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(1, 0.8784314, 0.47843137, 0.9019608, 1, 0.41568628, 0.101960786, 0.6, 0.72156864, 0.14117648, 0.047058824, 0)
+
+[sub_resource type="GradientTexture1D" id="flame_color_ramp"]
+gradient = SubResource("flame_color_gradient")
+
+[sub_resource type="Curve" id="flame_scale_curve"]
+_data = [Vector2(0, 1), 0.0, -0.75, 1, 1, Vector2(1, 0.25), -0.75, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="flame_scale_curve_texture"]
+curve = SubResource("flame_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="flame_process"]
+lifetime_randomness = 0.35
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 6.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+direction = Vector3(0, -1, 0)
+spread = 55.0
+initial_velocity_min = 140.0
+initial_velocity_max = 280.0
+gravity = Vector3(0, -220, 0)
+damping_min = 90.0
+damping_max = 160.0
+scale_min = 0.35
+scale_max = 0.8
+scale_curve = SubResource("flame_scale_curve_texture")
+color_ramp = SubResource("flame_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="embers_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="embers_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.85, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="embers_texture"]
+gradient = SubResource("embers_texture_gradient")
+width = 8
+height = 8
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="embers_color_gradient"]
+colors = PackedColorArray(1, 0.95686275, 0.7529412, 1, 1, 0.47843137, 0.1254902, 0)
+
+[sub_resource type="GradientTexture1D" id="embers_color_ramp"]
+gradient = SubResource("embers_color_gradient")
+
+[sub_resource type="ParticleProcessMaterial" id="embers_process"]
+lifetime_randomness = 0.4
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 6.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+direction = Vector3(0, -1, 0)
+spread = 70.0
+initial_velocity_min = 160.0
+initial_velocity_max = 320.0
+gravity = Vector3(0, 380, 0)
+damping_min = 20.0
+damping_max = 40.0
+scale_min = 0.6
+color_ramp = SubResource("embers_color_ramp")
+
+[node name="fire_burst" type="Node2D" unique_id=199378946]
+script = ExtResource("1")
+effect_id = "fire_burst"
+duration_seconds = 0.8
+loop = false
+playback_speed = 1.0
+auto_play = true
+free_when_finished = true
+emitter_delays = {
+"smoke": 0.1
+}
+
+[node name="smoke" type="GPUParticles2D" parent="." unique_id=1584260272]
+z_index = -1
+emitting = false
+amount = 10
+texture = SubResource("smoke_texture")
+one_shot = true
+explosiveness = 0.6
+visibility_rect = Rect2(-176, -176, 352, 352)
+process_material = SubResource("smoke_process")
+
+[node name="flame" type="GPUParticles2D" parent="." unique_id=1568792182]
+material = SubResource("flame_canvas_material")
+emitting = false
+amount = 40
+texture = SubResource("flame_texture")
+lifetime = 0.6
+one_shot = true
+explosiveness = 0.9
+visibility_rect = Rect2(-238, -238, 476, 476)
+process_material = SubResource("flame_process")
+
+[node name="embers" type="GPUParticles2D" parent="." unique_id=192612751]
+material = SubResource("embers_canvas_material")
+emitting = false
+amount = 18
+texture = SubResource("embers_texture")
+lifetime = 0.9
+one_shot = true
+explosiveness = 0.8
+visibility_rect = Rect2(-460, -460, 920, 920)
+process_material = SubResource("embers_process")

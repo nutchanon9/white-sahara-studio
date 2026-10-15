@@ -6,14 +6,16 @@ extends EditorExportPlugin
 ## example audio and sprite sheets (preview and export read the original
 ## bytes), the example rig (animation presets read scenes as text) and the
 ## generated example effects (copied into games when an animation using them
-## is exported; Godot would otherwise ship them converted to binary).
+## is exported; Godot would otherwise ship them converted to binary). The
+## generated examples also let --smoke-test compare the packaged app's
+## output with the CLI's.
 const RAW_DIRS := [
 	"res://addons/oasis_fx/presets/examples/audio",
 	"res://addons/oasis_fx/presets/examples/sprites",
 	"res://addons/oasis_fx/presets/examples/rigs",
 	"res://examples/runtime_demo/fx",
 ]
-const RAW_EXTENSIONS := ["wav", "ogg", "mp3", "png", "jpg", "jpeg", "webp", "svg", "tscn"]
+const RAW_EXTENSIONS := ["wav", "ogg", "mp3", "png", "jpg", "jpeg", "webp", "svg", "tscn", "tres"]
 
 
 func _get_name() -> String:

@@ -142,5 +142,5 @@
   },
   "format": "oasis_fx_manifest",
   "format_version": 1,
-  "generator": "OasisFx 0.5.0"
+  "generator": "OasisFx 0.5.1"
 }

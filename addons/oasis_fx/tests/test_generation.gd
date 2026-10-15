@@ -264,3 +264,23 @@ func test_shapes_map_to_flat_rings() -> void:
 		check_eq(m.emission_ring_inner_radius, cases[shape], shape + " inner radius")
 		check_eq(m.emission_ring_axis, Vector3(0, 0, 1), shape + " lies in the 2D plane")
 		root.free()
+
+
+## fixtures/release_build/ holds files written by the packaged desktop app
+## (Godot 4.7.2 release export template) before normalization: numeric
+## ext_resource ids and runtime properties at their default values. After
+## normalize_saved_text() they must equal the editor/CLI golden files.
+func test_release_build_output_normalizes_to_the_cli_text() -> void:
+	var fixtures := "res://addons/oasis_fx/tests/fixtures/release_build/"
+	var strip_uid := func(t: String) -> String: return RegEx.create_from_string(" uid=\"uid://[a-z0-9]+\"").sub(t, "", true)
+	for file in ["fire_burst.tscn", "sword_slash_sfx.tscn", "chef_ladle_attack.tres", "campfire_flame.tres"]:
+		var golden: String = strip_uid.call(FileAccess.get_file_as_string("res://examples/runtime_demo/fx/" + file))
+		var release: String = strip_uid.call(FileAccess.get_file_as_string(fixtures + file))
+		check(release != golden, file + ": the fixture really differs")
+		var ids := {}
+		for m in RegEx.create_from_string("path=\"([^\"]*)\" id=\"([^\"]*)\"").search_all(golden):
+			ids[m.get_string(1)] = m.get_string(2)
+		var preset_path := Array(Generator.find_presets(OasisFx.EXAMPLES_DIR)).filter(func(p): return p.get_file().get_slice(".", 0) == file.get_basename())[0] as String
+		var defaults := Generator.script_defaults(Validator.validate_file(preset_path, Report.new()))
+		check_eq(Generator.normalize_saved_text(release, ids, defaults), golden, file + " normalized")
+		check_eq(Generator.normalize_saved_text(golden, ids, defaults), golden, file + " editor text unchanged")

@@ -197,3 +197,16 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 - Bone2D ที่ไม่มี bone ลูกเตือน "cannot calculate bone length" — rig ตัวอย่างตั้ง `length`/`bone_angle` เองแล้ว
 - sprite sheet ต้องเว้นขอบใส ไม่งั้น texture filter ดึงพิกเซลเฟรมข้าง ๆ มา (เห็นจากภาพหน้าจอ แก้ใน tool แล้ว)
 
+---
+
+## 11. ภาคผนวก (2026-10-15): 0.5.1 — export จากแอปที่แพ็กแล้วตรงกับ CLI
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| ต้นเหตุ | Godot release template: `Resource.set_id_for_path()` ไม่มีผล และค่า default ของ property ใน script ไม่รู้ (ข้อมูลฝั่ง editor) | ยืนยันจากไฟล์จริงที่ build Linux เขียน (ภาคผนวก 9) |
+| วิธีแก้ | generator ตั้ง id แบบเดิม **และ** หลังบันทึกแปลงข้อความเอง (`normalize_saved_text()`): เปลี่ยน id ของ ext_resource ตามแผนที่ path → id, เรียงตาม id, เปลี่ยน `ExtResource("…")` ทุกที่, ตัด property ของ root node ที่เท่าค่า default ของ runtime script (ค่า default ได้จากการสร้าง instance ของ script) | ใช้โค้ดทางเดียวกันทั้ง CLI และแอป; ข้อความจาก editor ไม่เปลี่ยน (golden ทั้งหมดเหมือนเดิม) จึงไม่ต้อง migrate ไฟล์ที่ CLI สร้างไว้แล้ว |
+| ทางเลือกที่ไม่ใช้ | ให้แอปเขียน `.tscn` เองทั้งไฟล์ / ปิดการแปลงในแอป | ซ้ำกับ ResourceSaver ของ Godot และเสี่ยงต่างจาก CLI มากกว่า |
+| หลักฐาน | fixture จริงจาก build ที่แพ็กแล้ว 4 ไฟล์ (ทุกชนิด) + smoke test ใน build ที่แพ็กแล้ว (`matches_cli`) + เทียบไฟล์ export กับ CLI ในเกมเดียวกัน | แยกระหว่างเทสต์ headless กับการตรวจใน release build จริง |
+
+แก้ข้อสังเกตเดิมในภาคผนวก 9 ("ข้อความไม่ตรงกับ CLI"): ตั้งแต่ 0.5.1 ตรงกันแล้ว สำหรับ build Linux ที่ตรวจจริง; Windows ยังไม่ได้รัน
+

@@ -124,16 +124,20 @@ its events show and everything those scenes need (from the manifest next to them
 Godot imports copied audio the next time the game is opened in the editor (or with
 `godot --headless --import`).
 
-Run from source (`godot --path .`), the exported scene is byte-identical to what
-`oasis_fx_cli.gd -- generate` writes inside the game at the same `res://` path (same stable
-UID; checked by a test). **The packaged app writes an equivalent scene, but not the same
-text:** Godot release builds lack two editor-only features OasisFx uses for canonical text,
-so external resources get numeric ids (`id="1"`) and runtime properties are written even
-when they have their default value. The scene loads and plays identically (verified in a
-separate project), and the packaged app's own output is stable from run to run, but
-re-exporting with the CLI after the app (or the reverse) shows `OVERWRITE` instead of
-`UNCHANGED`. Exports never touch the game's scripts, scenes or settings; the runtime
-scripts live in the addon's own folder.
+The exported file is byte-identical to what `oasis_fx_cli.gd -- generate` writes inside
+the game at the same `res://` path (same stable UID), from source and from the packaged
+app, so exporting with the app after the CLI (or the reverse) shows `UNCHANGED`. Godot
+release builds — the packaged app — ignore `Resource.set_id_for_path()` and do not know
+script default values, so OasisFx normalizes every saved file itself (fixed external
+resource ids sorted by id, runtime properties at their defaults left out; see
+`normalize_saved_text()` in `vfx_generator.gd`). Checked three ways: a test normalizes
+real files saved by the packaged app before this fix
+(`addons/oasis_fx/tests/fixtures/release_build/`) into the CLI text, the packaged
+`--smoke-test` regenerates every bundled example and compares it with the CLI output, and
+files exported by the packaged Linux build were compared with CLI output in the same game.
+(Builds of OasisFx 0.5.0 and earlier wrote numeric ids and default values; re-exporting
+such files shows `OVERWRITE` once.) Exports never touch the game's scripts, scenes or
+settings; the runtime scripts live in the addon's own folder.
 
 ## Building
 
@@ -186,8 +190,9 @@ It prints one `SMOKE {...}` line and exits 0 when the bundled examples are liste
 valid, the preview builds, writes to packaged `res://` are refused, the runtime source is
 bundled, Fire Burst exports into the given folder, the Sword Slash SFX example
 validates, loads its audio from the package (real lengths on the timeline) and exports
-with its runtime and audio files, and the Chef Ladle Attack animation and Campfire Flame
-sprite frames validate, preview (rig stand-in / sheet) and export. On Windows use
+with its runtime and audio files, the Chef Ladle Attack animation and Campfire Flame
+sprite frames validate, preview (rig stand-in / sheet) and export, and every bundled
+example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 `OasisFx.console.exe` (same arguments) to see the output in a console.
 
 ## Verification status (Phase 1C, 2026-10-15)
@@ -216,7 +221,7 @@ sprite frames validate, preview (rig stand-in / sheet) and export. On Windows us
 | Packaged Linux build with a window, sound timeline screenshot (Xvfb, software OpenGL) | **PASS** — image above |
 | Hearing the sounds (preview in the app, demo, exported scene) | **NOT RUN** — no audio device in the cloud session (Dummy driver); timing, files, volume and pitch values were checked by tests, waveforms of the example sounds were inspected as images |
 | Launching `OasisFx.exe` on Windows, Windows audio output | **NOT RUN** |
-| Packaged app export text = CLI text | **FAIL (documented)** — equivalent scene, different ext_resource ids and explicit default values (see *Exporting to a game*); also true of the Phase 1C build |
+| Packaged app export text = CLI text | **FAIL** at the time (different ext_resource ids and explicit default values); **fixed in 0.5.1**, see the next table |
 
 ## Verification status (Phase 3 — animations and sprite frames, 2026-10-15)
 
@@ -231,6 +236,15 @@ sprite frames validate, preview (rig stand-in / sheet) and export. On Windows us
 | Packaged Linux build `--smoke-test` incl. animation and sprite frames validate/preview/export into a folder named `เกม anim/anim` | **PASS** — exported effect scene byte-identical (text) |
 | Packaged Linux build with a window, animation and sprite-frames screenshots (Xvfb, software OpenGL) | **PASS** — images above |
 | Launching `OasisFx.exe` on Windows; animation preview with a real White Sahara character scene | **NOT RUN** (no Windows; the White Sahara game repository is not in this session) |
+
+## Verification status (0.5.1 — packaged exports identical to the CLI, 2026-10-15)
+
+| Check | Result |
+|---|---|
+| Real packaged-app output (4 files, all asset types, saved by the 0.5.0 Linux release build) normalized to the CLI golden files (`test_generation.gd`) | **PASS** |
+| Packaged Linux build `--smoke-test`: all 13 bundled examples generated in the release build equal the CLI output (`"matches_cli": true`, export into a folder named `เกม byte/fx`) | **PASS** |
+| Fire Burst, Sword Slash SFX, Chef Ladle Attack and Campfire Flame exported by the packaged Linux build vs. `oasis_fx_cli.gd -- generate` in the same game at the same paths | **PASS** — byte-identical |
+| Same comparison with the packaged Windows build | **NOT RUN** (no Windows; the Windows build uses the same release template code) |
 
 ## Manual QA checklist (Windows)
 

@@ -7,7 +7,7 @@ and generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D
 `ParticleProcessMaterial`, `AudioStreamPlayer`, …) plus one small runtime script that
 handles playback.
 
-**Status: 0.5.0 — Phase 3.** Animation presets (`*.anim.json`): keyframe tracks for nodes
+**Status: 0.5.1 — Phase 3** (0.5.1: files exported by the packaged desktop app are byte-identical to CLI output). Animation presets (`*.anim.json`): keyframe tracks for nodes
 of an existing scene (bones, sprites, polygons …) and events that show OasisFx effects and
 sounds, generated as a Godot `Animation` (`.tres`); sprite-frame presets (`*.frames.json`)
 generated as `SpriteFrames`. Three example animations for an example rig and a CC0 flame

@@ -68,12 +68,13 @@ static func generate_preset(preset: Dictionary, out_dir: String, options := {}, 
 		return _result(report, "would_overwrite" if exists else "would_create", preset.id, output_path)
 
 	var output: Resource
+	var ids := {}
 	var err := OK
 	if is_scene_type(preset):
 		var root := build(preset, report)
 		if root == null:
 			return _result(report, "failed", preset.id, output_path)
-		_stabilize_external_ids(root, output_path)
+		ids = _stabilize_external_ids(root, output_path)
 		var packed := PackedScene.new()
 		err = packed.pack(root)
 		root.free()
@@ -86,7 +87,7 @@ static func generate_preset(preset: Dictionary, out_dir: String, options := {}, 
 		output = build_resource(preset, report)
 		if output == null:
 			return _result(report, "failed", preset.id, output_path)
-		_stabilize_resource_ids(output, output_path)
+		ids = _stabilize_resource_ids(output, output_path)
 
 	err = DirAccess.make_dir_recursive_absolute(dir.path)
 	if err != OK:
@@ -95,6 +96,10 @@ static func generate_preset(preset: Dictionary, out_dir: String, options := {}, 
 	err = ResourceSaver.save(output, output_path)
 	if err != OK:
 		report.error("", "could not save %s: %s" % [output_path, error_string(err)])
+		return _result(report, "failed", preset.id, output_path)
+	err = _normalize_saved_file(output_path, ids, script_defaults(preset))
+	if err != OK:
+		report.error("", "could not rewrite %s: %s" % [output_path, error_string(err)])
 		return _result(report, "failed", preset.id, output_path)
 	if output_path.begins_with("res://"):
 		err = ResourceSaver.set_uid(output_path, stable_uid(output_path))
@@ -265,27 +270,37 @@ static func stable_uid(output_path: String) -> int:
 # ext_resource ids are random ("1_ab3xy") unless the resource has an id set
 # for the scene it is saved into. Give the runtime script and file textures
 # fixed ids for this output path.
-static func _stabilize_external_ids(root: Node, output_path: String) -> void:
+# Returns the ids as {resource path: id}; _normalize_saved_text() applies the
+# same ids where set_id_for_path() has no effect (release builds of Godot,
+# i.e. the packaged desktop app).
+static func _stabilize_external_ids(root: Node, output_path: String) -> Dictionary:
+	var ids := {}
 	var script: Resource = root.get_script()
 	if script != null:
-		script.set_id_for_path(output_path, "oasis_sfx_runtime" if script.resource_path == OasisFx.SFX_RUNTIME_SCRIPT_PATH else "oasis_fx_runtime")
+		_set_external_id(script, output_path, "oasis_sfx_runtime" if script.resource_path == OasisFx.SFX_RUNTIME_SCRIPT_PATH else "oasis_fx_runtime", ids)
 	for child in root.get_children():
 		if child is GPUParticles2D and _is_external(child.texture):
-			child.texture.set_id_for_path(output_path, String(child.name) + "_texture_file")
+			_set_external_id(child.texture, output_path, String(child.name) + "_texture_file", ids)
 		elif (child is AudioStreamPlayer or child is AudioStreamPlayer2D) and _is_external(child.stream):
-			child.stream.set_id_for_path(output_path, String(child.name) + "_source")
+			_set_external_id(child.stream, output_path, String(child.name) + "_source", ids)
 	var settings: Variant = root.get("layer_settings")
 	if settings is Dictionary:
 		for layer in settings:
 			var variants: Array = settings[layer].get("variants", [])
 			for i in variants.size():
 				if _is_external(variants[i]):
-					variants[i].set_id_for_path(output_path, "%s_variant_%d" % [layer, i + 1])
+					_set_external_id(variants[i], output_path, "%s_variant_%d" % [layer, i + 1], ids)
+	return ids
+
+
+static func _set_external_id(resource: Resource, output_path: String, id: String, ids: Dictionary) -> void:
+	resource.set_id_for_path(output_path, id)
+	ids[resource.resource_path] = id
 
 
 # Same for resources saved as .tres: effect scenes of animation events and the
 # sheet texture of sprite frames get ids derived from their file names.
-static func _stabilize_resource_ids(resource: Resource, output_path: String) -> void:
+static func _stabilize_resource_ids(resource: Resource, output_path: String) -> Dictionary:
 	var used := {}
 	if resource is Animation:
 		for t in resource.get_track_count():
@@ -296,12 +311,142 @@ static func _stabilize_resource_ids(resource: Resource, output_path: String) -> 
 					if _is_external(scene) and not used.has(scene.resource_path):
 						used[scene.resource_path] = _unique_id("effect_" + scene.resource_path.get_file().get_basename(), used.values())
 						scene.set_id_for_path(output_path, used[scene.resource_path])
+		return used
 	elif resource is SpriteFrames:
 		for name in resource.get_animation_names():
 			for i in resource.get_frame_count(name):
 				var atlas := resource.get_frame_texture(name, i) as AtlasTexture
 				if atlas != null and _is_external(atlas.atlas):
-					atlas.atlas.set_id_for_path(output_path, "sheet")
+					_set_external_id(atlas.atlas, output_path, "sheet", used)
+	return used
+
+
+## Default values (as text) of the stored properties of the runtime script on
+## the root of a generated scene; {} for resource types.
+static func script_defaults(preset: Dictionary) -> Dictionary:
+	if not is_scene_type(preset):
+		return {}
+	var script := load(runtime_script_for(preset)) as Script
+	if script == null:
+		return {}
+	var instance: Object = script.new()
+	var out := {}
+	for p in script.get_script_property_list():
+		if p.usage & PROPERTY_USAGE_STORAGE:
+			out[p.name] = var_to_str(instance.get(p.name))
+	if instance is Node:
+		instance.free()
+	return out
+
+
+static func _normalize_saved_file(path: String, ids: Dictionary, defaults: Dictionary) -> Error:
+	var text := FileAccess.get_file_as_string(path)
+	var normalized := normalize_saved_text(text, ids, defaults)
+	if normalized == text:
+		return OK
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	file.store_string(normalized)
+	file.close()
+	return OK
+
+
+## Makes a saved .tscn/.tres text the same in every Godot build. Editor builds
+## already write it this way; release builds (the packaged desktop app) ignore
+## Resource.set_id_for_path() and do not know script default values, so there:
+## - external resources get the ids in `ids` ({path: id}), sorted by id, and
+##   every ExtResource("old") reference is renamed;
+## - properties of the root node that equal the runtime script's defaults
+##   (`defaults`: {name: var_to_str(default)}) are dropped, as the editor does.
+## Text that already follows these rules is returned unchanged.
+static func normalize_saved_text(text: String, ids: Dictionary, defaults: Dictionary) -> String:
+	var lines := text.split("\n")
+	var rename := {}
+	var ext_rows := []
+	var ext_regex := RegEx.create_from_string("^\\[ext_resource .*path=\"([^\"]*)\".* id=\"([^\"]*)\"\\]$")
+	for i in lines.size():
+		var m := ext_regex.search(lines[i])
+		if m == null:
+			continue
+		var old := m.get_string(2)
+		var new_id: String = ids.get(m.get_string(1), old)
+		rename[old] = new_id
+		ext_rows.append({"index": i, "id": new_id, "line": lines[i].replace(" id=\"%s\"]" % old, " id=\"%s\"]" % new_id)})
+	var sorted := ext_rows.duplicate()
+	sorted.sort_custom(func(a, b): return a.id < b.id)
+	for k in ext_rows.size():
+		lines[ext_rows[k].index] = sorted[k].line
+	var out := _rename_references("\n".join(lines), rename)
+	return _drop_default_root_properties(out, defaults) if not defaults.is_empty() else out
+
+
+static func _rename_references(text: String, rename: Dictionary) -> String:
+	if rename.keys().all(func(k): return rename[k] == k):
+		return text
+	var parts := PackedStringArray()
+	var last := 0
+	for m in RegEx.create_from_string("ExtResource\\(\"([^\"]*)\"\\)").search_all(text):
+		parts.append(text.substr(last, m.get_start() - last))
+		parts.append("ExtResource(\"%s\")" % rename.get(m.get_string(1), m.get_string(1)))
+		last = m.get_end()
+	parts.append(text.substr(last))
+	return "".join(parts)
+
+
+# Removes `name = value` entries of the root [node] (the one without parent)
+# whose value text equals defaults[name]; multi-line values are kept whole.
+static func _drop_default_root_properties(text: String, defaults: Dictionary) -> String:
+	var lines := text.split("\n")
+	var out := PackedStringArray()
+	var in_root := false
+	var i := 0
+	while i < lines.size():
+		var line := lines[i]
+		if line.begins_with("["):
+			in_root = line.begins_with("[node ") and not line.contains(" parent=")
+			out.append(line)
+			i += 1
+			continue
+		var eq := line.find(" = ")
+		if not in_root or eq <= 0:
+			out.append(line)
+			i += 1
+			continue
+		# One property entry, possibly spanning several lines.
+		var entry := PackedStringArray([line])
+		var balance := _bracket_balance(line.substr(eq + 3))
+		i += 1
+		while balance > 0 and i < lines.size():
+			entry.append(lines[i])
+			balance += _bracket_balance(lines[i])
+			i += 1
+		var name := line.substr(0, eq)
+		var value := "\n".join(entry).substr(eq + 3).strip_edges()
+		if not (defaults.has(name) and defaults[name] == value):
+			out.append_array(entry)
+	return "\n".join(out)
+
+
+static func _bracket_balance(text: String) -> int:
+	var depth := 0
+	var in_string := false
+	var escaped := false
+	for c in text:
+		if in_string:
+			if escaped:
+				escaped = false
+			elif c == "\\":
+				escaped = true
+			elif c == "\"":
+				in_string = false
+		elif c == "\"":
+			in_string = true
+		elif c in "([{":
+			depth += 1
+		elif c in ")]}":
+			depth -= 1
+	return depth
 
 
 static func _unique_id(base: String, taken: Array) -> String:

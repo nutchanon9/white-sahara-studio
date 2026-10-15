@@ -64,6 +64,13 @@ export). Full suite 163 passed, 0 failed (also on a fresh copy); packaged Linux 
 Windows launch and a real White Sahara character NOT RUN. Awaiting owner acceptance; Phase 4
 (rigging) not started.
 
+**0.5.1 (user requested, 2026-10-15):** packaged-app exports are byte-identical to CLI
+output — the generator normalizes saved text (`normalize_saved_text()` in `vfx_generator.gd`:
+stable ext ids, default runtime properties dropped) because release builds ignore
+`set_id_for_path()` and script defaults. Verified with real release-build fixtures
+(`tests/fixtures/release_build/`), the packaged Linux `--smoke-test` (`matches_cli`) and a
+direct comparison with CLI output in the same game; Windows NOT RUN. Full suite 164 passed, 0 failed (also on a fresh copy).
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.
