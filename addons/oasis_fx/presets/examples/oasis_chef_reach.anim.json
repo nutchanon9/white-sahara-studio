@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "asset_type": "animation",
+  "id": "oasis_chef_reach",
+  "display_name": "Oasis Chef Reach",
+  "description": "Crouches and reaches out with the ladle by moving IK targets of the generated Oasis Chef rig: the feet stay on the ground, knees and elbow bend by IK.",
+  "tags": ["chef", "rig", "ik", "cooking"],
+  "author": "OasisFx examples",
+  "target_scene": "res://examples/runtime_demo/fx/oasis_chef.tscn",
+  "duration_seconds": 1.2,
+  "tracks": [
+    {
+      "node": "IKTargets/arm_r",
+      "property": "position",
+      "interpolation": "cubic",
+      "keys": [
+        {"time": 0, "value": [15, -49]},
+        {"time": 0.5, "value": [36, -52], "ease": "out"},
+        {"time": 0.8, "value": [36, -52]},
+        {"time": 1.2, "value": [15, -49]}
+      ]
+    },
+    {
+      "node": "Skeleton/hips",
+      "property": "position",
+      "interpolation": "cubic",
+      "keys": [
+        {"time": 0, "value": [0, -48]},
+        {"time": 0.5, "value": [3, -40]},
+        {"time": 0.8, "value": [3, -40]},
+        {"time": 1.2, "value": [0, -48]}
+      ]
+    },
+    {
+      "node": "Skeleton/hips/chest",
+      "property": "rotation_degrees",
+      "interpolation": "cubic",
+      "keys": [
+        {"time": 0, "value": 0},
+        {"time": 0.5, "value": 14},
+        {"time": 0.8, "value": 14},
+        {"time": 1.2, "value": 0}
+      ]
+    }
+  ],
+  "events": [
+    {
+      "time": 0.55,
+      "name": "stir",
+      "effects": ["res://examples/runtime_demo/fx/cooking_success.tscn"],
+      "at": "Skeleton/hips/chest/upper_arm_r/forearm_r/ladle_tip"
+    }
+  ]
+}

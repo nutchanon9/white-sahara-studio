@@ -1,0 +1,2 @@
+These rig part images were drawn by tools/synth_example_rig_parts.gd for OasisFx.
+They contain no third-party material and are dedicated to the public domain (CC0 1.0).

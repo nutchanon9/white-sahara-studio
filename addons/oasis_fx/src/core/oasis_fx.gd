@@ -6,7 +6,7 @@ extends RefCounted
 ## the headless CLI works on a fresh clone, before the editor has built its
 ## global class cache.
 
-const VERSION := "0.5.1"
+const VERSION := "0.6.0"
 const ADDON_ROOT := "res://addons/oasis_fx"
 const EXAMPLES_DIR := "res://addons/oasis_fx/presets/examples"
 const SCHEMA_PATH := "res://addons/oasis_fx/schemas/vfx.v1.schema.json"

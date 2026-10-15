@@ -117,6 +117,32 @@
       "scene": "res://examples/runtime_demo/fx/ice_nova.tscn",
       "scene_sha256": "7b03fa10b15044d47d0b52ac0ebd4a93d3f4baf9afe23b52c3b9f6a3fa7f347b"
     },
+    "oasis_chef": {
+      "dependencies": [
+        "res://addons/oasis_fx/presets/examples/rig_parts/hat_beret.png",
+        "res://addons/oasis_fx/presets/examples/rig_parts/hat_chef.png",
+        "res://addons/oasis_fx/presets/examples/rig_parts/head.png",
+        "res://addons/oasis_fx/presets/examples/rig_parts/torso.png",
+        "res://addons/oasis_fx/presets/examples/rig_parts/torso_night.png",
+        "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
+        "res://addons/oasis_fx/src/runtime/oasis_rig.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/oasis_chef.rig.json",
+      "preset_sha256": "bb7cae5ef3227c6c1acb2d3c6fa16f4f0508be4f431b2290229f7ebaa0f53e9b",
+      "scene": "res://examples/runtime_demo/fx/oasis_chef.tscn",
+      "scene_sha256": "11deb175b9482151646249a5894ecad512de8efd590830a9393150cc6e3598dc"
+    },
+    "oasis_chef_reach": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
+        "res://examples/runtime_demo/fx/cooking_success.tscn"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/oasis_chef_reach.anim.json",
+      "preset_sha256": "c357493461620d50bac868fe99bf38c575da3544cca65aa3842c57c37050d25d",
+      "scene": "res://examples/runtime_demo/fx/oasis_chef_reach.tres",
+      "scene_sha256": "1ed320a204c96628649002d144c12f5eb8dd125343bb4c01b6b269a9835860c6"
+    },
     "sword_slash": {
       "dependencies": [
         "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
@@ -142,5 +168,5 @@
   },
   "format": "oasis_fx_manifest",
   "format_version": 1,
-  "generator": "OasisFx 0.5.1"
+  "generator": "OasisFx 0.6.0"
 }

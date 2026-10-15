@@ -9,6 +9,7 @@ const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
 const FramesSpec := preload("res://addons/oasis_fx/src/core/sprite_frames_spec.gd")
+const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
 
 const SCHEMA_DIR := "res://addons/oasis_fx/schemas"
 const SCHEMA_URL := "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/"
@@ -62,6 +63,16 @@ const TYPES := {
 		"summary": "Data-only description of frame-by-frame animations cut from a sprite sheet, which OasisFx turns into a Godot 4 SpriteFrames resource. Generated from addons/oasis_fx/src/core/sprite_frames_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/animation_format.md.",
 		"doc": "animation_format.md",
 	},
+	"rig": {
+		"fields": RigSpec.EFFECT_FIELDS,
+		"suffix": ".rig.json",
+		"output": ".tscn",
+		"items_key": "bones",
+		"item": "bone",
+		"title": "OasisFx rig preset v1",
+		"summary": "Data-only description of a 2D cutout character (Skeleton2D bones, parts, two-bone IK, skins, poses) that OasisFx turns into a Godot 4 scene. Generated from addons/oasis_fx/src/core/rig_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/rig_format.md (bone hierarchy, references, IK chains).",
+		"doc": "rig_format.md",
+	},
 }
 
 ## List item kind -> field table.
@@ -72,6 +83,14 @@ const ITEMS := {
 	"key": AnimSpec.KEY_FIELDS,
 	"event": AnimSpec.EVENT_FIELDS,
 	"sprite_animation": FramesSpec.ANIMATION_FIELDS,
+	"bone": RigSpec.BONE_FIELDS,
+	"part": RigSpec.PART_FIELDS,
+	"marker": RigSpec.MARKER_FIELDS,
+	"ik_chain": RigSpec.IK_CHAIN_FIELDS,
+	"skin": RigSpec.SKIN_FIELDS,
+	"skin_part": RigSpec.SKIN_PART_FIELDS,
+	"pose": RigSpec.POSE_FIELDS,
+	"pose_bone": RigSpec.POSE_BONE_FIELDS,
 }
 
 

@@ -1,0 +1,550 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/rig.v1.schema.json",
+  "title": "OasisFx rig preset v1",
+  "description": "Data-only description of a 2D cutout character (Skeleton2D bones, parts, two-bone IK, skins, poses) that OasisFx turns into a Godot 4 scene. Generated from addons/oasis_fx/src/core/rig_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/rig_format.md (bone hierarchy, references, IK chains).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset_type",
+    "id",
+    "display_name",
+    "bones"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Preset format version. Must be 1."
+    },
+    "asset_type": {
+      "enum": [
+        "rig"
+      ],
+      "description": "Asset kind: \"rig\" for a 2D cutout character (Skeleton2D, bones, parts, IK, skins, poses)."
+    },
+    "id": {
+      "$ref": "#/$defs/id",
+      "description": "Stable identifier; also the output file name (<id>.tscn) and the root node name. Lowercase snake_case."
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "description": "Human-readable name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "What the rig is for.",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+      },
+      "description": "Up to 16 lowercase search tags.",
+      "default": []
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who made the preset (person or AI tool).",
+      "default": ""
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Free-form authoring notes.",
+      "default": ""
+    },
+    "source_author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who drew the part images.",
+      "default": ""
+    },
+    "source_license": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "License of the part images, e.g. \"CC0\", \"own work\".",
+      "default": ""
+    },
+    "bones": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/bone"
+      },
+      "description": "Bones, 1 to 64; a bone's parent must come before it. Bones without parent hang from the skeleton."
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/part"
+      },
+      "description": "Visible pieces, up to 128, each attached to a bone (it moves rigidly with it) or to the rig root.",
+      "default": []
+    },
+    "markers": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/marker"
+      },
+      "description": "Named points attached to bones, up to 32 (a weapon tip, a hand): where animation events show effects.",
+      "default": []
+    },
+    "ik_chains": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/ik_chain"
+      },
+      "description": "Two-bone IK chains, up to 16: the two bones bend so the chain's tip reaches a target marker (arms reaching, feet staying on the ground).",
+      "default": []
+    },
+    "skins": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/skin"
+      },
+      "description": "Costume variants, up to 32: each changes the image, color or visibility of some parts.",
+      "default": []
+    },
+    "poses": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/pose"
+      },
+      "description": "Named poses, up to 64: bone rotations (and positions) applied with set_pose().",
+      "default": []
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
+    },
+    "bone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Bone identifier, unique among bones, parts and markers; becomes the Bone2D node name."
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "const": ""
+            }
+          ],
+          "description": "Id of the parent bone; \"\" = attached to the skeleton (a root bone).",
+          "default": ""
+        },
+        "position": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -10000.0,
+            "maximum": 10000.0
+          },
+          "description": "Rest position relative to the parent bone (or the rig root) in pixels [x, y]; +y is down.",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "rotation_degrees": {
+          "type": "number",
+          "minimum": -360.0,
+          "maximum": 360.0,
+          "description": "Rest rotation relative to the parent in degrees, positive = clockwise.",
+          "default": 0.0
+        },
+        "length": {
+          "type": "number",
+          "minimum": 1.0,
+          "maximum": 10000.0,
+          "description": "Bone length in pixels (used by IK and the bone display).",
+          "default": 16.0
+        },
+        "angle_degrees": {
+          "type": "number",
+          "minimum": -360.0,
+          "maximum": 360.0,
+          "description": "Direction the bone points in its own space: 90 = down (+y), 0 = right, -90 = up.",
+          "default": 90.0
+        }
+      }
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Part identifier, unique among bones, parts and markers; becomes the node name."
+        },
+        "bone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "const": ""
+            }
+          ],
+          "description": "Bone the part is attached to; \"\" = the rig root (does not move with bones).",
+          "default": ""
+        },
+        "kind": {
+          "enum": [
+            "polygon",
+            "sprite"
+          ],
+          "description": "polygon = a filled outline (optionally textured); sprite = an image (layered PNG body part).",
+          "default": "polygon"
+        },
+        "texture": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^$|^res://.*\\.(png|webp|jpg|jpeg)$",
+          "description": "Image of a sprite part (required for sprites), or the fill texture of a polygon part; \"\" = none.",
+          "default": ""
+        },
+        "polygon": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": -10000.0,
+              "maximum": 10000.0
+            }
+          },
+          "description": "Outline of a polygon part, 3 to 256 points [[x, y], …] in the bone's space (required for polygons).",
+          "default": []
+        },
+        "position": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -10000.0,
+            "maximum": 10000.0
+          },
+          "description": "Position relative to the bone (or the rig root) in pixels [x, y].",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "rotation_degrees": {
+          "type": "number",
+          "minimum": -360.0,
+          "maximum": 360.0,
+          "description": "Rotation relative to the bone in degrees.",
+          "default": 0.0
+        },
+        "scale": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -100.0,
+            "maximum": 100.0
+          },
+          "description": "Scale [x, y]; negative mirrors.",
+          "default": [
+            1.0,
+            1.0
+          ]
+        },
+        "offset": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -10000.0,
+            "maximum": 10000.0
+          },
+          "description": "Shifts the image/outline relative to the part's position, so the pivot (the joint) is where it should be.",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "color": {
+          "$ref": "#/$defs/color",
+          "description": "Polygon fill color, or tint of a sprite (white = unchanged).",
+          "default": "#FFFFFFFF"
+        },
+        "z_index": {
+          "type": "integer",
+          "minimum": -100,
+          "maximum": 100,
+          "description": "Draw order among parts; higher is in front (independent of the bone hierarchy).",
+          "default": 0
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "false = hidden unless a skin shows it.",
+          "default": true
+        }
+      }
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Marker identifier, unique among bones, parts and markers; becomes a Marker2D node."
+        },
+        "bone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "const": ""
+            }
+          ],
+          "description": "Bone the marker moves with; \"\" = the rig root.",
+          "default": ""
+        },
+        "position": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -10000.0,
+            "maximum": 10000.0
+          },
+          "description": "Position relative to the bone (or the rig root) in pixels [x, y].",
+          "default": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "ik_chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "upper",
+        "lower"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Chain identifier; its target is the Marker2D IKTargets/<id> (animate its position to move the chain)."
+        },
+        "upper": {
+          "$ref": "#/$defs/id",
+          "description": "First bone of the chain (e.g. the thigh or upper arm)."
+        },
+        "lower": {
+          "$ref": "#/$defs/id",
+          "description": "Second bone, a direct child of upper (e.g. the shin or forearm); its tip reaches the target."
+        },
+        "target": {
+          "type": "array",
+          "anyOf": [
+            {
+              "maxItems": 0
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": -10000.0,
+                "maximum": 10000.0
+              }
+            }
+          ],
+          "description": "Starting target position relative to the rig root [x, y]; [] = where the chain's tip is in the rest pose.",
+          "default": []
+        },
+        "flip_bend": {
+          "type": "boolean",
+          "description": "Bend the middle joint the other way (knees forward vs. backward).",
+          "default": false
+        }
+      }
+    },
+    "skin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "parts"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/id",
+          "description": "Skin name used with apply_skin(\"name\"); the rig starts with the parts as defined (skin \"\")."
+        },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/skin_part"
+          },
+          "description": "Changes of this skin, one entry per changed part."
+        }
+      }
+    },
+    "skin_part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part"
+      ],
+      "properties": {
+        "part": {
+          "$ref": "#/$defs/id",
+          "description": "Id of the part to change."
+        },
+        "texture": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^$|^res://.*\\.(png|webp|jpg|jpeg)$",
+          "description": "Replacement image; \"\" = keep the part's image.",
+          "default": ""
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/color"
+            },
+            {
+              "const": ""
+            }
+          ],
+          "description": "Replacement color/tint; \"\" = keep the part's color.",
+          "default": ""
+        },
+        "visible": {
+          "enum": [
+            "unchanged",
+            "show",
+            "hide"
+          ],
+          "description": "Show or hide the part in this skin, or leave it as it is.",
+          "default": "unchanged"
+        }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "bones"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/id",
+          "description": "Pose name used with set_pose(\"name\"); becomes the animation pose_<name>."
+        },
+        "bones": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/pose_bone"
+          },
+          "description": "Bones this pose moves; other bones keep their rest pose."
+        }
+      }
+    },
+    "pose_bone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bone",
+        "rotation_degrees"
+      ],
+      "properties": {
+        "bone": {
+          "$ref": "#/$defs/id",
+          "description": "Id of the bone."
+        },
+        "rotation_degrees": {
+          "type": "number",
+          "minimum": -360.0,
+          "maximum": 360.0,
+          "description": "Rotation of the bone in this pose, relative to its parent, in degrees."
+        },
+        "position": {
+          "type": "array",
+          "anyOf": [
+            {
+              "maxItems": 0
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": -10000.0,
+                "maximum": 10000.0
+              }
+            }
+          ],
+          "description": "Position of the bone in this pose; [] = its rest position.",
+          "default": []
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,280 @@
+@tool
+extends RefCounted
+## Creates a `rig` preset from an existing character scene (Skeleton2D with
+## Bone2D, Polygon2D and Sprite2D parts, Marker2D points), so a rig made in
+## the Godot editor — e.g. White Sahara's mannequin — can be edited and
+## regenerated with OasisFx. The scene is read as text (scene_outline.gd): it
+## is never loaded, run or changed.
+##
+## What does not fit the rig format is reported in `notes` and left out:
+## Polygon2D bone weights (parts become rigid on their bone), skew, sprite
+## sheets/regions, IK and other modifications, scripts, animations, and nodes
+## of other types. Node names become snake_case ids ("ArmR" -> "arm_r"), so
+## animations made for the original scene need their node paths updated.
+
+const Outline := preload("res://addons/oasis_fx/src/core/scene_outline.gd")
+const ImageHeader := preload("res://addons/oasis_fx/src/core/image_header.gd")
+const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
+const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
+
+const _DECIMALS := 0.001
+
+
+## Returns {"ok", "error", "preset", "notes": PackedStringArray}. `scene_path`
+## is a res:// .tscn looked up under `roots`; `id` overrides the rig id
+## (default: the scene root's name in snake_case).
+static func import_scene(scene_path: String, roots: PackedStringArray, id := "") -> Dictionary:
+	var result := {"ok": false, "error": "", "preset": {}, "notes": PackedStringArray()}
+	var outline := Outline.load_outline(scene_path, roots)
+	if not outline.ok:
+		result.error = outline.error
+		return result
+	var skeletons: Array = Array(outline.order).filter(func(p): return Outline.node_class(outline, p) == "Skeleton2D")
+	if skeletons.is_empty():
+		result.error = "%s has no Skeleton2D" % scene_path
+		return result
+	var skeleton: String = skeletons[0]
+	var notes: PackedStringArray = result.notes
+	if skeletons.size() > 1:
+		notes.append("only the first Skeleton2D (%s) was imported; also found: %s" % [skeleton, ", ".join(PackedStringArray(skeletons.slice(1)))])
+
+	var ids := {}  # node path -> new id
+	var used := {}
+	var renamed := PackedStringArray()
+	var bones := []
+	for path in outline.order:
+		if Outline.node_class(outline, path) != "Bone2D" or not _is_below(path, skeleton):
+			continue
+		var bone_id := _unique(_to_id(path.get_file()), used)
+		ids[path] = bone_id
+		if bone_id != path.get_file():
+			renamed.append("%s → %s" % [path.get_file(), bone_id])
+		var bone := {"id": bone_id}
+		var parent := _bone_ancestor(outline, path, skeleton)
+		if not parent.is_empty():
+			bone["parent"] = ids[parent]
+		# Relative to the parent bone, or to the scene root for root bones
+		# (the skeleton and nodes in between are folded in).
+		var xform := _relative_transform(outline, path, parent, true)
+		bone["position"] = _vec(xform.origin)
+		bone["rotation_degrees"] = _num(rad_to_deg(xform.get_rotation()))
+		var auto: Variant = Outline.property(outline, path, "auto_calculate_length_and_angle", true)
+		var child := _first_child_bone(outline, path)
+		if auto != false and not child.is_empty():
+			var offset: Vector2 = Outline.property(outline, child, "position", Vector2.ZERO)
+			bone["length"] = _num(maxf(1.0, offset.length()))
+			bone["angle_degrees"] = _num(rad_to_deg(offset.angle()))
+		else:
+			bone["length"] = _num(maxf(1.0, float(Outline.property(outline, path, "length", 16.0))))
+			bone["angle_degrees"] = _num(float(Outline.property(outline, path, "bone_angle", 0.0)))
+		bones.append(bone)
+	if bones.is_empty():
+		result.error = "the Skeleton2D %s has no Bone2D" % skeleton
+		return result
+
+	var parts := []
+	var markers := []
+	var textured := false
+	for path in outline.order:
+		var type := Outline.node_class(outline, path)
+		if not type in ["Polygon2D", "Sprite2D", "Marker2D"]:
+			continue
+		var bone_path := _bone_ancestor(outline, path, skeleton) if _is_below(path, skeleton) else ""
+		var xform := _relative_transform(outline, path, bone_path)
+		var entry := {"id": _unique(_to_id(path.get_file()), used)}
+		if entry.id != path.get_file():
+			renamed.append("%s → %s" % [path.get_file(), entry.id])
+		if not bone_path.is_empty():
+			entry["bone"] = ids[bone_path]
+		elif _is_below(path, skeleton):
+			notes.append("%s is below the skeleton but not below a bone; attached to the rig root" % path)
+		entry["position"] = _vec(xform.origin)
+		if type == "Marker2D":
+			markers.append(entry)
+			continue
+		var rotation := _num(rad_to_deg(xform.get_rotation()))
+		if rotation != 0.0:
+			entry["rotation_degrees"] = rotation
+		var scale := xform.get_scale()
+		if not scale.is_equal_approx(Vector2.ONE):
+			entry["scale"] = _vec(scale)
+		if absf(xform.get_skew()) > 0.001:
+			notes.append("%s: skew is not supported and was dropped" % path)
+		var texture := Outline.ext_resource_path(outline, path, "texture")
+		if not texture.is_empty() and not texture.get_extension().to_lower() in RigSpec.IMAGE_EXTENSIONS:
+			notes.append("%s: texture %s is not a png/webp/jpg image and was dropped" % [path, texture])
+			texture = ""
+		if type == "Sprite2D":
+			if texture.is_empty():
+				notes.append("%s: a Sprite2D without an image file was skipped" % path)
+				continue
+			entry["kind"] = "sprite"
+			entry["texture"] = texture
+			var offset: Vector2 = Outline.property(outline, path, "offset", Vector2.ZERO)
+			if Outline.property(outline, path, "centered", true) == false:
+				var size := ImageHeader.size_of(OasisFx.raw_file_path(PathUtils.resolve_res_path(texture, roots)))
+				offset += Vector2(size) * 0.5
+			if offset != Vector2.ZERO:
+				entry["offset"] = _vec(offset)
+			if Outline.property(outline, path, "flip_h", false) == true:
+				entry["scale"] = _vec(Vector2(-scale.x, scale.y))
+			for prop in ["hframes", "vframes", "region_enabled"]:
+				var value: Variant = Outline.property(outline, path, prop)
+				if value != null and value != 1 and value != false:
+					notes.append("%s: %s is not supported (the whole image is shown)" % [path, prop])
+					break
+			var tint: Variant = Outline.property(outline, path, "self_modulate")
+			if tint is Color:
+				entry["color"] = "#" + tint.to_html(true).to_upper()
+		else:
+			var polygon: Variant = Outline.property(outline, path, "polygon")
+			if not polygon is PackedVector2Array or polygon.size() < 3:
+				notes.append("%s: a Polygon2D without an outline was skipped" % path)
+				continue
+			entry["polygon"] = Array(polygon).map(func(p): return _vec(p))
+			if not texture.is_empty():
+				entry["texture"] = texture
+			var offset: Vector2 = Outline.property(outline, path, "offset", Vector2.ZERO)
+			if offset != Vector2.ZERO:
+				entry["offset"] = _vec(offset)
+			var color: Variant = Outline.property(outline, path, "color")
+			if color is Color:
+				entry["color"] = "#" + color.to_html(true).to_upper()
+			if Outline.property(outline, path, "bones") is Array and not Outline.property(outline, path, "bones").is_empty():
+				notes.append("%s: bone weights (deformation) are not imported; the part is rigid on %s" % [path, entry.get("bone", "the rig root")])
+		textured = textured or entry.has("texture")
+		if Outline.property(outline, path, "visible", true) == false:
+			entry["visible"] = false
+		entry["_draw"] = [_absolute_z(outline, path), outline.order.find(path)]
+		parts.append(entry)
+	# Godot draws in (z_index, tree order); the generated rig orders its tree
+	# differently (bones first), so keep the scene's drawing order as z_index.
+	var by_draw := parts.duplicate()
+	by_draw.sort_custom(func(a, b): return a._draw[0] < b._draw[0] or (a._draw[0] == b._draw[0] and a._draw[1] < b._draw[1]))
+	# Ranks start at 0 (negative z_index would draw behind the game's z 0
+	# world) and are squeezed into 0 … 100 when there are more parts.
+	var step := minf(1.0, 100.0 / maxf(1.0, by_draw.size() - 1))
+	for rank in by_draw.size():
+		var z := floori(rank * step)
+		if z != 0:
+			by_draw[rank]["z_index"] = z
+		by_draw[rank].erase("_draw")
+	if parts.size() > 1:
+		notes.append("the scene's drawing order is kept as z_index values")
+
+	if outline.nodes[skeleton].props.has("modification_stack"):
+		notes.append("the Skeleton2D's modifications (IK) are not imported; add ik_chains to the preset")
+	for path in outline.order:
+		if Outline.node_class(outline, path) == "AnimationPlayer":
+			notes.append("animations of %s are not imported; recreate them as animation presets for the new rig" % path)
+	if not renamed.is_empty():
+		notes.append("node names became snake_case ids: %s" % ", ".join(renamed))
+
+	var root_name: String = outline.nodes["."].name
+	var preset := {
+		"schema_version": 1,
+		"asset_type": "rig",
+		"id": id if not id.is_empty() else _to_id(root_name),
+		"display_name": root_name.capitalize(),
+		"description": "Imported from %s" % scene_path,
+		"notes": "Imported by OasisFx from %s.%s" % [scene_path, "" if notes.is_empty() else " Not imported: " + "; ".join(notes)],
+	}
+	if textured:
+		preset["source_license"] = ""
+	preset["bones"] = bones
+	preset["parts"] = parts
+	if not markers.is_empty():
+		preset["markers"] = markers
+	result.preset = preset
+	result.ok = true
+	return result
+
+
+## "ArmR" -> "arm_r", "Left Hand" -> "left_hand"; always a valid id.
+static func _to_id(name: String) -> String:
+	var id := name.to_snake_case().to_lower()
+	id = RegEx.create_from_string("[^a-z0-9_]+").sub(id, "_", true)
+	id = RegEx.create_from_string("_+").sub(id, "_", true).trim_prefix("_").trim_suffix("_")
+	if id.is_empty() or not (id[0] >= "a" and id[0] <= "z"):
+		id = "n_" + id
+	return id.substr(0, 64)
+
+
+static func _unique(id: String, used: Dictionary) -> String:
+	var out := id
+	var n := 2
+	while used.has(out):
+		out = "%s_%d" % [id.substr(0, 60), n]
+		n += 1
+	used[out] = true
+	return out
+
+
+static func _is_below(path: String, ancestor: String) -> bool:
+	return ancestor == "." or path.begins_with(ancestor + "/")
+
+
+# Nearest Bone2D above `path`, below `skeleton`; "" when there is none.
+static func _bone_ancestor(outline: Dictionary, path: String, skeleton: String) -> String:
+	var current := path.get_base_dir() if path.contains("/") else "."
+	while current != skeleton and current != "." and not current.is_empty():
+		if Outline.node_class(outline, current) == "Bone2D":
+			return current
+		current = current.get_base_dir() if current.contains("/") else "."
+	return ""
+
+
+# z_index as drawn: the node's z_index plus its ancestors' while z_as_relative.
+static func _absolute_z(outline: Dictionary, path: String) -> int:
+	var z := 0
+	var current := path
+	while true:
+		z += int(Outline.property(outline, current, "z_index", 0))
+		if Outline.property(outline, current, "z_as_relative", true) == false or current == "." or not current.contains("/") and current == ".":
+			break
+		if not current.contains("/"):
+			current = "."
+		else:
+			current = current.get_base_dir()
+	return z
+
+
+static func _first_child_bone(outline: Dictionary, path: String) -> String:
+	for other in outline.order:
+		if other.get_base_dir() == path and Outline.node_class(outline, other) == "Bone2D":
+			return other
+	return ""
+
+
+# Transform of a node relative to its parent; for bones the rest transform when set.
+static func _local_transform(outline: Dictionary, path: String, use_rest := false) -> Transform2D:
+	if use_rest:
+		var rest: Variant = Outline.property(outline, path, "rest")
+		if rest is Transform2D and rest != Transform2D.IDENTITY:
+			return rest
+	var position: Vector2 = Outline.property(outline, path, "position", Vector2.ZERO)
+	var rotation: float = Outline.property(outline, path, "rotation", 0.0)
+	var scale: Vector2 = Outline.property(outline, path, "scale", Vector2.ONE)
+	var skew: float = Outline.property(outline, path, "skew", 0.0)
+	return Transform2D(rotation, scale, skew, position)
+
+
+# Transform of `path` relative to `ancestor` ("" = the scene root), composing
+# the nodes in between (e.g. a WeaponPivot between a bone and its parts).
+static func _relative_transform(outline: Dictionary, path: String, ancestor: String, use_rest := false) -> Transform2D:
+	var xform := _local_transform(outline, path, use_rest)
+	var current := path.get_base_dir() if path.contains("/") else "."
+	var stop := ancestor if not ancestor.is_empty() else "."
+	while current != stop and current != ".":
+		xform = _local_transform(outline, current) * xform
+		current = current.get_base_dir() if current.contains("/") else "."
+	return xform
+
+
+static func _num(value: float) -> float:
+	return snappedf(value, _DECIMALS) + 0.0
+
+
+static func _vec(v: Vector2) -> Array:
+	return [_num(v.x), _num(v.y)]

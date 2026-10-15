@@ -22,8 +22,17 @@ const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 const Manifest := preload("res://addons/oasis_fx/src/core/asset_manifest.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 const AnimationBuilder := preload("res://addons/oasis_fx/src/core/animation_builder.gd")
+## Fixed ext_resource ids of the OasisFx runtime scripts.
+const SCRIPT_IDS := {
+	"res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd": "oasis_fx_runtime",
+	"res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd": "oasis_sfx_runtime",
+	"res://addons/oasis_fx/src/runtime/oasis_rig.gd": "oasis_rig_runtime",
+	"res://addons/oasis_fx/src/runtime/oasis_animation_events.gd": "oasis_animation_events",
+}
 const SpriteFramesBuilder := preload("res://addons/oasis_fx/src/core/sprite_frames_builder.gd")
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
+const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
+const RigBuilder := preload("res://addons/oasis_fx/src/core/rig_builder.gd")
 
 
 ## Validates and generates one preset file.
@@ -171,8 +180,11 @@ static func generate_many(paths: PackedStringArray, out_dir: String, options := 
 ## Builds the node tree of a scene asset type (vfx, sfx); audio and file
 ## textures as path-only placeholders.
 static func build(preset: Dictionary, report: RefCounted) -> Node2D:
-	if preset.get("asset_type") == "sfx":
-		return SfxBuilder.build(preset, report)
+	match preset.get("asset_type"):
+		"sfx":
+			return SfxBuilder.build(preset, report)
+		"rig":
+			return RigBuilder.build(preset, report)
 	return Builder.build(preset, report)
 
 
@@ -233,6 +245,16 @@ static func dependencies(preset: Dictionary, roots := PackedStringArray()) -> Pa
 		return deps
 	if preset.get("asset_type") == "sprite_frames":
 		return PackedStringArray([preset.texture])
+	if preset.get("asset_type") == "rig":
+		var files := PackedStringArray([RigSpec.RUNTIME_PATH, AnimSpec.EVENTS_RUNTIME_PATH])
+		for part in preset.parts:
+			if not part.texture.is_empty() and not files.has(part.texture):
+				files.append(part.texture)
+		for skin in preset.skins:
+			for change in skin.parts:
+				if not change.texture.is_empty() and not files.has(change.texture):
+					files.append(change.texture)
+		return files
 	if preset.get("asset_type") == "sfx":
 		var audio := PackedStringArray([OasisFx.SFX_RUNTIME_SCRIPT_PATH])
 		for layer in preset.layers:
@@ -257,6 +279,8 @@ static func runtime_script_for(preset: Dictionary) -> String:
 			return AnimSpec.EVENTS_RUNTIME_PATH if not preset.events.is_empty() else ""
 		"sprite_frames":
 			return ""
+		"rig":
+			return RigSpec.RUNTIME_PATH
 	return OasisFx.RUNTIME_SCRIPT_PATH
 
 
@@ -277,12 +301,24 @@ static func _stabilize_external_ids(root: Node, output_path: String) -> Dictiona
 	var ids := {}
 	var script: Resource = root.get_script()
 	if script != null:
-		_set_external_id(script, output_path, "oasis_sfx_runtime" if script.resource_path == OasisFx.SFX_RUNTIME_SCRIPT_PATH else "oasis_fx_runtime", ids)
+		_set_external_id(script, output_path, SCRIPT_IDS.get(script.resource_path, "oasis_fx_runtime"), ids)
 	for child in root.get_children():
 		if child is GPUParticles2D and _is_external(child.texture):
 			_set_external_id(child.texture, output_path, String(child.name) + "_texture_file", ids)
 		elif (child is AudioStreamPlayer or child is AudioStreamPlayer2D) and _is_external(child.stream):
 			_set_external_id(child.stream, output_path, String(child.name) + "_source", ids)
+	if script != null and script.resource_path == RigSpec.RUNTIME_PATH:
+		for node in root.find_children("*", "", true, false):
+			if node.get_script() != null:
+				_set_external_id(node.get_script(), output_path, SCRIPT_IDS.get(node.get_script().resource_path, String(node.name) + "_script"), ids)
+			if (node is Sprite2D or node is Polygon2D) and _is_external(node.texture):
+				_set_external_id(node.texture, output_path, String(node.name) + "_texture", ids)
+		var skins: Dictionary = root.get("skins")
+		for skin in skins:
+			for part_path in skins[skin]:
+				var texture: Variant = skins[skin][part_path].get("texture")
+				if texture is Resource and _is_external(texture) and not ids.has(texture.resource_path):
+					_set_external_id(texture, output_path, "%s_%s_texture" % [skin, String(part_path).get_file()], ids)
 	var settings: Variant = root.get("layer_settings")
 	if settings is Dictionary:
 		for layer in settings:
@@ -321,21 +357,27 @@ static func _stabilize_resource_ids(resource: Resource, output_path: String) -> 
 	return used
 
 
-## Default values (as text) of the stored properties of the runtime script on
-## the root of a generated scene; {} for resource types.
+## For each OasisFx script a generated scene uses: {script path: {property:
+## default value as text}} (stored properties only); {} for resource types.
 static func script_defaults(preset: Dictionary) -> Dictionary:
 	if not is_scene_type(preset):
 		return {}
-	var script := load(runtime_script_for(preset)) as Script
-	if script == null:
-		return {}
-	var instance: Object = script.new()
+	var paths := [runtime_script_for(preset)]
+	if preset.asset_type == "rig":
+		paths.append(AnimSpec.EVENTS_RUNTIME_PATH)
 	var out := {}
-	for p in script.get_script_property_list():
-		if p.usage & PROPERTY_USAGE_STORAGE:
-			out[p.name] = var_to_str(instance.get(p.name))
-	if instance is Node:
-		instance.free()
+	for path in paths:
+		var script := load(path) as Script
+		if script == null:
+			continue
+		var instance: Object = script.new()
+		var defaults := {}
+		for p in script.get_script_property_list():
+			if p.usage & PROPERTY_USAGE_STORAGE:
+				defaults[p.name] = var_to_str(instance.get(p.name))
+		if instance is Node:
+			instance.free()
+		out[path] = defaults
 	return out
 
 
@@ -357,8 +399,9 @@ static func _normalize_saved_file(path: String, ids: Dictionary, defaults: Dicti
 ## Resource.set_id_for_path() and do not know script default values, so there:
 ## - external resources get the ids in `ids` ({path: id}), sorted by id, and
 ##   every ExtResource("old") reference is renamed;
-## - properties of the root node that equal the runtime script's defaults
-##   (`defaults`: {name: var_to_str(default)}) are dropped, as the editor does.
+## - properties of nodes running an OasisFx script that equal that script's
+##   defaults (`defaults`: {script path: {name: var_to_str(default)}}) are
+##   dropped, as the editor does.
 ## Text that already follows these rules is returned unchanged.
 static func normalize_saved_text(text: String, ids: Dictionary, defaults: Dictionary) -> String:
 	var lines := text.split("\n")
@@ -378,7 +421,7 @@ static func normalize_saved_text(text: String, ids: Dictionary, defaults: Dictio
 	for k in ext_rows.size():
 		lines[ext_rows[k].index] = sorted[k].line
 	var out := _rename_references("\n".join(lines), rename)
-	return _drop_default_root_properties(out, defaults) if not defaults.is_empty() else out
+	return _drop_default_script_properties(out, defaults) if not defaults.is_empty() else out
 
 
 static func _rename_references(text: String, rename: Dictionary) -> String:
@@ -394,22 +437,37 @@ static func _rename_references(text: String, rename: Dictionary) -> String:
 	return "".join(parts)
 
 
-# Removes `name = value` entries of the root [node] (the one without parent)
-# whose value text equals defaults[name]; multi-line values are kept whole.
-static func _drop_default_root_properties(text: String, defaults: Dictionary) -> String:
+# Removes `name = value` entries of [node] sections whose script has an entry
+# in `defaults` and whose value text equals that default; multi-line values
+# are kept whole.
+static func _drop_default_script_properties(text: String, defaults: Dictionary) -> String:
 	var lines := text.split("\n")
+	var ext_paths := {}
+	for m in RegEx.create_from_string("(?m)^\\[ext_resource .*path=\"([^\"]*)\".* id=\"([^\"]*)\"\\]$").search_all(text):
+		ext_paths[m.get_string(2)] = m.get_string(1)
+	# Script of each [node] section (by the header's line index).
+	var section_script := {}
+	var header := -1
+	var script_regex := RegEx.create_from_string("^script = ExtResource\\(\"([^\"]*)\"\\)$")
+	for i in lines.size():
+		if lines[i].begins_with("["):
+			header = i if lines[i].begins_with("[node ") else -1
+		elif header >= 0:
+			var m := script_regex.search(lines[i])
+			if m:
+				section_script[header] = ext_paths.get(m.get_string(1), "")
 	var out := PackedStringArray()
-	var in_root := false
+	var section_defaults := {}
 	var i := 0
 	while i < lines.size():
 		var line := lines[i]
 		if line.begins_with("["):
-			in_root = line.begins_with("[node ") and not line.contains(" parent=")
+			section_defaults = defaults.get(section_script.get(i, ""), {})
 			out.append(line)
 			i += 1
 			continue
 		var eq := line.find(" = ")
-		if not in_root or eq <= 0:
+		if section_defaults.is_empty() or eq <= 0:
 			out.append(line)
 			i += 1
 			continue
@@ -423,7 +481,7 @@ static func _drop_default_root_properties(text: String, defaults: Dictionary) ->
 			i += 1
 		var name := line.substr(0, eq)
 		var value := "\n".join(entry).substr(eq + 3).strip_edges()
-		if not (defaults.has(name) and defaults[name] == value):
+		if not (section_defaults.has(name) and section_defaults[name] == value):
 			out.append_array(entry)
 	return "\n".join(out)
 
@@ -486,6 +544,9 @@ static func _verify_loads(output_path: String, preset: Dictionary, report: RefCo
 	if not is_scene_type(preset):
 		_verify_resource_loads(output_path, preset, report)
 		return
+	if preset.asset_type == "rig":
+		_verify_rig_loads(output_path, preset, report)
+		return
 	var scene := ResourceLoader.load(output_path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
 	if scene == null or not scene.can_instantiate():
 		report.error("", "the generated scene %s could not be loaded back" % output_path)
@@ -503,6 +564,23 @@ static func _verify_loads(output_path: String, preset: Dictionary, report: RefCo
 		report.error("", "the generated scene has nodes %s, expected %s" % [names, expected])
 	if not has_runtime:
 		report.error("", "the generated scene is missing the OasisFx runtime script")
+
+
+static func _verify_rig_loads(output_path: String, preset: Dictionary, report: RefCounted) -> void:
+	var scene := ResourceLoader.load(output_path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
+	if scene == null or not scene.can_instantiate():
+		report.error("", "the generated rig %s could not be loaded back" % output_path)
+		return
+	var rig := scene.instantiate()
+	var bones := rig.find_children("*", "Bone2D", true, false).size()
+	var has_runtime: bool = rig.get_script() != null and rig.get_script().resource_path == RigSpec.RUNTIME_PATH
+	var skeleton := rig.get_node_or_null(RigSpec.SKELETON_NODE) as Skeleton2D
+	var chains := skeleton.get_modification_stack().modification_count if skeleton and skeleton.get_modification_stack() else 0
+	rig.free()
+	if bones != preset.bones.size() or chains != preset.ik_chains.size():
+		report.error("", "the generated rig has %d bones and %d IK chains, expected %d and %d" % [bones, chains, preset.bones.size(), preset.ik_chains.size()])
+	if not has_runtime:
+		report.error("", "the generated rig is missing the OasisFx rig runtime script")
 
 
 static func _verify_resource_loads(output_path: String, preset: Dictionary, report: RefCounted) -> void:

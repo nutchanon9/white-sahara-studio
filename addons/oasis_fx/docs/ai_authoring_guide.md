@@ -12,7 +12,7 @@ preset. The JSON Schema and the validator are the final word.
 | `sfx` — layered sound effect from existing audio files | `schema_version: 1`, [`schemas/sfx.v1.schema.json`](../schemas/sfx.v1.schema.json) | supported (OasisFx 0.4); see [section 9](#9-sound-effects-sfx) |
 | `animation` — keyframes and events for nodes of an existing scene | `schema_version: 1`, [`schemas/animation.v1.schema.json`](../schemas/animation.v1.schema.json) | supported (OasisFx 0.5); see [section 10](#10-animations-and-sprite-frames) |
 | `sprite_frames` — frame animations from a sprite sheet | `schema_version: 1`, [`schemas/sprite_frames.v1.schema.json`](../schemas/sprite_frames.v1.schema.json) | supported (OasisFx 0.5); see [section 10](#10-animations-and-sprite-frames) |
-| rigs (bones, IK, skins) | — | planned (Phase 4); not a preset type yet |
+| `rig` — 2D cutout character: bones, parts, IK, skins, poses | `schema_version: 1`, [`schemas/rig.v1.schema.json`](../schemas/rig.v1.schema.json) | supported (OasisFx 0.6); see [section 11](#11-rigs-rig) |
 
 A `vfx` preset describes one effect made of **1–8 emitters**. Each emitter becomes a Godot
 `GPUParticles2D`. Every field, unit, range and default is listed in
@@ -450,3 +450,140 @@ Campfire Flame (sprite frames):
   ]
 }
 ```
+
+## 11. Rigs (`rig`)
+
+A `rig` (`<id>.rig.json`) is a **2D cutout character**: bones (`Skeleton2D` / `Bone2D`),
+rigid parts on them (PNG body parts or polygons), markers (a hand, a weapon tip), two-bone IK
+chains, skins (costume swaps) and poses. It generates `<id>.tscn`, which `animation` presets
+can then animate. Every field is listed in [rig_format.md](rig_format.md).
+
+A rig does not create art: part images must already exist in the project, or use `polygon`
+parts (flat shapes) as a stand-in. Never invent image paths.
+
+### Copy-paste prompt (new rig)
+
+> You are writing an OasisFx rig preset for Godot 4. Read
+> `addons/oasis_fx/docs/rig_format.md` and `addons/oasis_fx/schemas/rig.v1.schema.json` first.
+> Output only one JSON object with `"asset_type": "rig"`. Part images may only be these files:
+> **<list of res:// png paths and their pixel sizes, or "none — use polygon parts">**. Save it
+> as `<id>.rig.json`, run
+> `godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- validate <file>`
+> and fix every error and warning.
+>
+> Character: **<describe it: height in pixels, facing, which limbs, which IK (legs/arms),
+> costume variants, poses>**
+
+### Copy-paste prompt (from an existing scene)
+
+> Run `godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- import-rig
+> <res:// path of the character .tscn> --out <id>.rig.json`, read the notes it prints, then add
+> `ik_chains` for **<legs / arms>**, skins **<…>** and poses **<…>** to the preset. Do not
+> change the original scene. Validate and fix every error and warning.
+
+### Rules that matter most (rig)
+
+1. **Required:** `schema_version` (1), `asset_type` ("rig"), `id`, `display_name`, `bones`
+   (at least one).
+2. **Bones in tree order:** a bone's `parent` must appear earlier in the list. Positions are
+   relative to the parent bone; +y is down, so a hip at `[0, -48]` is 48 px above the feet.
+3. **Bone direction:** `angle_degrees` 90 (default) points down — arms and legs hanging;
+   -90 points up — spine, neck, head. Set `length` to the limb's length; IK uses it.
+4. **Ids** of bones, parts and markers are node names and must all be different
+   (`thigh_l` the bone, `thigh_l_shape` its part).
+5. **Parts are rigid.** A bending limb is two bones with one part each (thigh + shin,
+   upper arm + forearm). Draw order is `z_index` only: put the far arm/leg behind the torso
+   (lower values) and the near ones in front.
+6. **Sprites are centered** on `position`; move them so the joint sits at the bone's origin
+   (e.g. an upper arm image 30 px tall hanging down: `position: [0, 15]`).
+7. **IK:** `lower` must be a direct child of `upper`. Leave `target` as `[]` to start at the
+   rest pose; use `flip_bend: true` when a knee or elbow bends the wrong way. A bone can be in
+   one chain only. Animate `IKTargets/<chain id>` `position`, not the IK bones' rotations.
+8. **Skins** only change existing parts (`texture`, `color`, `visible`: `show`/`hide`); add a
+   costume piece as a hidden part and `show` it in the skin.
+9. **Poses** set bone rotations (and optionally positions); do not pose bones in IK chains.
+10. Fill in `source_author` and `source_license` when you use images.
+
+### Changing an existing rig
+
+| Request | Change |
+|---|---|
+| "longer arms" | increase `length` of the arm bones **and** move/resize their parts and child bone positions |
+| "knee bends backwards" | toggle `flip_bend` on that leg's chain |
+| "arm behind the body" | lower that arm's parts' `z_index` below the torso's |
+| "add a costume" | a new skin; reuse part ids, give new `texture` / `color` |
+| "hold a sword" | a part (and a marker at its tip) on the forearm bone |
+
+Generate it and **look at it** in the desktop app (bones, IK targets you can drag, skin and
+pose pickers) or in the game; a valid rig can still look wrong.
+
+### Complete example: Oasis Chef
+
+```json
+{
+  "schema_version": 1,
+  "asset_type": "rig",
+  "id": "oasis_chef",
+  "display_name": "Oasis Chef",
+  "description": "Example cutout chef: two-bone arms and legs, IK on both legs and the right arm, PNG torso/head/hat with costume skins, and two poses.",
+  "tags": ["chef", "character", "rig", "example"],
+  "author": "OasisFx examples",
+  "source_author": "OasisFx (procedural, tools/synth_example_rig_parts.gd)",
+  "source_license": "CC0",
+  "bones": [
+    {"id": "hips", "position": [0, -48], "length": 8, "angle_degrees": -90},
+    {"id": "chest", "parent": "hips", "position": [0, -4], "length": 34, "angle_degrees": -90},
+    {"id": "head", "parent": "chest", "position": [0, -34], "length": 40, "angle_degrees": -90},
+    {"id": "upper_arm_l", "parent": "chest", "position": [-15, -28], "length": 16},
+    {"id": "forearm_l", "parent": "upper_arm_l", "position": [0, 16], "length": 15},
+    {"id": "upper_arm_r", "parent": "chest", "position": [15, -28], "length": 16},
+    {"id": "forearm_r", "parent": "upper_arm_r", "position": [0, 16], "length": 15},
+    {"id": "thigh_l", "parent": "hips", "position": [-7, 2], "length": 22},
+    {"id": "shin_l", "parent": "thigh_l", "position": [0, 22], "length": 22},
+    {"id": "thigh_r", "parent": "hips", "position": [7, 2], "length": 22},
+    {"id": "shin_r", "parent": "thigh_r", "position": [0, 22], "length": 22}
+  ],
+  "parts": [
+    {"id": "shadow", "polygon": [[26, 0], [24.7, 2.2], [21, 4.1], [15.3, 5.7], [8, 6.7], [0, 7], [-8, 6.7], [-15.3, 5.7], [-21, 4.1], [-24.7, 2.2], [-26, 0], [-24.7, -2.2], [-21, -4.1], [-15.3, -5.7], [-8, -6.7], [0, -7], [8, -6.7], [15.3, -5.7], [21, -4.1], [24.7, -2.2]], "color": "#00000040", "z_index": 0},
+    {"id": "thigh_l_shape", "bone": "thigh_l", "polygon": [[-5, -2], [5, -2], [4.5, 23], [-4.5, 23]], "color": "#5B4636", "z_index": 10},
+    {"id": "shin_l_shape", "bone": "shin_l", "polygon": [[-4.5, -2], [4.5, -2], [4, 20], [-4, 20]], "color": "#5B4636", "z_index": 10},
+    {"id": "shoe_l", "bone": "shin_l", "polygon": [[-5, 18], [6, 18], [9, 22], [9, 25], [-5, 25]], "color": "#3A2A22", "z_index": 11},
+    {"id": "thigh_r_shape", "bone": "thigh_r", "polygon": [[-5, -2], [5, -2], [4.5, 23], [-4.5, 23]], "color": "#5B4636", "z_index": 10},
+    {"id": "shin_r_shape", "bone": "shin_r", "polygon": [[-4.5, -2], [4.5, -2], [4, 20], [-4, 20]], "color": "#5B4636", "z_index": 10},
+    {"id": "shoe_r", "bone": "shin_r", "polygon": [[-5, 18], [6, 18], [9, 22], [9, 25], [-5, 25]], "color": "#3A2A22", "z_index": 11},
+    {"id": "upper_arm_l_shape", "bone": "upper_arm_l", "polygon": [[-4.5, -2], [4.5, -2], [4, 17], [-4, 17]], "color": "#E6DFD3", "z_index": 11},
+    {"id": "forearm_l_shape", "bone": "forearm_l", "polygon": [[-4, -2], [4, -2], [3.5, 14], [-3.5, 14]], "color": "#E6DFD3", "z_index": 11},
+    {"id": "hand_l", "bone": "forearm_l", "polygon": [[4.5, 16], [3.9, 18.2], [2.3, 19.9], [0, 20.5], [-2.2, 19.9], [-3.9, 18.2], [-4.5, 16], [-3.9, 13.8], [-2.3, 12.1], [0, 11.5], [2.3, 12.1], [3.9, 13.7]], "color": "#F2C9A0", "z_index": 11},
+    {"id": "torso", "bone": "chest", "kind": "sprite", "texture": "res://addons/oasis_fx/presets/examples/rig_parts/torso.png", "position": [0, -17], "z_index": 12},
+    {"id": "face", "bone": "head", "kind": "sprite", "texture": "res://addons/oasis_fx/presets/examples/rig_parts/head.png", "position": [0, -17], "z_index": 14},
+    {"id": "hat", "bone": "head", "kind": "sprite", "texture": "res://addons/oasis_fx/presets/examples/rig_parts/hat_chef.png", "position": [0, -40], "z_index": 15},
+    {"id": "upper_arm_r_shape", "bone": "upper_arm_r", "polygon": [[-4.5, -2], [4.5, -2], [4, 17], [-4, 17]], "color": "#F4EFE6", "z_index": 16},
+    {"id": "forearm_r_shape", "bone": "forearm_r", "polygon": [[-4, -2], [4, -2], [3.5, 14], [-3.5, 14]], "color": "#F4EFE6", "z_index": 16},
+    {"id": "ladle", "bone": "forearm_r", "polygon": [[-1.5, 10], [1.5, 10], [1.5, 38], [-1.5, 38]], "color": "#8A5A3C", "z_index": 15},
+    {"id": "ladle_bowl", "bone": "forearm_r", "polygon": [[7, 42], [6.3, 44.6], [4.4, 46.7], [1.6, 47.8], [-1.6, 47.8], [-4.4, 46.7], [-6.3, 44.6], [-7, 42], [-6.3, 39.4], [-4.4, 37.3], [-1.6, 36.2], [1.6, 36.2], [4.4, 37.3], [6.3, 39.4]], "color": "#9AA6B2", "z_index": 15},
+    {"id": "hand_r", "bone": "forearm_r", "polygon": [[4.5, 16], [3.9, 18.2], [2.3, 19.9], [0, 20.5], [-2.2, 19.9], [-3.9, 18.2], [-4.5, 16], [-3.9, 13.8], [-2.3, 12.1], [0, 11.5], [2.3, 12.1], [3.9, 13.7]], "color": "#F2C9A0", "z_index": 17}
+  ],
+  "markers": [
+    {"id": "ladle_tip", "bone": "forearm_r", "position": [0, 46]},
+    {"id": "above_head", "bone": "head", "position": [0, -62]}
+  ],
+  "ik_chains": [
+    {"id": "leg_l", "upper": "thigh_l", "lower": "shin_l"},
+    {"id": "leg_r", "upper": "thigh_r", "lower": "shin_r", "flip_bend": true},
+    {"id": "arm_r", "upper": "upper_arm_r", "lower": "forearm_r"}
+  ],
+  "skins": [
+    {"name": "night_shift", "parts": [{"part": "torso", "texture": "res://addons/oasis_fx/presets/examples/rig_parts/torso_night.png"}, {"part": "upper_arm_l_shape", "color": "#26304F"}, {"part": "forearm_l_shape", "color": "#26304F"}, {"part": "upper_arm_r_shape", "color": "#2F3B63"}, {"part": "forearm_r_shape", "color": "#2F3B63"}]},
+    {"name": "beret", "parts": [{"part": "hat", "texture": "res://addons/oasis_fx/presets/examples/rig_parts/hat_beret.png"}]},
+    {"name": "no_hat", "parts": [{"part": "hat", "visible": "hide"}]}
+  ],
+  "poses": [
+    {"name": "wave", "bones": [{"bone": "upper_arm_l", "rotation_degrees": 150}, {"bone": "forearm_l", "rotation_degrees": -30}, {"bone": "head", "rotation_degrees": -6}]},
+    {"name": "crouch", "bones": [{"bone": "hips", "rotation_degrees": 0, "position": [0, -38]}, {"bone": "chest", "rotation_degrees": 12}]}
+  ]
+}
+```
+
+Animate it with an `animation` preset such as `oasis_chef_reach.anim.json`, whose node paths
+are built from the ids (`IKTargets/arm_r`, `Skeleton/hips/chest`,
+`Skeleton/hips/chest/upper_arm_r/forearm_r/ladle_tip`).

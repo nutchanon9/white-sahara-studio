@@ -17,6 +17,7 @@ const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
+const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
 
 
 static func build(asset_type := "vfx") -> Dictionary:
@@ -84,6 +85,13 @@ static func _property(spec: Dictionary) -> Dictionary:
 		"vec2":
 			p = {"type": "array", "minItems": 2, "maxItems": 2,
 				"items": {"type": "number", "minimum": spec.min, "maximum": spec.max}}
+			if spec.get("allow_empty", false):
+				p = {"type": "array", "anyOf": [{"maxItems": 0}, p]}
+		"id_ref":
+			p = {"anyOf": [{"$ref": "#/$defs/id"}, {"const": ""}]}
+		"points":
+			p = {"type": "array", "maxItems": RigSpec.MAX_POINTS, "items": {"type": "array", "minItems": 2, "maxItems": 2,
+				"items": {"type": "number", "minimum": spec.min, "maximum": spec.max}}}
 		"rect":
 			p = {"type": "array", "anyOf": [
 				{"maxItems": 0},

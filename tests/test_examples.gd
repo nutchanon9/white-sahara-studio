@@ -85,6 +85,28 @@ func test_runtime_demo_triggers_effects_from_animation_events() -> void:
 	await tree.process_frame
 
 
+func test_runtime_demo_drives_the_generated_rig() -> void:
+	var demo: Node = load(DEMO).instantiate()
+	tree.root.add_child(demo)
+	await tree.process_frame
+	var rig: Node2D = demo.get_node("OasisChef")
+	check_eq(demo.next_rig_skin(), "beret", "first skin")
+	check(rig.get_node("Skeleton/hips/chest/head/hat").texture.resource_path.ends_with("hat_beret.png"), "beret worn")
+	check_eq(demo.next_rig_pose(), "wave", "pose")
+	check(absf(rig.get_bone("upper_arm_l").rotation_degrees - 150.0) < 0.1, "waving")
+	demo.play_rig_reach()
+	await tree.create_timer(0.75).timeout  # held at 0.5 … 0.8 s; the stir event is at 0.55 s
+	var target: Vector2 = rig.get_ik_target("arm_r").position
+	check(target.x > 30.0, "the reach animation moves the IK target (%s)" % target)
+	var forearm: Bone2D = rig.get_bone("forearm_r")
+	var tip := forearm.global_position + Vector2.from_angle(forearm.global_rotation + forearm.get_bone_angle()) * forearm.get_length() * rig.scale.x
+	check(tip.distance_to(rig.get_ik_target("arm_r").global_position) < 1.0, "the hand follows by IK")
+	var ids := demo.get_node("Effects").get_children().map(func(c): return c.effect_id)
+	check(ids.has("cooking_success"), "the stir event showed its effect in the effects layer: %s" % [ids])
+	demo.queue_free()
+	await tree.process_frame
+
+
 func test_runtime_demo_plays_generated_chef_animations_and_sprite_frames() -> void:
 	var demo: Node = load(DEMO).instantiate()
 	tree.root.add_child(demo)

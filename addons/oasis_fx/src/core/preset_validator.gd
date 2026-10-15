@@ -9,6 +9,7 @@ const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
 const FramesSpec := preload("res://addons/oasis_fx/src/core/sprite_frames_spec.gd")
 const Outline := preload("res://addons/oasis_fx/src/core/scene_outline.gd")
+const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
 const ImageHeader := preload("res://addons/oasis_fx/src/core/image_header.gd")
 const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
@@ -61,6 +62,8 @@ static func validate(data: Variant, report: RefCounted) -> Dictionary:
 				_check_animation_semantics(data, preset, report)
 			"sprite_frames":
 				_check_sprite_frames_semantics(data, preset, report)
+			"rig":
+				_check_rig_semantics(data, preset, report)
 	return preset if report.is_ok() else {}
 
 
@@ -142,7 +145,30 @@ static func _check_value(value: Variant, spec: Dictionary, path: String, report:
 			var hex: String = value.substr(1).to_upper()
 			return "#" + (hex + "FF" if hex.length() == 6 else hex)
 		"vec2":
+			if typeof(value) == TYPE_ARRAY and value.is_empty() and spec.get("allow_empty", false):
+				return []
 			return _check_number_array(value, 2, spec, path, report)
+		"id_ref":
+			if typeof(value) == TYPE_STRING and value.is_empty():
+				return ""
+			if typeof(value) != TYPE_STRING or not _matches(Spec.ID_PATTERN, value):
+				report.error(path, "must be an id (lowercase snake_case) or \"\" (got %s)" % JSON.stringify(value))
+				return null
+			return value
+		"points":
+			if typeof(value) != TYPE_ARRAY:
+				report.error(path, "must be an array of [x, y] points")
+				return null
+			if value.size() > RigSpec.MAX_POINTS:
+				report.error(path, "must contain at most %d points (got %d)" % [RigSpec.MAX_POINTS, value.size()])
+				return null
+			var points := []
+			for i in value.size():
+				var point: Variant = _check_number_array(value[i], 2, spec, "%s[%d]" % [path, i], report)
+				if point == null:
+					return null
+				points.append(point)
+			return points
 		"rect":
 			if typeof(value) == TYPE_ARRAY and value.is_empty() and spec.get("allow_empty", false):
 				return []
@@ -519,6 +545,114 @@ static func _suggest_node(outline: Dictionary, wanted: String) -> String:
 			return "; did you mean \"%s\"?" % path
 	var some := Array(outline.order).slice(0, 12)
 	return "; nodes in the scene: %s%s" % [", ".join(PackedStringArray(some)), " …" if outline.order.size() > 12 else ""]
+
+
+static func _check_rig_semantics(raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
+	var bone_index := {}
+	var node_ids := {}
+	for i in preset.bones.size():
+		var bone: Dictionary = preset.bones[i]
+		var path := "bones[%d]" % i
+		if node_ids.has(bone.id):
+			report.error(path + ".id", "duplicate id \"%s\" (also %s); bone, part and marker ids become node names and must be unique" % [bone.id, node_ids[bone.id]])
+		node_ids[bone.id] = path
+		if not bone.parent.is_empty():
+			if bone.parent == bone.id:
+				report.error(path + ".parent", "a bone cannot be its own parent")
+			elif not bone_index.has(bone.parent):
+				var later: bool = preset.bones.any(func(b): return b.id == bone.parent)
+				report.error(path + ".parent", ("bone \"%s\" must be listed before its child" if later else "no bone \"%s\"") % bone.parent)
+		bone_index[bone.id] = i
+	var textured := false
+	for i in preset.parts.size():
+		var part: Dictionary = preset.parts[i]
+		var path := "parts[%d]" % i
+		if node_ids.has(part.id):
+			report.error(path + ".id", "duplicate id \"%s\" (also %s); bone, part and marker ids become node names and must be unique" % [part.id, node_ids[part.id]])
+		node_ids[part.id] = path
+		if not part.bone.is_empty() and not bone_index.has(part.bone):
+			report.error(path + ".bone", "no bone \"%s\"%s" % [part.bone, _suggest_id(part.bone, bone_index.keys())])
+		if part.kind == "sprite" and part.texture.is_empty():
+			report.error(path + ".texture", "a sprite part needs an image")
+		if part.kind == "polygon" and part.polygon.size() < 3:
+			report.error(path + ".polygon", "a polygon part needs at least 3 points (got %d)" % part.polygon.size())
+		if part.kind == "sprite" and not part.polygon.is_empty():
+			report.warn(path + ".polygon", "is ignored for sprite parts")
+		textured = textured or not part.texture.is_empty()
+	for i in preset.markers.size():
+		var marker: Dictionary = preset.markers[i]
+		var path := "markers[%d]" % i
+		if node_ids.has(marker.id):
+			report.error(path + ".id", "duplicate id \"%s\" (also %s); bone, part and marker ids become node names and must be unique" % [marker.id, node_ids[marker.id]])
+		node_ids[marker.id] = path
+		if not marker.bone.is_empty() and not bone_index.has(marker.bone):
+			report.error(path + ".bone", "no bone \"%s\"%s" % [marker.bone, _suggest_id(marker.bone, bone_index.keys())])
+	var chain_of := {}
+	var chain_ids := {}
+	for i in preset.ik_chains.size():
+		var chain: Dictionary = preset.ik_chains[i]
+		var path := "ik_chains[%d]" % i
+		if chain_ids.has(chain.id):
+			report.error(path + ".id", "duplicate chain id \"%s\"" % chain.id)
+		chain_ids[chain.id] = true
+		for key in ["upper", "lower"]:
+			if not bone_index.has(chain[key]):
+				report.error("%s.%s" % [path, key], "no bone \"%s\"%s" % [chain[key], _suggest_id(chain[key], bone_index.keys())])
+			elif chain_of.has(chain[key]):
+				report.error("%s.%s" % [path, key], "bone \"%s\" is already in IK chain \"%s\"" % [chain[key], chain_of[chain[key]]])
+			else:
+				chain_of[chain[key]] = chain.id
+		if bone_index.has(chain.lower) and bone_index.has(chain.upper) and preset.bones[bone_index[chain.lower]].parent != chain.upper:
+			report.error(path + ".lower", "\"%s\" must be a direct child of \"%s\" (its parent is \"%s\")" % [chain.lower, chain.upper, preset.bones[bone_index[chain.lower]].parent])
+	var part_ids := {}
+	for part in preset.parts:
+		part_ids[part.id] = true
+	var names := {}
+	for i in preset.skins.size():
+		var skin: Dictionary = preset.skins[i]
+		var path := "skins[%d]" % i
+		if names.has(skin.name):
+			report.error(path + ".name", "duplicate skin name \"%s\"" % skin.name)
+		names[skin.name] = true
+		var seen := {}
+		for j in skin.parts.size():
+			var change: Dictionary = skin.parts[j]
+			var cpath := "%s.parts[%d]" % [path, j]
+			if not part_ids.has(change.part):
+				report.error(cpath + ".part", "no part \"%s\"%s" % [change.part, _suggest_id(change.part, part_ids.keys())])
+			elif seen.has(change.part):
+				report.error(cpath + ".part", "part \"%s\" is already changed by this skin" % change.part)
+			seen[change.part] = true
+			if change.texture.is_empty() and change.color.is_empty() and change.visible == "unchanged":
+				report.warn(cpath, "changes nothing (set texture, color or visible)")
+			textured = textured or not change.texture.is_empty()
+	names = {}
+	for i in preset.poses.size():
+		var pose: Dictionary = preset.poses[i]
+		var path := "poses[%d]" % i
+		if names.has(pose.name):
+			report.error(path + ".name", "duplicate pose name \"%s\"" % pose.name)
+		names[pose.name] = true
+		var seen := {}
+		for j in pose.bones.size():
+			var entry: Dictionary = pose.bones[j]
+			var bpath := "%s.bones[%d].bone" % [path, j]
+			if not bone_index.has(entry.bone):
+				report.error(bpath, "no bone \"%s\"%s" % [entry.bone, _suggest_id(entry.bone, bone_index.keys())])
+			elif seen.has(entry.bone):
+				report.error(bpath, "bone \"%s\" is already in this pose" % entry.bone)
+			elif chain_of.has(entry.bone):
+				report.warn(bpath, "bone \"%s\" is driven by IK chain \"%s\"; the chain overrides its rotation (move the chain's target instead)" % [entry.bone, chain_of[entry.bone]])
+			seen[entry.bone] = true
+	if textured and preset.source_license.is_empty():
+		report.warn("source_license", "is empty; record the license of the part images (where they came from and whether credit is required)")
+
+
+static func _suggest_id(wanted: String, ids: Array) -> String:
+	for id in ids:
+		if String(id).contains(wanted) or wanted.contains(String(id)):
+			return "; did you mean \"%s\"?" % id
+	return "" if ids.is_empty() else "; defined: %s" % ", ".join(PackedStringArray(ids.slice(0, 12)))
 
 
 static func _check_sprite_frames_semantics(_raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:

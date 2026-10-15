@@ -117,7 +117,7 @@ func test_batch_errors() -> void:
 	var empty := temp_dir("cli_batch_empty")
 	r = _cli(["validate-all", empty])
 	check_eq(r.code, 1, "empty folder fails")
-	check(r.output.contains("no *.vfx.json, *.sfx.json, *.anim.json or *.frames.json files"), "explains empty folder")
+	check(r.output.contains("no *.vfx.json, *.sfx.json, *.anim.json, *.frames.json or *.rig.json files"), "explains empty folder")
 	r = _cli(["generate-all", "res://does/not/exist"])
 	check_eq(r.code, 1, "missing folder fails")
 	check_eq(_cli(["validate-all"]).code, 2, "validate-all without directory is a usage error")
@@ -144,3 +144,19 @@ func test_internal_script_error_fails_the_cli() -> void:
 	var text := "\n".join(PackedStringArray(output))
 	check_eq(code, 1, "exit code; output:\n" + text)
 	check(text.contains("FAIL  internal error"), "reports an internal error")
+
+
+func test_import_rig_command() -> void:
+	var out := "res://_oasis_fx_test_output/cli_import/chef.rig.json"
+	var r := _cli(["import-rig", "addons/oasis_fx/presets/examples/rigs/chef_rig.tscn"])
+	check_eq(r.code, 2, "--out is required")
+	r = _cli(["import-rig", "addons/oasis_fx/presets/examples/rigs/chef_rig.tscn", "--out", out, "--id", "chef"])
+	check_eq(r.code, 0, "import exit code; output: " + r.output)
+	check(r.output.contains("chef (rig, 5 bone(s), 15 part(s)") and r.output.contains("note: "), "summary and notes: " + r.output)
+	r = _cli(["import-rig", "addons/oasis_fx/presets/examples/rigs/chef_rig.tscn", "--out", out])
+	check_eq(r.code, 1, "an existing preset is not overwritten without --force")
+	r = _cli(["validate", out])
+	check_eq(r.code, 0, "imported preset validates")
+	r = _cli(["import-rig", "addons/oasis_fx/presets/examples/fire_burst.vfx.json", "--out", out, "--force"])
+	check_eq(r.code, 1, "not a scene")
+	remove_tree("res://_oasis_fx_test_output/cli_import")

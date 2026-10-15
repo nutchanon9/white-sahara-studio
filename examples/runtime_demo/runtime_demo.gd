@@ -37,6 +37,11 @@ const CHEF_ANIMATIONS := {
 	&"cooking_success": preload("res://examples/runtime_demo/fx/chef_cooking_success.tres"),
 }
 
+## Rig generated from oasis_chef.rig.json (Phase 4) and the animation that
+## moves its IK targets.
+const RIG_REACH := preload("res://examples/runtime_demo/fx/oasis_chef_reach.tres")
+const RIG_POSES := ["", "wave", "crouch"]
+
 ## The looping sizzle while the stove is cooking (null when idle).
 var sizzle: Node2D
 
@@ -46,6 +51,7 @@ var sizzle: Node2D
 @onready var _pot_top: Marker2D = $Stove/PotTop
 @onready var _stove_animation: AnimationPlayer = $Stove/AnimationPlayer
 @onready var _chef_animation: AnimationPlayer = $Chef/AnimationPlayer
+@onready var _rig: Node2D = $OasisChef
 
 
 func _ready() -> void:
@@ -61,6 +67,34 @@ func _ready() -> void:
 	events.effects_parent = events.get_path_to(_effects_layer)
 	_chef_animation.animation_finished.connect(func(_name): _chef_animation.play(&"oasis/idle"))
 	_chef_animation.play(&"oasis/idle")
+	var rig_library := AnimationLibrary.new()
+	rig_library.add_animation(&"reach", RIG_REACH)
+	_rig.get_animation_player().add_animation_library(&"oasis", rig_library)
+	var rig_events: Node = $OasisChef/OasisAnimationEvents
+	rig_events.effects_parent = rig_events.get_path_to(_effects_layer)
+
+
+## Plays the generated rig's reach animation (IK targets move; feet stay put).
+func play_rig_reach() -> void:
+	_rig.set_pose("")
+	_rig.get_animation_player().play(&"oasis/reach")
+
+
+## Switches the generated rig to its next skin ("" = as generated).
+func next_rig_skin() -> String:
+	var names := [""] + Array(_rig.get_skin_names())
+	var next: String = names[(names.find(_rig.current_skin) + 1) % names.size()]
+	_rig.apply_skin(next)
+	return next
+
+
+## Switches the generated rig to its next pose ("" = rest).
+func next_rig_pose() -> String:
+	var current: String = _rig.get_meta("demo_pose", "")
+	var next: String = RIG_POSES[(RIG_POSES.find(current) + 1) % RIG_POSES.size()]
+	_rig.set_pose(next)
+	_rig.set_meta("demo_pose", next)
+	return next
 
 
 ## Plays one of the chef animations ("ladle_attack", "cooking_success");
@@ -119,3 +153,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				play_chef(&"ladle_attack")
 			KEY_S:
 				play_chef(&"cooking_success")
+			KEY_R:
+				play_rig_reach()
+			KEY_K:
+				next_rig_skin()
+			KEY_P:
+				next_rig_pose()

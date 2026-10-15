@@ -13,6 +13,8 @@ extends SceneTree
 ##            [--force] [--dry-run]
 ##   format <preset|dir> [--check]              rewrite presets in canonical form
 ##   schema [TYPE] [--write]                    print a JSON Schema, or rewrite all schema files
+##   import-rig <scene.tscn> --out <f.rig.json> make a rig preset from an existing scene
+##            [--id ID] [--force]
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
 ##
@@ -28,6 +30,8 @@ const Schema := preload("res://addons/oasis_fx/src/core/vfx_schema.gd")
 const Serializer := preload("res://addons/oasis_fx/src/core/preset_serializer.gd")
 const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
+const RigImporter := preload("res://addons/oasis_fx/src/core/rig_importer.gd")
+const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 
 const EXIT_OK := 0
 const EXIT_FAILED := 1
@@ -39,16 +43,19 @@ Usage:
   godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- <command> [options]
 
 Commands:
-  validate <preset>      Validate a preset (.vfx.json, .sfx.json, .anim.json or .frames.json).
+  validate <preset>      Validate a preset (.vfx.json, .sfx.json, .anim.json, .frames.json or .rig.json).
   validate-all <dir>     Validate every preset under <dir> (recursive); ids must be unique.
-  generate <preset>      Validate and write <out>/<id>.tscn (effects, sounds) or <id>.tres
-                         (animations, sprite frames).
+  generate <preset>      Validate and write <out>/<id>.tscn (effects, sounds, rigs) or
+                         <id>.tres (animations, sprite frames).
   generate-all <dir>     Generate every preset under <dir>. Writes nothing unless all are valid.
   format <preset|dir>    Rewrite presets in canonical form (key order, spacing, numbers).
                          With --check, only report files that are not canonical.
   schema [TYPE]          Print the JSON Schema of an asset type: vfx (default), sfx,
-                         animation or sprite_frames. With --write, rewrite every
+                         animation, sprite_frames or rig. With --write, rewrite every
                          schemas/<type>.v1.schema.json file.
+  import-rig <scene>     Make a rig preset from an existing scene with a Skeleton2D
+                         (the scene is not changed). Needs --out <file.rig.json>;
+                         --id sets the rig id, --force overwrites the preset.
   version                Print the OasisFx version.
   help                   Show this help.
 
@@ -103,6 +110,14 @@ func _run(args: PackedStringArray) -> int:
 		"help", "--help", "-h":
 			print(USAGE % [OasisFx.VERSION, OasisFx.DEFAULT_OUTPUT_DIR])
 			return EXIT_OK
+		"import-rig":
+			if rest.size() != 1:
+				return _usage_error("import-rig expects exactly one scene (.tscn)")
+			if not parsed.flags.has("out"):
+				return _usage_error("import-rig needs --out <file.rig.json>")
+			if parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check"):
+				return _usage_error("import-rig only accepts --out, --id and --force")
+			return _import_rig(rest[0], parsed.flags.out, parsed.flags.get("id", ""), parsed.flags.has("force"))
 		"version":
 			_emit({"command": "version", "ok": true, "version": OasisFx.VERSION}, "OasisFx " + OasisFx.VERSION)
 			return EXIT_OK
@@ -154,6 +169,40 @@ func _validate(arg: String) -> int:
 	lines.append(("OK    %s  %s" % [path, summary]) if report.is_ok() else ("FAIL  %s" % path))
 	lines.append_array(report.format_lines())
 	_emit(data, "\n".join(lines))
+	return EXIT_OK if report.is_ok() else EXIT_FAILED
+
+
+## Writes a rig preset made from an existing scene (the scene is not changed),
+## then validates it and prints what could not be imported.
+func _import_rig(scene_arg: String, out_arg: String, id: String, force: bool) -> int:
+	var scene := PathUtils.resolve_input_path(scene_arg)
+	var out := PathUtils.resolve_input_path(out_arg)
+	if not out.ends_with(AssetTypes.suffix("rig")):
+		return _usage_error("--out must end with %s" % AssetTypes.suffix("rig"))
+	if FileAccess.file_exists(out) and not force:
+		return _fail_message("import-rig", "%s already exists; pass --force to overwrite it" % out)
+	if not id.is_empty() and not RegEx.create_from_string(Spec.ID_PATTERN).search(id):
+		return _usage_error("--id must be lowercase snake_case")
+	var imported := RigImporter.import_scene(scene, PackedStringArray())
+	if not id.is_empty() and imported.ok:
+		imported.preset.id = id
+	if not imported.ok:
+		return _fail_message("import-rig", imported.error)
+	DirAccess.make_dir_recursive_absolute(out.get_base_dir())
+	var file := FileAccess.open(out, FileAccess.WRITE)
+	if file == null:
+		return _fail_message("import-rig", "cannot write %s: %s" % [out, error_string(FileAccess.get_open_error())])
+	file.store_string(Serializer.to_text(imported.preset))
+	file.close()
+	var report := Report.new(out)
+	var preset := Validator.validate_file(out, report)
+	var lines := PackedStringArray(["%s  %s -> %s%s" % ["OK  " if report.is_ok() else "FAIL", scene, out, ("  " + _summary(preset)) if report.is_ok() else ""]])
+	for note in imported.notes:
+		lines.append("  note: " + note)
+	lines.append_array(report.format_lines())
+	var data := report.to_dict()
+	data["notes"] = imported.notes
+	_emit({"command": "import-rig", "ok": report.is_ok(), "output_path": out, "results": [data]}, "\n".join(lines))
 	return EXIT_OK if report.is_ok() else EXIT_FAILED
 
 
@@ -320,6 +369,9 @@ static func _type_list() -> String:
 
 
 static func _summary(preset: Dictionary) -> String:
+	if preset.get("asset_type") == "rig":
+		return "%s (rig, %d bone(s), %d part(s), %d IK chain(s), %d skin(s), %d pose(s))" % [preset.id, preset.bones.size(),
+				preset.parts.size(), preset.ik_chains.size(), preset.skins.size(), preset.poses.size()]
 	if preset.get("asset_type") == "animation":
 		return "%s (animation, %d track(s), %d event(s), %s s%s)" % [preset.id, preset.tracks.size(), preset.events.size(),
 				Serializer.number(preset.duration_seconds), ", loop" if preset.loop else ""]
@@ -359,6 +411,11 @@ func _parse(args: PackedStringArray) -> Dictionary:
 			flags["out"] = args[i]
 		elif arg.begins_with("--out="):
 			flags["out"] = arg.substr(6)
+		elif arg == "--id":
+			if i + 1 >= args.size():
+				return {"flags": flags, "positional": positional, "error": "--id needs a rig id"}
+			i += 1
+			flags["id"] = args[i]
 		elif arg in ["--help", "-h"]:
 			positional.push_front("help")
 		elif arg.begins_with("-"):
