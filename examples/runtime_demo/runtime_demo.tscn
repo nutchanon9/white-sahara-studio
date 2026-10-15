@@ -1,0 +1,131 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://examples/runtime_demo/runtime_demo.gd" id="1_2itws"]
+[ext_resource type="PackedScene" path="res://examples/runtime_demo/vfx/campfire_loop.tscn" id="2_8x121"]
+
+[sub_resource type="Animation" id="Animation_t3psv"]
+resource_name = "attack"
+length = 0.5
+tracks/0/type = "method"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("..")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0.18),
+"transitions": PackedFloat32Array(1),
+"values": [{
+"args": [],
+"method": &"_on_attack_hit_frame"
+}]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("SwordPivot:rotation")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.5),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [-1.0471975511965976, 0.6981317007977318, -1.0471975511965976]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_ogfea"]
+_data = {
+&"attack": SubResource("Animation_t3psv")
+}
+
+[sub_resource type="Animation" id="Animation_bfiak"]
+resource_name = "cook"
+length = 1.2
+tracks/0/type = "method"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("..")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(1.2),
+"transitions": PackedFloat32Array(1),
+"values": [{
+"args": [],
+"method": &"_on_cooking_complete"
+}]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_vydii"]
+_data = {
+&"cook": SubResource("Animation_bfiak")
+}
+
+[node name="RuntimeDemo" type="Node2D" unique_id=1822711868]
+script = ExtResource("1_2itws")
+
+[node name="Background" type="ColorRect" parent="." unique_id=1073974193]
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+color = Color(0.12, 0.11, 0.15, 1)
+
+[node name="Floor" type="ColorRect" parent="." unique_id=897319855]
+offset_top = 520.0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+color = Color(0.2, 0.17, 0.16, 1)
+
+[node name="Help" type="Label" parent="." unique_id=1047685550]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 24.0
+offset_bottom = 20.0
+text = "OasisFx runtime demo
+Left click: Fire Burst   Right click: Ice Nova
+Space: attack (Sword Slash on the hit frame)   C: cook (Cooking Success when done)"
+
+[node name="Hero" type="Node2D" parent="." unique_id=503854990]
+position = Vector2(380, 470)
+
+[node name="Body" type="Polygon2D" parent="Hero" unique_id=1504039226]
+color = Color(0.35, 0.55, 0.85, 1)
+polygon = PackedVector2Array(-26, -90, 26, -90, 30, 50, -30, 50)
+
+[node name="Head" type="Polygon2D" parent="Hero" unique_id=2129894388]
+color = Color(0.95, 0.82, 0.68, 1)
+polygon = PackedVector2Array(-22, -130, 22, -130, 22, -92, -22, -92)
+
+[node name="SwordPivot" type="Node2D" parent="Hero" unique_id=760409812]
+position = Vector2(20, -40)
+rotation = -1.0471976
+
+[node name="Blade" type="Polygon2D" parent="Hero/SwordPivot" unique_id=343138384]
+color = Color(0.85, 0.9, 0.95, 1)
+polygon = PackedVector2Array(0, -4, 90, -3, 100, 0, 90, 3, 0, 4)
+
+[node name="Hand" type="Marker2D" parent="Hero/SwordPivot" unique_id=1651515082]
+position = Vector2(70, 0)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Hero" unique_id=1660716196]
+libraries/ = SubResource("AnimationLibrary_ogfea")
+
+[node name="Stove" type="Node2D" parent="." unique_id=1604075524]
+position = Vector2(880, 470)
+
+[node name="Campfire" parent="Stove" unique_id=1553235885 instance=ExtResource("2_8x121")]
+position = Vector2(0, 40)
+
+[node name="Pot" type="Polygon2D" parent="Stove" unique_id=852116723]
+color = Color(0.3, 0.3, 0.33, 1)
+polygon = PackedVector2Array(-60, -30, 60, -30, 48, 30, -48, 30)
+
+[node name="PotTop" type="Marker2D" parent="Stove" unique_id=1422546230]
+position = Vector2(0, -40)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Stove" unique_id=1491187165]
+libraries/ = SubResource("AnimationLibrary_vydii")
+
+[node name="Effects" type="Node2D" parent="." unique_id=1757509283]
+z_index = 10

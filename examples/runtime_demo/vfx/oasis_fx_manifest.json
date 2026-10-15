@@ -1,0 +1,52 @@
+{
+  "entries": {
+    "campfire_loop": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/campfire_loop.vfx.json",
+      "preset_sha256": "19f8fbcce68f3ce140456d5281cd6860beec16fbce8d0b8b806e3f12a8aba517",
+      "scene": "res://examples/runtime_demo/vfx/campfire_loop.tscn",
+      "scene_sha256": "2a24b680c92ac5aab9feb25cc1f71d3d02fcc3face458737df96fac4d53ec319"
+    },
+    "cooking_success": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/cooking_success.vfx.json",
+      "preset_sha256": "7895aa236c8a07de1119160aa0dfb33dec0d178cc0d34312bea647a9d1089e15",
+      "scene": "res://examples/runtime_demo/vfx/cooking_success.tscn",
+      "scene_sha256": "55cb9ace6079f5443ba6afae9928cb74dc1ae608d8936553818fbec7dded5910"
+    },
+    "fire_burst": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json",
+      "preset_sha256": "68648910a032d992c609b3c3dc4e7e42ca3c29ed5c958d9cc9199c3734905e6a",
+      "scene": "res://examples/runtime_demo/vfx/fire_burst.tscn",
+      "scene_sha256": "e124fb7740e92532f7e64fcde925857e38aa0fa17636dff7b8fff6b745fb7ecd"
+    },
+    "ice_nova": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/ice_nova.vfx.json",
+      "preset_sha256": "463300452c2221389d121f9f800067cb439534227ada403e2d46f2ff309a3c8a",
+      "scene": "res://examples/runtime_demo/vfx/ice_nova.tscn",
+      "scene_sha256": "4b270cff6ca9e2adf2c8d7db23c2c9160cd71c7cbc774bb15d91afaa885c04b5"
+    },
+    "sword_slash": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/sword_slash.vfx.json",
+      "preset_sha256": "76429eb6c5836458584776e04d092b4f3d0b3fb2d30bfd3ac24b1f72cdd14c0b",
+      "scene": "res://examples/runtime_demo/vfx/sword_slash.tscn",
+      "scene_sha256": "bff04344de3ee2ac0397f0cd7a079e4e63aee8834d361826136152f46e18543e"
+    }
+  },
+  "format": "oasis_fx_manifest",
+  "format_version": 1,
+  "generator": "OasisFx 0.2.0"
+}

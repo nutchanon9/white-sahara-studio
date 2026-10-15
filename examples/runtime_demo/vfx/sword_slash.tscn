@@ -1,0 +1,158 @@
+[gd_scene format=3 uid="uid://jjnuhk4nkpf2"]
+
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
+
+[sub_resource type="CanvasItemMaterial" id="arc_glow_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="arc_glow_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="arc_glow_texture"]
+gradient = SubResource("arc_glow_texture_gradient")
+width = 48
+height = 48
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="arc_glow_color_gradient"]
+colors = PackedColorArray(0.62352943, 0.84705883, 1, 0.4, 0.24705882, 0.5019608, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="arc_glow_color_ramp"]
+gradient = SubResource("arc_glow_color_gradient")
+
+[sub_resource type="Curve" id="arc_glow_scale_curve"]
+_data = [Vector2(0, 1), 0.0, -0.6999999, 1, 1, Vector2(1, 0.3), -0.6999999, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="arc_glow_scale_curve_texture"]
+curve = SubResource("arc_glow_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="arc_glow_process"]
+particle_flag_disable_z = true
+emission_shape_offset = Vector3(0, -64, 0)
+spread = 0.0
+orbit_velocity_min = -2.5
+orbit_velocity_max = -2.5
+gravity = Vector3(0, 0, 0)
+scale_curve = SubResource("arc_glow_scale_curve_texture")
+color_ramp = SubResource("arc_glow_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="arc_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="arc_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="arc_texture"]
+gradient = SubResource("arc_texture_gradient")
+width = 20
+height = 20
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="arc_color_gradient"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0.7490196, 0.9137255, 1, 0.8666667, 0.43529412, 0.72156864, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="arc_color_ramp"]
+gradient = SubResource("arc_color_gradient")
+
+[sub_resource type="Curve" id="arc_scale_curve"]
+_data = [Vector2(0, 1), 0.0, -0.85, 1, 1, Vector2(1, 0.15), -0.85, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="arc_scale_curve_texture"]
+curve = SubResource("arc_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="arc_process"]
+particle_flag_disable_z = true
+emission_shape_offset = Vector3(0, -64, 0)
+spread = 0.0
+orbit_velocity_min = -2.5
+orbit_velocity_max = -2.5
+gravity = Vector3(0, 0, 0)
+scale_max = 1.1
+scale_curve = SubResource("arc_scale_curve_texture")
+color_ramp = SubResource("arc_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="sparks_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="sparks_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.3, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.8, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="sparks_texture"]
+gradient = SubResource("sparks_texture_gradient")
+width = 4
+height = 16
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="sparks_color_gradient"]
+colors = PackedColorArray(1, 1, 1, 1, 0.62352943, 0.84705883, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="sparks_color_ramp"]
+gradient = SubResource("sparks_color_gradient")
+
+[sub_resource type="ParticleProcessMaterial" id="sparks_process"]
+particle_flag_align_y = true
+particle_flag_disable_z = true
+direction = Vector3(0.766044, 0.642788, 0)
+spread = 40.0
+initial_velocity_min = 200.0
+initial_velocity_max = 380.0
+gravity = Vector3(0, 0, 0)
+damping_min = 400.0
+damping_max = 600.0
+scale_min = 0.6
+color_ramp = SubResource("sparks_color_ramp")
+
+[node name="sword_slash" type="Node2D" unique_id=976283414]
+script = ExtResource("oasis_fx_runtime")
+effect_id = "sword_slash"
+duration_seconds = 0.4
+emitter_delays = {
+"sparks": 0.15
+}
+
+[node name="arc_glow" type="GPUParticles2D" parent="." unique_id=791075219]
+z_index = -1
+material = SubResource("arc_glow_canvas_material")
+rotation = -0.6981317
+emitting = false
+amount = 28
+texture = SubResource("arc_glow_texture")
+lifetime = 0.2
+one_shot = true
+visibility_rect = Rect2(-96, -96, 192, 192)
+process_material = SubResource("arc_glow_process")
+
+[node name="arc" type="GPUParticles2D" parent="." unique_id=670430107]
+material = SubResource("arc_canvas_material")
+rotation = -0.6981317
+emitting = false
+amount = 56
+texture = SubResource("arc_texture")
+lifetime = 0.2
+one_shot = true
+visibility_rect = Rect2(-83, -83, 166, 166)
+process_material = SubResource("arc_process")
+
+[node name="sparks" type="GPUParticles2D" parent="." unique_id=1329829497]
+material = SubResource("sparks_canvas_material")
+position = Vector2(50, 36)
+emitting = false
+amount = 12
+texture = SubResource("sparks_texture")
+lifetime = 0.3
+one_shot = true
+explosiveness = 0.9
+visibility_rect = Rect2(-130, -130, 260, 260)
+process_material = SubResource("sparks_process")

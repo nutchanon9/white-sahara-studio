@@ -1,0 +1,222 @@
+[gd_scene format=3 uid="uid://b6edoyole5qu"]
+
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
+
+[sub_resource type="CanvasItemMaterial" id="glow_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="glow_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="glow_texture"]
+gradient = SubResource("glow_texture_gradient")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="glow_color_gradient"]
+colors = PackedColorArray(1, 0.9098039, 0.6039216, 0.6, 1, 0.7607843, 0.2901961, 0)
+
+[sub_resource type="GradientTexture1D" id="glow_color_ramp"]
+gradient = SubResource("glow_color_gradient")
+
+[sub_resource type="Curve" id="glow_scale_curve"]
+_limits = [0.0, 1.6, 0.0, 1.0]
+_data = [Vector2(0, 1), 0.0, 0.6, 1, 1, Vector2(1, 1.6), 0.6, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="glow_scale_curve_texture"]
+curve = SubResource("glow_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="glow_process"]
+particle_flag_disable_z = true
+spread = 0.0
+gravity = Vector3(0, 0, 0)
+scale_min = 1.2
+scale_max = 1.2
+scale_curve = SubResource("glow_scale_curve_texture")
+color_ramp = SubResource("glow_color_ramp")
+
+[sub_resource type="Gradient" id="steam_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="steam_texture"]
+gradient = SubResource("steam_texture_gradient")
+width = 48
+height = 48
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="steam_color_gradient"]
+colors = PackedColorArray(1, 1, 1, 0.2509804, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="steam_color_ramp"]
+gradient = SubResource("steam_color_gradient")
+
+[sub_resource type="Curve" id="steam_scale_curve"]
+_limits = [0.0, 1.8, 0.0, 1.0]
+_data = [Vector2(0, 1), 0.0, 0.79999995, 1, 1, Vector2(1, 1.8), 0.79999995, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="steam_scale_curve_texture"]
+curve = SubResource("steam_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="steam_process"]
+particle_flag_disable_z = true
+emission_shape = 3
+emission_box_extents = Vector3(30, 0, 0)
+direction = Vector3(0, -1, 0)
+spread = 15.0
+initial_velocity_min = 30.0
+initial_velocity_max = 60.0
+gravity = Vector3(0, -30, 0)
+scale_min = 0.4
+scale_max = 0.6
+scale_curve = SubResource("steam_scale_curve_texture")
+color_ramp = SubResource("steam_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="sparkles_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="sparkles_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.85, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="sparkles_texture"]
+gradient = SubResource("sparkles_texture_gradient")
+width = 10
+height = 10
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="sparkles_color_gradient"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(1, 0.9647059, 0.78431374, 1, 1, 0.83137256, 0.3529412, 1, 1, 0.6901961, 0.1882353, 0)
+
+[sub_resource type="GradientTexture1D" id="sparkles_color_ramp"]
+gradient = SubResource("sparkles_color_gradient")
+
+[sub_resource type="Curve" id="sparkles_scale_curve"]
+_data = [Vector2(0, 1), 0.0, -0.6999999, 1, 1, Vector2(1, 0.3), -0.6999999, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="sparkles_scale_curve_texture"]
+curve = SubResource("sparkles_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="sparkles_process"]
+lifetime_randomness = 0.3
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 10.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+direction = Vector3(0, -1, 0)
+spread = 70.0
+initial_velocity_min = 150.0
+initial_velocity_max = 260.0
+gravity = Vector3(0, 320, 0)
+damping_min = 20.0
+damping_max = 40.0
+scale_min = 0.6
+scale_max = 1.1
+scale_curve = SubResource("sparkles_scale_curve_texture")
+color_ramp = SubResource("sparkles_color_ramp")
+
+[sub_resource type="Gradient" id="confetti_texture_gradient"]
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture2D" id="confetti_texture"]
+gradient = SubResource("confetti_texture_gradient")
+width = 8
+height = 8
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="confetti_color_gradient"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(1, 0.6901961, 0.41568628, 1, 1, 0.6901961, 0.41568628, 1, 1, 0.6901961, 0.41568628, 0)
+
+[sub_resource type="GradientTexture1D" id="confetti_color_ramp"]
+gradient = SubResource("confetti_color_gradient")
+
+[sub_resource type="ParticleProcessMaterial" id="confetti_process"]
+lifetime_randomness = 0.2
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 8.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+angle_max = 360.0
+direction = Vector3(0, -1, 0)
+spread = 60.0
+initial_velocity_min = 160.0
+initial_velocity_max = 260.0
+angular_velocity_min = -540.0
+angular_velocity_max = 540.0
+gravity = Vector3(0, 300, 0)
+damping_min = 40.0
+damping_max = 60.0
+scale_min = 0.6
+color_ramp = SubResource("confetti_color_ramp")
+hue_variation_min = -0.06
+hue_variation_max = 0.06
+
+[node name="cooking_success" type="Node2D" unique_id=1547017231]
+script = ExtResource("oasis_fx_runtime")
+effect_id = "cooking_success"
+duration_seconds = 1.2
+emitter_delays = {
+"steam": 0.2
+}
+
+[node name="glow" type="GPUParticles2D" parent="." unique_id=1352749655]
+z_index = -1
+material = SubResource("glow_canvas_material")
+emitting = false
+amount = 1
+texture = SubResource("glow_texture")
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+visibility_rect = Rect2(-131, -131, 262, 262)
+process_material = SubResource("glow_process")
+
+[node name="steam" type="GPUParticles2D" parent="." unique_id=1705572696]
+emitting = false
+amount = 6
+texture = SubResource("steam_texture")
+one_shot = true
+explosiveness = 0.3
+visibility_rect = Rect2(-139, -139, 278, 278)
+process_material = SubResource("steam_process")
+
+[node name="sparkles" type="GPUParticles2D" parent="." unique_id=827942275]
+material = SubResource("sparkles_canvas_material")
+emitting = false
+amount = 22
+texture = SubResource("sparkles_texture")
+lifetime = 0.9
+one_shot = true
+explosiveness = 0.85
+visibility_rect = Rect2(-388, -388, 776, 776)
+process_material = SubResource("sparkles_process")
+
+[node name="confetti" type="GPUParticles2D" parent="." unique_id=1035509370]
+emitting = false
+amount = 18
+texture = SubResource("confetti_texture")
+lifetime = 1.1
+one_shot = true
+explosiveness = 0.9
+visibility_rect = Rect2(-488, -488, 976, 976)
+process_material = SubResource("confetti_process")

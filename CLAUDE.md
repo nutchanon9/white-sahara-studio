@@ -33,7 +33,13 @@ logged errors via `OS.add_logger`, per-test timeout, regression suite
 `tests/test_runner.gd`; full suite 53 passed, 0 failed on Godot 4.7.2). Phase 1A awaits
 owner acceptance.
 
-Stop after that review fix unless the user has requested a later milestone.
+**Phase 1B (user requested, 2026-10-15):** implemented on `claude/cool-brown-hrne5t` —
+multi-emitter schema v1 (additive optional fields), five example presets, `validate-all`,
+`generate-all`, `schema`, manifest, runtime script `src/runtime/oasis_fx_effect.gd`,
+`examples/runtime_demo/` with committed golden scenes, AI authoring guide. Full suite
+86 passed, 0 failed on Godot 4.7.2. Awaiting owner acceptance before Phase 1C.
+
+Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.
 

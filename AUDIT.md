@@ -102,3 +102,24 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 ส่วนที่สเปกเสนอแต่ **ยังไม่ทำใน Phase 1A** (โดยตั้งใจ): `plugin.cfg`/`plugin.gd`, `src/editor/`,
 `src/runtime/`, `asset_manifest.gd`, `validate-all`/`generate-all`, preset ตัวอย่างอีก 3 แบบ,
 `ai_authoring_guide.md`, `architecture.md`, `compatibility.md`, GitHub Actions
+
+---
+
+## 7. ภาคผนวก (2026-10-15): การตัดสินใจใน Phase 1B
+
+ส่วนนี้เพิ่มต่อท้าย ไม่ได้แก้ข้อสังเกตเดิมด้านบน
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| ขยาย schema | คง `schema_version: 1` และเพิ่มเฉพาะ field แบบ optional; ขยาย emitter สูงสุด 1 → 8 | preset ของ 0.1 ทุกไฟล์ยังถูกต้องและได้ผลเหมือนเดิม จึงไม่ต้องมี migration |
+| JSON Schema | สร้างจาก `vfx_spec.gd` (`vfx_schema.gd`, คำสั่ง `schema --write`) และมีเทสต์เทียบไฟล์ทุก byte | ป้องกัน schema ไม่ตรงกับ validator; ตรวจกับ Python `jsonschema` 4.26 (Draft 2020-12) แล้วผ่าน |
+| Playback | script เล็ก ๆ `src/runtime/oasis_fx_effect.gd` (class `OasisFxEffect`) ติดอยู่กับ root ของ scene ที่ generate | ทำ delay, ปิด emitter ที่ duration, loop, ลบตัวเองโดยไม่แตะ node แม่ และ restart/pause ได้ ซึ่ง GPUParticles2D ทำเองไม่ได้; ไม่ใช่ `@tool` จึงไม่เล่นหรือลบตัวเองเมื่อเปิดใน editor |
+| ผลกับเกม | scene อ้างถึง runtime script ด้วย path → เกมต้องมี `addons/oasis_fx/src/runtime/` | Phase 1C exporter จะต้อง copy/map ไฟล์นี้ (ระบุไว้ใน `dependencies` ของ manifest แล้ว) |
+| พฤติกรรม scene เปลี่ยนจาก 1A | เดิม emitter `emitting = true` เล่นเองตอน instantiate; ตอนนี้ `emitting = false` และให้ runtime สั่งเล่น (`auto_play` ค่าเริ่มต้น true) | เพื่อให้ delay/loop/cleanup ทำงานได้; สำหรับผู้ใช้ผลเหมือนเดิม (เล่นทันที) |
+| Determinism ของ ext_resource | ใช้ `Resource.set_id_for_path()` ให้ id คงที่ (`oasis_fx_runtime`, `<emitter>_texture_file`) | ค่าเริ่มต้นของ Godot สุ่ม id แบบ `1_ab3xy`; CLI ไม่เขียน uid ของ script ทั้งบน clone ใหม่และหลัง import → ผลเหมือนกัน (ทดสอบแล้ว) |
+| Manifest | `oasis_fx_manifest.json` หนึ่งไฟล์ต่อโฟลเดอร์ output, sort key, ไม่มี timestamp | รู้ว่าไฟล์ไหนถูกแก้มือ (เตือนตอน `--force`) และรู้ dependency สำหรับ export ใน 1C |
+| Batch | `generate-all` ทำทั้งหมดหรือไม่ทำเลย (ตรวจทุกไฟล์, id ซ้ำ, ไฟล์ที่มีอยู่แล้ว ก่อนเขียน) | ไม่เหลือโฟลเดอร์ที่ generate ไปครึ่งเดียว |
+| Exit code ของ CLI | ใช้ `ErrorCapture` (Logger) ร่วมกับ test runner; มี error ใดถูก log → exit 1 | พบว่า script error ใน `_run()` เดิมทำให้ CLI exit 0 (ทดสอบซ้ำได้) |
+| Golden files | commit scene ที่ generate แล้วใน `examples/runtime_demo/vfx/` และให้เทสต์ระดับ repo (`tests/`) generate ใหม่แล้วเทียบ | เดโมรันได้ทันทีบน clone ใหม่ และจับการเปลี่ยน output โดยไม่ตั้งใจ |
+| ทิศทางหมุน | ตรวจจากภาพจริง: `orbit_velocity` > 0 หมุนทวนเข็มบนจอ, `rotation_degrees` > 0 หมุนตามเข็ม | เอกสารเดิมในร่างแรกเขียนทิศ orbit ผิด แก้แล้วหลัง render |
+| ภาพ preview | ภาพใน `docs/images/` render จริงด้วย Xvfb + Mesa llvmpipe (software OpenGL) | ใช้ดูทิศทาง/สี/ขนาด ไม่เท่ากับการตรวจบน GPU จริงหรือบน Windows |

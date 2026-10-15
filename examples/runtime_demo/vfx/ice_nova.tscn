@@ -1,0 +1,231 @@
+[gd_scene format=3 uid="uid://i68atwofdp1k"]
+
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
+
+[sub_resource type="CanvasItemMaterial" id="shockwave_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="shockwave_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.6, 0.8, 1)
+colors = PackedColorArray(1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="shockwave_texture"]
+gradient = SubResource("shockwave_texture_gradient")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="shockwave_color_gradient"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.9098039, 0.9843137, 1, 1, 0.62352943, 0.9019608, 1, 0.6666667, 0.37254903, 0.78431374, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="shockwave_color_ramp"]
+gradient = SubResource("shockwave_color_gradient")
+
+[sub_resource type="Curve" id="shockwave_scale_curve"]
+_limits = [0.0, 6.0, 0.0, 1.0]
+_data = [Vector2(0, 1), 0.0, 5.0, 1, 1, Vector2(1, 6), 5.0, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="shockwave_scale_curve_texture"]
+curve = SubResource("shockwave_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="shockwave_process"]
+particle_flag_disable_z = true
+spread = 0.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.3
+scale_max = 0.3
+scale_curve = SubResource("shockwave_scale_curve_texture")
+color_ramp = SubResource("shockwave_color_ramp")
+
+[sub_resource type="Gradient" id="mist_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="mist_texture"]
+gradient = SubResource("mist_texture_gradient")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="mist_color_gradient"]
+colors = PackedColorArray(0.8117647, 0.9607843, 1, 0.33333334, 0.56078434, 0.827451, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="mist_color_ramp"]
+gradient = SubResource("mist_color_gradient")
+
+[sub_resource type="Curve" id="mist_scale_curve"]
+_limits = [0.0, 1.4, 0.0, 1.0]
+_data = [Vector2(0, 1), 0.0, 0.39999998, 1, 1, Vector2(1, 1.4), 0.39999998, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="mist_scale_curve_texture"]
+curve = SubResource("mist_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="mist_process"]
+lifetime_randomness = 0.3
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 60.0
+emission_ring_inner_radius = 30.0
+emission_ring_cone_angle = 90.0
+spread = 180.0
+initial_velocity_min = 10.0
+initial_velocity_max = 30.0
+gravity = Vector3(0, 0, 0)
+tangential_accel_min = 40.0
+tangential_accel_max = 80.0
+scale_min = 0.8
+scale_max = 1.3
+scale_curve = SubResource("mist_scale_curve_texture")
+color_ramp = SubResource("mist_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="shards_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="shards_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.3, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.8, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="shards_texture"]
+gradient = SubResource("shards_texture_gradient")
+width = 8
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="shards_color_gradient"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0.72156864, 0.9411765, 1, 1, 0.30980393, 0.7058824, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="shards_color_ramp"]
+gradient = SubResource("shards_color_gradient")
+
+[sub_resource type="Curve" id="shards_scale_curve"]
+_data = [Vector2(0, 1), 0.0, -0.6, 1, 1, Vector2(1, 0.4), -0.6, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="shards_scale_curve_texture"]
+curve = SubResource("shards_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="shards_process"]
+lifetime_randomness = 0.2
+particle_flag_align_y = true
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 10.0
+emission_ring_inner_radius = 10.0
+emission_ring_cone_angle = 90.0
+spread = 180.0
+initial_velocity_min = 220.0
+initial_velocity_max = 340.0
+gravity = Vector3(0, 0, 0)
+damping_min = 300.0
+damping_max = 420.0
+scale_min = 0.7
+scale_curve = SubResource("shards_scale_curve_texture")
+color_ramp = SubResource("shards_color_ramp")
+
+[sub_resource type="CanvasItemMaterial" id="glints_canvas_material"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="glints_texture_gradient"]
+offsets = PackedFloat32Array(0, 0.85, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="glints_texture"]
+gradient = SubResource("glints_texture_gradient")
+width = 8
+height = 8
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="glints_color_gradient"]
+colors = PackedColorArray(1, 1, 1, 1, 0.8117647, 0.9647059, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="glints_color_ramp"]
+gradient = SubResource("glints_color_gradient")
+
+[sub_resource type="Curve" id="glints_scale_curve"]
+_data = [Vector2(0, 1), 0.0, -1.0, 1, 1, Vector2(1, 0), -1.0, 0.0, 1, 1]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="glints_scale_curve_texture"]
+curve = SubResource("glints_scale_curve")
+
+[sub_resource type="ParticleProcessMaterial" id="glints_process"]
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 0.0
+emission_ring_radius = 70.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+direction = Vector3(0, -1, 0)
+spread = 180.0
+initial_velocity_max = 10.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.5
+scale_curve = SubResource("glints_scale_curve_texture")
+color_ramp = SubResource("glints_color_ramp")
+
+[node name="ice_nova" type="Node2D" unique_id=967511985]
+script = ExtResource("oasis_fx_runtime")
+effect_id = "ice_nova"
+emitter_delays = {
+"glints": 0.15,
+"mist": 0.05
+}
+
+[node name="shockwave" type="GPUParticles2D" parent="." unique_id=184237579]
+material = SubResource("shockwave_canvas_material")
+emitting = false
+amount = 1
+texture = SubResource("shockwave_texture")
+lifetime = 0.45
+one_shot = true
+explosiveness = 1.0
+visibility_rect = Rect2(-124, -124, 248, 248)
+process_material = SubResource("shockwave_process")
+
+[node name="mist" type="GPUParticles2D" parent="." unique_id=442341693]
+z_index = -1
+emitting = false
+amount = 14
+texture = SubResource("mist_texture")
+lifetime = 0.9
+one_shot = true
+explosiveness = 0.8
+visibility_rect = Rect2(-186, -186, 372, 372)
+process_material = SubResource("mist_process")
+
+[node name="shards" type="GPUParticles2D" parent="." unique_id=906747333]
+material = SubResource("shards_canvas_material")
+emitting = false
+amount = 24
+texture = SubResource("shards_texture")
+lifetime = 0.55
+one_shot = true
+explosiveness = 1.0
+visibility_rect = Rect2(-222, -222, 444, 444)
+process_material = SubResource("shards_process")
+
+[node name="glints" type="GPUParticles2D" parent="." unique_id=442149969]
+material = SubResource("glints_canvas_material")
+emitting = false
+amount = 10
+texture = SubResource("glints_texture")
+lifetime = 0.4
+one_shot = true
+explosiveness = 0.4
+visibility_rect = Rect2(-86, -86, 172, 172)
+process_material = SubResource("glints_process")
