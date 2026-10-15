@@ -6,7 +6,9 @@ extends SceneTree
 ##   godot --headless --path . --script res://tools/synth_example_rig_parts.gd
 ##
 ## Output: addons/oasis_fx/presets/examples/rig_parts/*.png — head, torso,
-## torso_night (skin), hat_chef, hat_beret (skin). Smooth-edged flat shapes
+## torso_night (skin), hat_chef, hat_beret (skin) for the chef; serpent_skin,
+## serpent_skin_pale (skin) and serpent_head for sand_serpent.rig.json (the
+## skin strip is the texture of its bending body). Smooth-edged flat shapes
 ## with simple shading; pure math, identical on every run; released as CC0
 ## (see the LICENSE.txt written next to them).
 
@@ -24,6 +26,12 @@ const APRON := Color("#D9534F")
 const APRON_SHADE := Color("#B8403C")
 const BERET := Color("#B8323A")
 const BERET_SHADE := Color("#962731")
+const SAND := Color("#D9A85B")
+const SAND_DARK := Color("#9C6A33")
+const SAND_BELLY := Color("#F1D9A6")
+const PALE := Color("#EFE6D6")
+const PALE_DARK := Color("#C9B8A0")
+const PALE_BELLY := Color("#FBF6EC")
 
 
 func _initialize() -> void:
@@ -33,6 +41,9 @@ func _initialize() -> void:
 	_save("torso_night", _torso(NIGHT, NIGHT_SHADE))
 	_save("hat_chef", _hat_chef())
 	_save("hat_beret", _hat_beret())
+	_save("serpent_skin", _serpent_skin(SAND, SAND_DARK, SAND_BELLY))
+	_save("serpent_skin_pale", _serpent_skin(PALE, PALE_DARK, PALE_BELLY))
+	_save("serpent_head", _serpent_head())
 	var license := FileAccess.open(OUT_DIR + "/LICENSE.txt", FileAccess.WRITE)
 	license.store_string("These rig part images were drawn by tools/synth_example_rig_parts.gd for OasisFx.\nThey contain no third-party material and are dedicated to the public domain (CC0 1.0).\n")
 	license.close()
@@ -88,6 +99,33 @@ func _hat_beret() -> Image:
 	_ellipse(img, Vector2(20, 14), Vector2(18, 8), BERET)
 	_ellipse(img, Vector2(24, 16), Vector2(12, 5), BERET_SHADE, 0.6)
 	_ellipse(img, Vector2(20, 5), Vector2(2.5, 2.5), BERET_SHADE)
+	return img
+
+
+## Skin strip 240 × 40 (body length × thickness): back, belly band and a row
+## of diamonds along the middle. The body polygon cuts the outline out of it.
+func _serpent_skin(back: Color, dark: Color, belly: Color) -> Image:
+	var img := _empty(240, 40)
+	img.fill(back)
+	_rounded_rect(img, Rect2(-10, 25, 260, 30), 6, belly)
+	for i in 10:
+		var c := Vector2(14 + i * 24, 17)
+		for y in img.get_height():
+			for x in img.get_width():
+				var d := absf(x + 0.5 - c.x) / 9.0 + absf(y + 0.5 - c.y) / 6.0
+				_blend(img, x, y, dark, clampf((1.0 - d) * 6.0, 0.0, 1.0) * 0.9)
+	return img
+
+
+## Head 48 × 40 looking right: snout, eye, nostril.
+func _serpent_head() -> Image:
+	var img := _empty(48, 40)
+	_ellipse(img, Vector2(22, 20), Vector2(20, 14), SAND)
+	_ellipse(img, Vector2(26, 25), Vector2(16, 7), SAND_BELLY, 0.9)
+	_ellipse(img, Vector2(18, 15), Vector2(9, 5), SAND_DARK, 0.7)
+	_ellipse(img, Vector2(30, 15), Vector2(3.6, 3.6), Color.WHITE)
+	_ellipse(img, Vector2(31, 15), Vector2(2.2, 2.6), INK)
+	_ellipse(img, Vector2(40, 19), Vector2(1.2, 1.0), INK, 0.8)
 	return img
 
 

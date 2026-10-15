@@ -9,6 +9,8 @@ extends RefCounted
 ## Same field keys as vfx_spec.gd, plus:
 ##   id_ref   an id of another entry of this preset, or "" (none)
 ##   points   array of [x, y] points (a polygon outline)
+##   number_list  array of numbers (bone weights, one per polygon point)
+##   index_lists  array of arrays of point indices (custom polygon pieces)
 ##   vec2 with allow_empty: [] means "not set"
 
 const MAX_BONES := 64
@@ -18,6 +20,8 @@ const MAX_SKINS := 32
 const MAX_POSES := 64
 const MAX_POINTS := 256
 const MAX_MARKERS := 32
+## Bones that may bend one polygon part.
+const MAX_WEIGHT_BONES := 8
 const IMAGE_EXTENSIONS := ["png", "webp", "jpg", "jpeg"]
 const RUNTIME_PATH := "res://addons/oasis_fx/src/runtime/oasis_rig.gd"
 ## Node names in a generated rig.
@@ -99,6 +103,21 @@ const PART_FIELDS := {
 		"doc": "Draw order among parts; higher is in front (independent of the bone hierarchy)."},
 	"visible": {"type": "bool", "default": true,
 		"doc": "false = hidden unless a skin shows it."},
+	"uv": {"type": "points", "default": [], "min": -100000.0, "max": 100000.0,
+		"doc": "Texture coordinates of a textured polygon part in pixels of its image, one [x, y] per polygon point; [] = the points themselves (plus offset)."},
+	"internal_vertex_count": {"type": "int", "default": 0, "min": 0, "max": MAX_POINTS - 3,
+		"doc": "How many of the last polygon points lie inside the outline (extra points for smoother bending); they are drawn only through polygons."},
+	"polygons": {"type": "index_lists", "default": [], "min": 0, "max": MAX_POINTS - 1, "max_items": MAX_POINTS,
+		"doc": "Custom pieces of a polygon part: lists of point indices (3 or more each), e.g. triangles that use the internal points; [] = fill the outline."},
+	"weights": {"type": "list", "item": "weight", "min_items": 0, "max_items": MAX_WEIGHT_BONES, "default": [],
+		"doc": "Bone weights that bend (deform) a polygon part with up to 8 bones; [] = rigid. A weighted part is attached to the rig root (bone \"\")."},
+}
+
+const WEIGHT_FIELDS := {
+	"bone": {"type": "id", "required": true,
+		"doc": "Bone that pulls the points."},
+	"values": {"type": "number_list", "required": true, "min": 0.0, "max": 1.0, "min_items": 1, "max_items": MAX_POINTS,
+		"doc": "One weight 0 … 1 per polygon point, in polygon order; a point's weights are divided by their sum, so it follows its bones in proportion."},
 }
 
 const MARKER_FIELDS := {

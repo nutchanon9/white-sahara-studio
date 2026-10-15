@@ -35,7 +35,7 @@ static func build(preset: Dictionary, report: RefCounted, texture_provider := Ca
 
 	for part in preset.parts:
 		if part.bone.is_empty():
-			_add(root, root, _part_node(part, provider))
+			_add(root, root, _part_node(part, provider, paths))
 	var skeleton := Skeleton2D.new()
 	skeleton.name = RigSpec.SKELETON_NODE
 	_add(root, root, skeleton)
@@ -53,7 +53,7 @@ static func build(preset: Dictionary, report: RefCounted, texture_provider := Ca
 		bones[bone.id] = node
 	for part in preset.parts:
 		if not part.bone.is_empty():
-			_add(root, bones[part.bone], _part_node(part, provider))
+			_add(root, bones[part.bone], _part_node(part, provider, paths))
 	for marker in preset.markers:
 		var node := Marker2D.new()
 		node.name = marker.id
@@ -130,7 +130,7 @@ static func chain_tip(preset: Dictionary, bone_id: String) -> Array:
 	return [snappedf(tip.x, 0.001), snappedf(tip.y, 0.001)]
 
 
-static func _part_node(part: Dictionary, provider: Callable) -> Node2D:
+static func _part_node(part: Dictionary, provider: Callable, paths: Dictionary) -> Node2D:
 	var node: Node2D
 	var texture: Texture2D = provider.call(part.texture) if not part.texture.is_empty() else null
 	if part.kind == "sprite":
@@ -149,6 +149,20 @@ static func _part_node(part: Dictionary, provider: Callable) -> Node2D:
 		polygon.offset = Vector2(part.offset[0], part.offset[1])
 		if texture != null:
 			polygon.texture = texture
+		var uv := PackedVector2Array()
+		for p in part.uv:
+			uv.append(Vector2(p[0], p[1]))
+		polygon.uv = uv
+		polygon.internal_vertex_count = part.internal_vertex_count
+		var pieces := []
+		for piece in part.polygons:
+			pieces.append(PackedInt32Array(piece))
+		polygon.polygons = pieces
+		# Bone weights in Godot's own Polygon2D format (paths relative to the
+		# Skeleton2D). `skeleton` stays empty: oasis_rig.gd bends the points
+		# on the CPU (see _setup_deformation there).
+		for weight in part.weights:
+			polygon.add_bone(NodePath(paths[weight.bone]), PackedFloat32Array(weight.values))
 		node = polygon
 	node.name = part.id
 	node.position = Vector2(part.position[0], part.position[1])

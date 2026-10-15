@@ -41,6 +41,9 @@ const CHEF_ANIMATIONS := {
 ## moves its IK targets.
 const RIG_REACH := preload("res://examples/runtime_demo/fx/oasis_chef_reach.tres")
 const RIG_POSES := ["", "wave", "crouch"]
+## Generated from sand_serpent_slither.anim.json for the Sand Serpent rig,
+## whose body polygon bends with its spine bones (weights).
+const SERPENT_SLITHER := preload("res://examples/runtime_demo/fx/sand_serpent_slither.tres")
 
 ## The looping sizzle while the stove is cooking (null when idle).
 var sizzle: Node2D
@@ -52,6 +55,7 @@ var sizzle: Node2D
 @onready var _stove_animation: AnimationPlayer = $Stove/AnimationPlayer
 @onready var _chef_animation: AnimationPlayer = $Chef/AnimationPlayer
 @onready var _rig: Node2D = $OasisChef
+@onready var _serpent: Node2D = $SandSerpent
 
 
 func _ready() -> void:
@@ -72,6 +76,17 @@ func _ready() -> void:
 	_rig.get_animation_player().add_animation_library(&"oasis", rig_library)
 	var rig_events: Node = $OasisChef/OasisAnimationEvents
 	rig_events.effects_parent = rig_events.get_path_to(_effects_layer)
+	var serpent_library := AnimationLibrary.new()
+	serpent_library.add_animation(&"slither", SERPENT_SLITHER)
+	_serpent.get_animation_player().add_animation_library(&"oasis", serpent_library)
+	_serpent.get_animation_player().play(&"oasis/slither")
+
+
+## Switches the serpent between its skins (its bending body keeps the texture).
+func next_serpent_skin() -> String:
+	var next := "pale" if _serpent.current_skin.is_empty() else ""
+	_serpent.apply_skin(next)
+	return next
 
 
 ## Plays the generated rig's reach animation (IK targets move; feet stay put).
@@ -159,3 +174,5 @@ func _unhandled_input(event: InputEvent) -> void:
 				next_rig_skin()
 			KEY_P:
 				next_rig_pose()
+			KEY_G:
+				next_serpent_skin()

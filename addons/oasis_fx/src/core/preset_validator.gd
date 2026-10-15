@@ -169,6 +169,43 @@ static func _check_value(value: Variant, spec: Dictionary, path: String, report:
 					return null
 				points.append(point)
 			return points
+		"number_list":
+			if typeof(value) != TYPE_ARRAY:
+				report.error(path, "must be an array of numbers")
+				return null
+			if value.size() < spec.min_items or value.size() > spec.max_items:
+				report.error(path, "must contain %d to %d numbers (got %d)" % [spec.min_items, spec.max_items, value.size()])
+				return null
+			var numbers := []
+			for i in value.size():
+				if not _is_number(value[i]):
+					report.error("%s[%d]" % [path, i], "must be a number (got %s)" % JSON.stringify(value[i]))
+					return null
+				_check_range(float(value[i]), spec, "%s[%d]" % [path, i], report)
+				numbers.append(float(value[i]))
+			return numbers
+		"index_lists":
+			if typeof(value) != TYPE_ARRAY:
+				report.error(path, "must be an array of point index lists, e.g. [[0, 1, 2]]")
+				return null
+			if value.size() > spec.max_items:
+				report.error(path, "must contain at most %d lists (got %d)" % [spec.max_items, value.size()])
+				return null
+			var lists := []
+			for i in value.size():
+				var item_path := "%s[%d]" % [path, i]
+				if typeof(value[i]) != TYPE_ARRAY or value[i].size() < 3 or value[i].size() > RigSpec.MAX_POINTS:
+					report.error(item_path, "must be a list of 3 to %d point indices (got %s)" % [RigSpec.MAX_POINTS, JSON.stringify(value[i])])
+					return null
+				var indices := []
+				for j in value[i].size():
+					if not _is_whole_number(value[i][j]):
+						report.error("%s[%d]" % [item_path, j], "must be a whole number (got %s)" % JSON.stringify(value[i][j]))
+						return null
+					_check_range(float(value[i][j]), spec, "%s[%d]" % [item_path, j], report)
+					indices.append(int(value[i][j]))
+				lists.append(indices)
+			return lists
 		"rect":
 			if typeof(value) == TYPE_ARRAY and value.is_empty() and spec.get("allow_empty", false):
 				return []
@@ -547,6 +584,46 @@ static func _suggest_node(outline: Dictionary, wanted: String) -> String:
 	return "; nodes in the scene: %s%s" % [", ".join(PackedStringArray(some)), " …" if outline.order.size() > 12 else ""]
 
 
+# uv, internal points, custom pieces and bone weights of a polygon part.
+static func _check_part_mesh(part: Dictionary, path: String, bone_index: Dictionary, report: RefCounted) -> void:
+	var count: int = part.polygon.size()
+	if not part.uv.is_empty() and part.uv.size() != count:
+		report.error(path + ".uv", "needs one point per polygon point (%d), got %d" % [count, part.uv.size()])
+	if part.internal_vertex_count > 0 and part.polygons.is_empty():
+		report.warn(path + ".internal_vertex_count", "internal points are drawn only through polygons; add polygons that use them")
+	for j in part.polygons.size():
+		for index in part.polygons[j]:
+			if index >= count:
+				report.error("%s.polygons[%d]" % [path, j], "point %d does not exist; the polygon has %d points (0 … %d)" % [index, count, count - 1])
+				break
+	if part.weights.is_empty():
+		return
+	if not part.bone.is_empty():
+		report.error(path + ".bone", "a part with weights must be attached to the rig root (\"\"); its bones move it")
+	var seen := {}
+	var totals := PackedFloat32Array()
+	totals.resize(count)
+	for j in part.weights.size():
+		var weight: Dictionary = part.weights[j]
+		var wpath := "%s.weights[%d]" % [path, j]
+		if not bone_index.has(weight.bone):
+			report.error(wpath + ".bone", "no bone \"%s\"%s" % [weight.bone, _suggest_id(weight.bone, bone_index.keys())])
+		elif seen.has(weight.bone):
+			report.error(wpath + ".bone", "bone \"%s\" already has weights for this part" % weight.bone)
+		seen[weight.bone] = true
+		if weight.values.size() != count:
+			report.error(wpath + ".values", "needs one weight per polygon point (%d), got %d" % [count, weight.values.size()])
+			continue
+		for v in count:
+			totals[v] += weight.values[v]
+	var loose := 0
+	for v in count:
+		if totals[v] <= 0.0:
+			loose += 1
+	if loose > 0:
+		report.warn(path + ".weights", "%d point(s) have no weight on any bone and stay where they are" % loose)
+
+
 static func _check_rig_semantics(raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
 	var bone_index := {}
 	var node_ids := {}
@@ -574,10 +651,14 @@ static func _check_rig_semantics(raw: Dictionary, preset: Dictionary, report: Re
 			report.error(path + ".bone", "no bone \"%s\"%s" % [part.bone, _suggest_id(part.bone, bone_index.keys())])
 		if part.kind == "sprite" and part.texture.is_empty():
 			report.error(path + ".texture", "a sprite part needs an image")
-		if part.kind == "polygon" and part.polygon.size() < 3:
-			report.error(path + ".polygon", "a polygon part needs at least 3 points (got %d)" % part.polygon.size())
-		if part.kind == "sprite" and not part.polygon.is_empty():
-			report.warn(path + ".polygon", "is ignored for sprite parts")
+		if part.kind == "polygon" and part.polygon.size() - part.internal_vertex_count < 3:
+			report.error(path + ".polygon", "a polygon part needs at least 3 outline points (got %d)" % (part.polygon.size() - part.internal_vertex_count))
+		if part.kind == "sprite":
+			for key in ["polygon", "uv", "polygons", "weights"]:
+				if not part[key].is_empty():
+					report.warn("%s.%s" % [path, key], "is ignored for sprite parts")
+		else:
+			_check_part_mesh(part, path, bone_index, report)
 		textured = textured or not part.texture.is_empty()
 	for i in preset.markers.size():
 		var marker: Dictionary = preset.markers[i]

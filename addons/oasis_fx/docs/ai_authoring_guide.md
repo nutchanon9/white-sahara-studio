@@ -12,7 +12,7 @@ preset. The JSON Schema and the validator are the final word.
 | `sfx` — layered sound effect from existing audio files | `schema_version: 1`, [`schemas/sfx.v1.schema.json`](../schemas/sfx.v1.schema.json) | supported (OasisFx 0.4); see [section 9](#9-sound-effects-sfx) |
 | `animation` — keyframes and events for nodes of an existing scene | `schema_version: 1`, [`schemas/animation.v1.schema.json`](../schemas/animation.v1.schema.json) | supported (OasisFx 0.5); see [section 10](#10-animations-and-sprite-frames) |
 | `sprite_frames` — frame animations from a sprite sheet | `schema_version: 1`, [`schemas/sprite_frames.v1.schema.json`](../schemas/sprite_frames.v1.schema.json) | supported (OasisFx 0.5); see [section 10](#10-animations-and-sprite-frames) |
-| `rig` — 2D cutout character: bones, parts, IK, skins, poses | `schema_version: 1`, [`schemas/rig.v1.schema.json`](../schemas/rig.v1.schema.json) | supported (OasisFx 0.6); see [section 11](#11-rigs-rig) |
+| `rig` — 2D cutout character: bones, parts (rigid or bending), IK, skins, poses | `schema_version: 1`, [`schemas/rig.v1.schema.json`](../schemas/rig.v1.schema.json) | supported (OasisFx 0.6; bending parts 0.7); see [section 11](#11-rigs-rig) |
 
 A `vfx` preset describes one effect made of **1–8 emitters**. Each emitter becomes a Godot
 `GPUParticles2D`. Every field, unit, range and default is listed in
@@ -503,6 +503,12 @@ parts (flat shapes) as a stand-in. Never invent image paths.
    costume piece as a hidden part and `show` it in the skin.
 9. **Poses** set bone rotations (and optionally positions); do not pose bones in IK chains.
 10. Fill in `source_author` and `source_license` when you use images.
+11. **Bending parts** (a tail, a scarf, a sleeve): a polygon part with `weights`, attached to
+    the rig root (`bone: ""`), with points every ~10 px along each side so it can bend. Do not
+    invent the weight numbers: write the part without `weights`, then run
+    `oasis_fx_cli.gd -- auto-weights <file> --part <id> [--bones a,b,c]`, which adds them
+    (and moves a part from a bone to the root without changing where it is). A textured
+    bending polygon uses its image's pixel coordinates: points inside the image, or `uv`.
 
 ### Changing an existing rig
 
@@ -513,6 +519,7 @@ parts (flat shapes) as a stand-in. Never invent image paths.
 | "arm behind the body" | lower that arm's parts' `z_index` below the torso's |
 | "add a costume" | a new skin; reuse part ids, give new `texture` / `color` |
 | "hold a sword" | a part (and a marker at its tip) on the forearm bone |
+| "make the tail curl" / "bend the sleeve" | chain of bones along it, a polygon outline with points along both sides, then `auto-weights --part <id>`; animate the bones |
 
 Generate it and **look at it** in the desktop app (bones, IK targets you can drag, skin and
 pose pickers) or in the game; a valid rig can still look wrong.
@@ -583,6 +590,9 @@ pose pickers) or in the game; a valid rig can still look wrong.
   ]
 }
 ```
+
+A bending example is `presets/examples/sand_serpent.rig.json` (its `body` weights were made
+with `auto-weights`) with `sand_serpent_slither.anim.json`.
 
 Animate it with an `animation` preset such as `oasis_chef_reach.anim.json`, whose node paths
 are built from the ids (`IKTargets/arm_r`, `Skeleton/hips/chest`,

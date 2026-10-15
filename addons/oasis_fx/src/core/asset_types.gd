@@ -89,6 +89,7 @@ const ITEMS := {
 	"ik_chain": RigSpec.IK_CHAIN_FIELDS,
 	"skin": RigSpec.SKIN_FIELDS,
 	"skin_part": RigSpec.SKIN_PART_FIELDS,
+	"weight": RigSpec.WEIGHT_FIELDS,
 	"pose": RigSpec.POSE_FIELDS,
 	"pose_bone": RigSpec.POSE_BONE_FIELDS,
 }

@@ -73,7 +73,7 @@ func test_rig_errors() -> void:
 	_expect_error(data, "parts[%d].texture" % torso, "a sprite part needs an image")
 	data = _raw()
 	data.parts[1].polygon = [[0, 0], [1, 1]]
-	_expect_error(data, "parts[1].polygon", "at least 3 points")
+	_expect_error(data, "parts[1].polygon", "at least 3 outline points")
 	data = _raw()
 	data.parts[1].polygon = [[0, 0], [1], [2, 2]]
 	_expect_error(data, "parts[1].polygon[1]", "must be an array of 2 numbers")
@@ -291,6 +291,6 @@ func test_import_reports_what_does_not_fit() -> void:
 	check_eq(face.scale, [-2.0, 2.0], "intermediate scale and flip_h folded in")
 	check_eq(face.offset, [22.0, 22.0], "centered = false becomes an offset of half the image")
 	var notes := " | ".join(imported.notes)
-	for part in ["bone weights (deformation) are not imported", "modifications (IK) are not imported", "only the first Skeleton2D"]:
+	for part in ["has bone weights but no skeleton", "modifications (IK) are not imported", "only the first Skeleton2D"]:
 		check(notes.contains(part), "note: %s; got: %s" % [part, notes])
 	check(not RigImporter.import_scene("res://chars/missing.tscn", PackedStringArray([dir])).ok, "missing scene fails")

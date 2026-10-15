@@ -107,6 +107,27 @@ func test_runtime_demo_drives_the_generated_rig() -> void:
 	await tree.process_frame
 
 
+func test_runtime_demo_serpent_slithers_and_bends() -> void:
+	var demo: Node = load(DEMO).instantiate()
+	tree.root.add_child(demo)
+	await tree.process_frame
+	var serpent: Node2D = demo.get_node("SandSerpent")
+	var body: Polygon2D = serpent.get_node("body")
+	var player: AnimationPlayer = serpent.get_animation_player()
+	check_eq(String(player.current_animation), "oasis/slither", "slithers from the start")
+	var first := body.polygon
+	await tree.create_timer(0.3).timeout
+	check(body.polygon != first, "the body bends while the spine moves")
+	check_eq(demo.next_serpent_skin(), "pale", "skin")
+	check(body.texture.resource_path.ends_with("serpent_skin_pale.png"), "pale skin on the bending body")
+	var hisses := []
+	serpent.get_node("OasisAnimationEvents").event_triggered.connect(func(n, _at): hisses.append(String(n)))
+	await tree.create_timer(1.7).timeout
+	check(hisses.has("hiss"), "the hiss event fires each loop")
+	demo.queue_free()
+	await tree.process_frame
+
+
 func test_runtime_demo_plays_generated_chef_animations_and_sprite_frames() -> void:
 	var demo: Node = load(DEMO).instantiate()
 	tree.root.add_child(demo)

@@ -128,7 +128,7 @@
         "res://addons/oasis_fx/src/runtime/oasis_rig.gd"
       ],
       "preset": "res://addons/oasis_fx/presets/examples/oasis_chef.rig.json",
-      "preset_sha256": "bb7cae5ef3227c6c1acb2d3c6fa16f4f0508be4f431b2290229f7ebaa0f53e9b",
+      "preset_sha256": "918ff703068ac2fc8c80b4294d3f1eadb6f63edd75b8289899acc983a9641dc8",
       "scene": "res://examples/runtime_demo/fx/oasis_chef.tscn",
       "scene_sha256": "11deb175b9482151646249a5894ecad512de8efd590830a9393150cc6e3598dc"
     },
@@ -142,6 +142,28 @@
       "preset_sha256": "c357493461620d50bac868fe99bf38c575da3544cca65aa3842c57c37050d25d",
       "scene": "res://examples/runtime_demo/fx/oasis_chef_reach.tres",
       "scene_sha256": "1ed320a204c96628649002d144c12f5eb8dd125343bb4c01b6b269a9835860c6"
+    },
+    "sand_serpent": {
+      "dependencies": [
+        "res://addons/oasis_fx/presets/examples/rig_parts/serpent_head.png",
+        "res://addons/oasis_fx/presets/examples/rig_parts/serpent_skin.png",
+        "res://addons/oasis_fx/presets/examples/rig_parts/serpent_skin_pale.png",
+        "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
+        "res://addons/oasis_fx/src/runtime/oasis_rig.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/sand_serpent.rig.json",
+      "preset_sha256": "0af03ec376b59aeb7df24bd1649f72eb5c6eebf5b8fba25b71df82e480e037a9",
+      "scene": "res://examples/runtime_demo/fx/sand_serpent.tscn",
+      "scene_sha256": "30430694d0bdf1dbe8491259ef9141c5e2cfe618e69b7f7a97048609a608ba73"
+    },
+    "sand_serpent_slither": {
+      "dependencies": [
+        "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd"
+      ],
+      "preset": "res://addons/oasis_fx/presets/examples/sand_serpent_slither.anim.json",
+      "preset_sha256": "eac7c8120405701ef0f516f139f9034f73b295fa83792e71da6f47f5f483d511",
+      "scene": "res://examples/runtime_demo/fx/sand_serpent_slither.tres",
+      "scene_sha256": "0b612a6e548fcbd3c8b6887b778fae177ae1e2df168b739faafe5feedc839ae9"
     },
     "sword_slash": {
       "dependencies": [
@@ -168,5 +190,5 @@
   },
   "format": "oasis_fx_manifest",
   "format_version": 1,
-  "generator": "OasisFx 0.6.0"
+  "generator": "OasisFx 0.7.0"
 }

@@ -5,7 +5,10 @@ extends Node2D
 ## IK targets by id. The rig itself is plain Godot: Skeleton2D / Bone2D with
 ## Polygon2D and Sprite2D parts, two-bone IK in the skeleton's modification
 ## stack, and an AnimationPlayer holding RESET and pose_<name> animations.
-## Not a @tool script: nothing changes when the scene is open in the editor.
+## Polygon parts with bone weights (Polygon2D `bones`) are bent by this script
+## on the CPU every frame, with the same math as Godot's 2D skinning.
+## Not a @tool script: nothing changes when the scene is open in the editor
+## (weighted parts show their rest shape there).
 ##
 ##   var chef: OasisRig = preload("res://chars/oasis_chef.tscn").instantiate()
 ##   chef.apply_skin("night_shift")
@@ -19,15 +22,63 @@ const IK_TARGETS := "IKTargets"
 ## Skin name -> {part node path: {"texture": Texture2D, "color": Color, "visible": bool}}
 ## (only the changed values). The parts as saved in the scene are skin "".
 @export var skins: Dictionary = {}
+## Bend weighted parts with Godot's GPU skinning (Polygon2D.skeleton) instead
+## of on the CPU. Off by default: in Godot 4.7.2's Compatibility renderer
+## (tested with Mesa llvmpipe) GPU skinning drew points weighted to any bone
+## but the first one wrongly.
+@export var gpu_deform := false
 
 ## Name of the skin applied last ("" = as saved).
 var current_skin := ""
 var _base := {}
+## One entry per weighted Polygon2D bent on the CPU.
+var _deformers: Array[Dictionary] = []
 
 
 func _ready() -> void:
 	_own_ik_stack()
 	_capture_base()
+	_setup_deformation()
+
+
+func _process(_delta: float) -> void:
+	update_deformation()
+
+
+## Bends the weighted parts to the bones' current pose. Runs every frame after
+## animations and IK (process_priority 1000); call it yourself after moving
+## bones when the rig does not process (e.g. paused).
+func update_deformation() -> void:
+	var skeleton := get_skeleton()
+	if skeleton == null or _deformers.is_empty():
+		return
+	var to_skeleton := skeleton.global_transform.affine_inverse()
+	for d in _deformers:
+		var poly: Polygon2D = d.poly
+		if not is_instance_valid(poly) or not poly.is_visible_in_tree():
+			continue
+		# Godot's skinning: points in skeleton space, moved by each bone's
+		# (current pose × inverse rest pose), blended by weight.
+		var into: Transform2D = to_skeleton * poly.global_transform
+		var back := into.affine_inverse()
+		var moves: Array[Transform2D] = []
+		for i in d.bones.size():
+			moves.append(to_skeleton * (d.bones[i] as Bone2D).global_transform * d.rest_inverse[i])
+		var rest: PackedVector2Array = d.rest
+		var offset := poly.offset
+		var out := PackedVector2Array()
+		out.resize(rest.size())
+		for v in rest.size():
+			var p: Vector2 = into * (rest[v] + offset)
+			var sum := Vector2.ZERO
+			var total := 0.0
+			for i in moves.size():
+				var w: float = d.weights[i][v]
+				if w > 0.0:
+					sum += moves[i] * p * w
+					total += w
+			out[v] = (back * (sum / total) - offset) if total > 0.0 else rest[v]
+		poly.polygon = out
 
 
 func get_skin_names() -> PackedStringArray:
@@ -100,6 +151,40 @@ func set_ik_enabled(enabled: bool) -> void:
 	var skeleton := get_skeleton()
 	if skeleton and skeleton.get_modification_stack():
 		skeleton.get_modification_stack().enabled = enabled
+
+
+# Finds weighted Polygon2D parts (bones set, no skeleton) and remembers their
+# rest points, bones and inverse rest poses.
+func _setup_deformation() -> void:
+	var skeleton := get_skeleton()
+	_deformers.clear()
+	if skeleton != null:
+		for poly: Polygon2D in find_children("*", "Polygon2D", true, false):
+			if poly.get_bone_count() == 0 or not poly.skeleton.is_empty():
+				continue
+			if gpu_deform:
+				poly.skeleton = poly.get_path_to(skeleton)
+				continue
+			var d := {"poly": poly, "rest": poly.polygon, "bones": [], "weights": [], "rest_inverse": []}
+			for i in poly.get_bone_count():
+				var bone := skeleton.get_node_or_null(poly.get_bone_path(i)) as Bone2D
+				var weights := poly.get_bone_weights(i)
+				if bone == null or weights.size() != poly.polygon.size():
+					push_warning("OasisRig %s: %s: bone %s is missing or its weights do not match the points" % [rig_id, poly.name, poly.get_bone_path(i)])
+					continue
+				d.bones.append(bone)
+				d.weights.append(weights)
+				d.rest_inverse.append(bone.get_skeleton_rest().affine_inverse())
+			# The texture must stay on the rest points while the outline bends.
+			if poly.uv.size() != poly.polygon.size():
+				var uv := PackedVector2Array()
+				for p in poly.polygon:
+					uv.append(p + poly.offset)
+				poly.uv = uv
+			_deformers.append(d)
+	process_priority = 1000
+	set_process(not _deformers.is_empty())
+	update_deformation()
 
 
 # All instances of a rig scene share the skeleton's SkeletonModificationStack2D

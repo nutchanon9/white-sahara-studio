@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "asset_type": "rig",
+  "id": "sand_serpent",
+  "display_name": "Sand Serpent",
+  "description": "Example of a bending (deforming) part: one textured body polygon weighted to six spine bones, a rigid head sprite, IK on the neck, a pale skin and two poses.",
+  "tags": ["serpent", "creature", "rig", "deform", "example"],
+  "author": "OasisFx examples",
+  "source_author": "OasisFx (procedural, tools/synth_example_rig_parts.gd)",
+  "source_license": "CC0",
+  "bones": [
+    {
+      "id": "spine_1",
+      "position": [-120, -14],
+      "length": 40,
+      "angle_degrees": 0
+    },
+    {
+      "id": "spine_2",
+      "parent": "spine_1",
+      "position": [40, 0],
+      "length": 40,
+      "angle_degrees": 0
+    },
+    {
+      "id": "spine_3",
+      "parent": "spine_2",
+      "position": [40, 0],
+      "length": 40,
+      "angle_degrees": 0
+    },
+    {
+      "id": "spine_4",
+      "parent": "spine_3",
+      "position": [40, 0],
+      "length": 40,
+      "angle_degrees": 0
+    },
+    {
+      "id": "spine_5",
+      "parent": "spine_4",
+      "position": [40, 0],
+      "length": 40,
+      "angle_degrees": 0
+    },
+    {
+      "id": "spine_6",
+      "parent": "spine_5",
+      "position": [40, 0],
+      "length": 40,
+      "angle_degrees": 0
+    }
+  ],
+  "parts": [
+    {
+      "id": "shadow",
+      "polygon": [[150, 0], [139, 2], [106, 4], [57, 5], [0, 5], [-57, 5], [-106, 4], [-139, 2], [-150, 0], [-139, -2], [-106, -4], [-57, -5], [0, -5], [57, -5], [106, -4], [139, -2]],
+      "color": "#00000040"
+    },
+    {
+      "id": "body",
+      "bone": "",
+      "texture": "res://addons/oasis_fx/presets/examples/rig_parts/serpent_skin.png",
+      "polygon": [[0, 17], [10, 16], [20, 15.5], [30, 14.5], [40, 13.5], [50, 13], [60, 12], [70, 11], [80, 10.5], [90, 9.5], [100, 8.5], [110, 8], [120, 7], [130, 7], [140, 7], [150, 7], [160, 7], [170, 7], [180, 7], [190, 7.5], [200, 7.5], [210, 8], [220, 8.5], [230, 8.5], [240, 9], [240, 31], [230, 31.5], [220, 31.5], [210, 32], [200, 32.5], [190, 32.5], [180, 33], [170, 33], [160, 33], [150, 33], [140, 33], [130, 33], [120, 33], [110, 32], [100, 31.5], [90, 30.5], [80, 29.5], [70, 29], [60, 28], [50, 27], [40, 26.5], [30, 25.5], [20, 24.5], [10, 24], [0, 23]],
+      "position": [-120, -34],
+      "rotation_degrees": 0,
+      "scale": [1, 1],
+      "z_index": 1,
+      "weights": [
+        {"bone": "spine_1", "values": [1, 1, 0.998, 0.949, 0.5, 0.098, 0.019, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.019, 0.098, 0.5, 0.949, 0.998, 1, 1]},
+        {"bone": "spine_2", "values": [0, 0, 0.002, 0.051, 0.5, 0.902, 0.981, 0.833, 0.5, 0.216, 0.058, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.058, 0.216, 0.5, 0.833, 0.981, 0.902, 0.5, 0.051, 0.002, 0, 0]},
+        {"bone": "spine_3", "values": [0, 0, 0, 0, 0, 0, 0, 0.167, 0.5, 0.784, 0.942, 0.742, 0.5, 0.283, 0.081, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.081, 0.283, 0.5, 0.742, 0.942, 0.784, 0.5, 0.167, 0, 0, 0, 0, 0, 0, 0]},
+        {"bone": "spine_4", "values": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.258, 0.5, 0.717, 0.919, 0.717, 0.5, 0.283, 0.081, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.081, 0.283, 0.5, 0.717, 0.919, 0.717, 0.5, 0.258, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]},
+        {"bone": "spine_5", "values": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.283, 0.5, 0.717, 0.919, 0.729, 0.5, 0.258, 0.058, 0.016, 0.005, 0.005, 0.016, 0.058, 0.258, 0.5, 0.729, 0.919, 0.717, 0.5, 0.283, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]},
+        {"bone": "spine_6", "values": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.271, 0.5, 0.742, 0.942, 0.984, 0.995, 0.995, 0.984, 0.942, 0.742, 0.5, 0.271, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+      ]
+    },
+    {
+      "id": "head",
+      "bone": "spine_6",
+      "kind": "sprite",
+      "texture": "res://addons/oasis_fx/presets/examples/rig_parts/serpent_head.png",
+      "position": [54, -3],
+      "z_index": 2
+    }
+  ],
+  "markers": [
+    {
+      "id": "fang",
+      "bone": "spine_6",
+      "position": [76, 2]
+    }
+  ],
+  "ik_chains": [
+    {
+      "id": "head",
+      "upper": "spine_5",
+      "lower": "spine_6"
+    }
+  ],
+  "skins": [
+    {
+      "name": "pale",
+      "parts": [
+        {
+          "part": "body",
+          "texture": "res://addons/oasis_fx/presets/examples/rig_parts/serpent_skin_pale.png"
+        }
+      ]
+    }
+  ],
+  "poses": [
+    {
+      "name": "wave",
+      "bones": [
+        {
+          "bone": "spine_2",
+          "rotation_degrees": -18
+        },
+        {
+          "bone": "spine_3",
+          "rotation_degrees": 24
+        },
+        {
+          "bone": "spine_4",
+          "rotation_degrees": -18
+        }
+      ]
+    },
+    {
+      "name": "s_curve",
+      "bones": [
+        {
+          "bone": "spine_2",
+          "rotation_degrees": 25
+        },
+        {
+          "bone": "spine_3",
+          "rotation_degrees": -30
+        },
+        {
+          "bone": "spine_4",
+          "rotation_degrees": 30
+        }
+      ]
+    }
+  ]
+}

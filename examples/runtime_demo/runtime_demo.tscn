@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn" id="3_chef"]
 [ext_resource type="SpriteFrames" path="res://examples/runtime_demo/fx/campfire_flame.tres" id="4_flame"]
 [ext_resource type="PackedScene" path="res://examples/runtime_demo/fx/oasis_chef.tscn" id="5_rig"]
+[ext_resource type="PackedScene" path="res://examples/runtime_demo/fx/sand_serpent.tscn" id="6_serpent"]
 
 [sub_resource type="Animation" id="Animation_t3psv"]
 resource_name = "attack"
@@ -89,7 +90,8 @@ text = "OasisFx runtime demo
 Left click: Fire Burst   Right click: Ice Nova
 Space: attack (Sword Slash on the hit frame)   C: cook (Cooking Success when done)
 A: chef ladle attack   S: chef cooking success (generated animations with events)
-R: rig reach (IK)   K: rig skin   P: rig pose (generated rig)"
+R: rig reach (IK)   K: rig skin   P: rig pose (generated rig)
+G: serpent skin (generated rig whose body bends with its bones)"
 
 [node name="Hero" type="Node2D" parent="." unique_id=503854990]
 position = Vector2(380, 470)
@@ -139,6 +141,9 @@ scale = Vector2(1.6, 1.6)
 [node name="OasisChef" parent="." instance=ExtResource("5_rig")]
 position = Vector2(1140, 528)
 scale = Vector2(1.8, 1.8)
+
+[node name="SandSerpent" parent="." instance=ExtResource("6_serpent")]
+position = Vector2(250, 640)
 
 [node name="Flame" type="AnimatedSprite2D" parent="Stove"]
 position = Vector2(-110, 0)

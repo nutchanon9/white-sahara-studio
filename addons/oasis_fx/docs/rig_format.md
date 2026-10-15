@@ -1,7 +1,7 @@
 # OasisFx preset format — `rig` v1
 
-Phase 4 adds **2D cutout rigs**: a character made of rigid pieces (layered PNG body parts or
-polygons) attached to bones, built from plain Godot nodes — `Skeleton2D`, `Bone2D`,
+Phase 4 adds **2D cutout rigs**: a character made of pieces (layered PNG body parts or
+polygons) attached to bones — rigid, or **bending** with several bones (0.7.0) — built from plain Godot nodes — `Skeleton2D`, `Bone2D`,
 `Polygon2D`, `Sprite2D`, `Marker2D`, two-bone IK in the skeleton's modification stack and an
 `AnimationPlayer`. One preset describes the bones, the parts, named points (markers), IK
 chains, **skins** (costume swaps) and **poses**.
@@ -22,12 +22,15 @@ with `animation` presets ([animation_format.md](animation_format.md)) — it alr
 - Examples (in [`presets/examples/`](../presets/examples/)): `oasis_chef` (11 bones, PNG
   torso/head/hat drawn by `tools/synth_example_rig_parts.gd` (CC0), IK on both legs and the
   right arm, three skins, two poses) and `oasis_chef_reach` (an animation that moves the
-  generated rig's IK targets and shows an effect at the ladle tip)
+  generated rig's IK targets and shows an effect at the ladle tip); `sand_serpent` (a textured
+  body polygon that bends with six spine bones, a rigid head, IK on the neck, a pale skin) and
+  `sand_serpent_slither` (a looping wave along the spine)
 - Writing rigs with ChatGPT or Claude: [AI authoring guide](ai_authoring_guide.md), section 11
 
-**Not supported (by design, for now):** mesh deformation and bone weights (every part is
-rigid on one bone), IK other than two-bone chains (no FABRIK/CCDIK/look-at), automatic
-rigging of a single image, physics (jiggle) bones, 3D. See *Limitations* below.
+**Not supported (by design, for now):** a weight painting brush (weights are computed
+automatically, imported, or written as numbers), IK other than two-bone chains (no
+FABRIK/CCDIK/look-at), automatic rigging of a single image, physics (jiggle) bones, 3D. See
+*Limitations* below.
 
 ---
 
@@ -93,6 +96,10 @@ rigging of a single image, physics (jiggle) bones, 3D. See *Limitations* below.
 | `color` | color |  | `"#FFFFFFFF"` | Polygon fill color, or tint of a sprite (white = unchanged). |
 | `z_index` | int | -100 … 100 | `0` | Draw order among parts; higher is in front (independent of the bone hierarchy). |
 | `visible` | bool |  | `true` | false = hidden unless a skin shows it. |
+| `uv` | points | -100000.0 … 100000.0 | `[]` | Texture coordinates of a textured polygon part in pixels of its image, one [x, y] per polygon point; [] = the points themselves (plus offset). |
+| `internal_vertex_count` | int | 0 … 253 | `0` | How many of the last polygon points lie inside the outline (extra points for smoother bending); they are drawn only through polygons. |
+| `polygons` | index_lists | 0 … 255 | `[]` | Custom pieces of a polygon part: lists of point indices (3 or more each), e.g. triangles that use the internal points; [] = fill the outline. |
+| `weights` | list of weight | 0 … 8 | `[]` | Bone weights that bend (deform) a polygon part with up to 8 bones; [] = rigid. A weighted part is attached to the rig root (bone ""). |
 
 ### Marker fields (`markers[i]`)
 
@@ -143,6 +150,13 @@ rigging of a single image, physics (jiggle) bones, 3D. See *Limitations* below.
 | `rotation_degrees` | number | -360.0 … 360.0 | **required** | Rotation of the bone in this pose, relative to its parent, in degrees. |
 | `position` | vec2 | -10000.0 … 10000.0 | `[]` | Position of the bone in this pose; [] = its rest position. |
 
+### Weight fields (`parts[i].weights[j]`)
+
+| Field | Type | Range | Default | Meaning |
+|---|---|---|---|---|
+| `bone` | id |  | **required** | Bone that pulls the points. |
+| `values` | number_list | 0.0 … 1.0 | **required** | One weight 0 … 1 per polygon point, in polygon order; a point's weights are divided by their sum, so it follows its bones in proportion. |
+
 ## Cross-field rules (enforced by the validator)
 
 Errors:
@@ -155,11 +169,17 @@ Errors:
    and a bone can be in only one chain. Chain ids are unique.
 6. Skins: unique names; each change names an existing part, at most once per skin.
 7. Poses: unique names; each entry names an existing bone, at most once per pose.
-8. In a batch, preset ids must be unique across all preset types.
+8. Bending parts (`weights`): only polygon parts; attached to the rig root (`bone` "");
+   each weight names a different bone and has one value 0 … 1 per polygon point.
+9. `uv` has one point per polygon point; `polygons` use existing point indices (3 or more
+   per piece); a polygon keeps at least 3 outline points besides its `internal_vertex_count`.
+10. In a batch, preset ids must be unique across all preset types.
 
 Warnings:
 
-- `polygon` on a sprite part (ignored);
+- `polygon`, `uv`, `polygons` or `weights` on a sprite part (ignored);
+- internal points without `polygons` (they are not drawn);
+- points of a bending part with no weight at all (they stay where they are);
 - a skin change that sets nothing (no texture, color or visibility);
 - a pose that rotates a bone driven by an IK chain (the chain overrides it — move its target);
 - empty `source_license` while the rig uses images.
@@ -184,7 +204,8 @@ Warnings:
 | Preset | Godot 4 |
 |---|---|
 | bone | `Bone2D` named `id`, `rest` = position/rotation, `length`, `bone_angle`, `autocalculate_length_and_angle = false` |
-| part `polygon` | `Polygon2D` with `polygon`, `color`, optional `texture`, `offset`, `z_index`, `visible` (rigid: no bone weights) |
+| part `polygon` | `Polygon2D` with `polygon`, `color`, optional `texture`, `uv`, `internal_vertex_count`, `polygons`, `offset`, `z_index`, `visible` |
+| part `weights` | Godot's own `Polygon2D.bones` (bone path relative to the Skeleton2D, `PackedFloat32Array` of weights); `skeleton` left empty — `oasis_rig.gd` bends it (below) |
 | part `sprite` | `Sprite2D` with `texture` (centered), `self_modulate` = `color`, `offset`, `z_index`, `visible` |
 | marker | `Marker2D` under its bone |
 | ik_chain | `SkeletonModification2DTwoBoneIK` (joint one = `upper`, joint two = `lower`, target `IKTargets/<id>`, `flip_bend_direction`) in a `SkeletonModificationStack2D`; the target starts at `target` or at the chain's rest-pose tip |
@@ -219,6 +240,39 @@ Every instance gets its own IK stack in `_ready()` (Godot shares the stack resou
 instances of a scene, but a stack can only drive one skeleton), so several copies of a rig can
 run with independent IK.
 
+### Bending parts (deformation)
+
+A polygon part with `weights` bends with several bones, like a sleeve that creases at the
+elbow or a tail that curls. `oasis_rig.gd` moves its points **on the CPU** every frame, with
+the same math as Godot's 2D skinning: each point is taken into skeleton space, moved by each
+of its bones' *current pose × inverse rest pose*, and blended by its weights (divided by
+their sum); points without weight stay put. The texture stays pinned to the rest points
+(`uv`, or the rest points when `uv` is empty), so the image stretches with the shape.
+
+- It runs after animations and IK (`process_priority` 1000). Call `update_deformation()`
+  yourself after moving bones while the rig does not process (paused).
+- Why not Godot's GPU skinning? In Godot 4.7.2's **Compatibility** renderer (the one this
+  project and its app use; tested with Mesa llvmpipe), points weighted to any bone except
+  the first were drawn in the wrong place, even at rest. `gpu_deform = true` (exported on the
+  rig root) links `Polygon2D.skeleton` instead and lets Godot do it — use it only after
+  checking it on your renderer and GPU (**NOT RUN** here on a GPU).
+- Cost: points × bones per frame in GDScript; dozens to a few hundred points per rig are
+  cheap. Only weighted parts are processed; rigs without them do not process at all.
+- Bending needs points where the outline bends: several points along each side of a limb
+  (the serpent has one every 10 px); a 4-point rectangle cannot bend. Internal points plus
+  `polygons` (custom pieces) give smoother results for wide parts.
+
+**Weights** can be written by hand (one value per point per bone), imported from a scene
+(below), or computed: `auto-weights` (CLI) or **Bend with bones** (desktop app, under
+**Parts**) weights each point to its two nearest bones by distance to the bone segments
+(1 / d⁴, normalized; points on a joint get half of each), moves a rigid part to the rig root
+without changing where it is, and writes the result into the preset:
+
+```
+godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- \
+    auto-weights presets/my_rig.rig.json --part body [--bones spine_1,spine_2,spine_3]
+```
+
 ### Animating a rig
 
 Write an `animation` preset whose `target_scene` is the generated `.tscn`. Node paths are
@@ -238,12 +292,14 @@ changed. The first `Skeleton2D` is used:
 | Scene | Preset |
 |---|---|
 | `Bone2D` (rest transform) | bone, parent = nearest Bone2D ancestor; transforms of nodes in between and of the skeleton are folded in |
-| `Polygon2D` / `Sprite2D` | part on the nearest bone (or the root), position/rotation/scale/offset/color/texture/visible; the scene's draw order becomes `z_index` 0 … 100 |
+| `Polygon2D` / `Sprite2D` | part on the nearest bone (or the root), position/rotation/scale/offset/color/texture/visible, and `uv`, `internal_vertex_count`, `polygons`; the scene's draw order becomes `z_index` 0 … 100 |
+| `Polygon2D` with `skeleton` = that Skeleton2D and `bones` | bending part on the rig root (transform at the rest pose) with its weights by bone id (in rigs generated by OasisFx, `skeleton` is empty and the weights are imported too) |
 | `Marker2D` under a bone | marker |
 | node names | snake_case ids (`ArmR` → `arm_r`), made unique |
 
-Everything that does not fit is left out and **reported as a note**: bone weights (parts
-become rigid), skew, sprite sheet regions/frames, the skeleton's modifications (IK — add
+Everything that does not fit is left out and **reported as a note**: weights of a polygon
+not linked to the skeleton (Godot does not bend it either; imported rigid), weights for nodes
+that are not bones of the skeleton, `texture_offset` / `texture_scale` / `texture_rotation`, skew, sprite sheet regions/frames, the skeleton's modifications (IK — add
 `ik_chains`), extra skeletons, animations (recreate them as `animation` presets for the new
 node paths) and renamed nodes. Review the result, add IK chains, skins and poses, then
 generate a **new** scene; the original scene stays as it is.
@@ -255,8 +311,8 @@ godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- 
 
 ## Limitations
 
-- **Rigid parts only.** Polygon2D bone weights / mesh deformation are not generated or
-  imported; bend a limb by splitting it into parts on two bones (as the example does).
+- **No weight brush.** Weights are automatic, imported or typed; there is no painting tool.
+  Bending is done on the CPU by default (see *Bending parts*).
 - **Two-bone IK only**, one chain per bone, no IK constraints (angle limits).
 - Skins change the image, color or visibility of existing parts; they do not add parts or
   move bones (add the part hidden and show it in the skin).

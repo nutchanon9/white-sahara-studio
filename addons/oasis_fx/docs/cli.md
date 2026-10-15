@@ -25,6 +25,7 @@ $OASIS generate-all addons/oasis_fx/presets/examples --out res://generated/oasis
 $OASIS --json validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
 $OASIS schema sfx
 $OASIS import-rig res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn --out presets/chef_rig.rig.json
+$OASIS auto-weights presets/chef_rig.rig.json --part torso --bones hips,chest
 $OASIS help
 ```
 
@@ -51,6 +52,7 @@ Every command handles all asset types; the type comes from the preset's `asset_t
 | `format <preset\|dir> [--check]` | Rewrites presets in canonical form (field order, 2-space indent, whole numbers without `.0`) — the same text the desktop app saves. `--check` only reports files that are not canonical (exit 1). |
 | `schema [TYPE] [--write]` | Prints the JSON Schema of an asset type (`vfx` (default), `sfx`, `animation`, `sprite_frames`, `rig`) built from the validator's field tables; `--write` rewrites every `schemas/<type>.v1.schema.json` (a test fails while any is out of date). |
 | `import-rig <scene> --out <file.rig.json>` | Creates a rig preset from an existing `.tscn` with a `Skeleton2D` (bones, Polygon2D/Sprite2D parts, Marker2D points), read as text — the scene is never loaded or changed. Prints what was not imported as `note:` lines (bone weights, IK, skew, regions, animations, renamed nodes). `--id` sets the rig id (default: the scene root's name in snake_case); without `--force` an existing preset file is an error. See [rig_format.md](rig_format.md#importing-an-existing-rig-scene). |
+| `auto-weights <file.rig.json> --part <id> [--bones a,b,c]` | Makes polygon part `<id>` bend with its two nearest bones per point (all bones, or the listed ones): moves it to the rig root at the same place and writes automatic `weights`; the preset is rewritten in canonical form and validated. The preset must be valid first; sprite parts are refused. See [rig_format.md](rig_format.md#bending-parts-deformation). |
 | `version` | Prints the OasisFx version. |
 | `help` | Prints usage. |
 
@@ -61,6 +63,7 @@ Every command handles all asset types; the type comes from the preset's `asset_t
 | `--out <dir>` / `--out=<dir>` | generate, generate-all | Output folder, `res://` or `user://`. Default `res://generated/oasis_fx`. For import-rig: the preset file to write. |
 | `--force` | generate, generate-all, import-rig | Allow overwriting existing `<id>.tscn` / `<id>.tres` files (the preset file for import-rig). Without it an existing file is an error. |
 | `--id <id>` | import-rig | Id of the imported rig. |
+| `--part <id>`, `--bones a,b,c` | auto-weights | The polygon part to bend; the bones it may follow (default: all). |
 | `--dry-run` | generate, generate-all | Validate and report the target paths; write nothing (no folders either). |
 | `--json` | all | Print one JSON object on its own line instead of text. |
 | `--write` | schema | Write the schema file instead of printing it. |
@@ -103,9 +106,11 @@ OK    res://addons/oasis_fx/presets/examples/fire_burst_sfx.sfx.json  fire_burst
 OK    res://addons/oasis_fx/presets/examples/ice_nova.vfx.json  ice_nova (4 emitter(s), 49 particles)
 OK    res://addons/oasis_fx/presets/examples/oasis_chef.rig.json  oasis_chef (rig, 11 bone(s), 18 part(s), 3 IK chain(s), 3 skin(s), 2 pose(s))
 OK    res://addons/oasis_fx/presets/examples/oasis_chef_reach.anim.json  oasis_chef_reach (animation, 3 track(s), 1 event(s), 1.2 s)
+OK    res://addons/oasis_fx/presets/examples/sand_serpent.rig.json  sand_serpent (rig, 6 bone(s), 3 part(s) (1 bending), 1 IK chain(s), 1 skin(s), 2 pose(s))
+OK    res://addons/oasis_fx/presets/examples/sand_serpent_slither.anim.json  sand_serpent_slither (animation, 4 track(s), 1 event(s), 1.6 s, loop)
 OK    res://addons/oasis_fx/presets/examples/sword_slash.vfx.json  sword_slash (3 emitter(s), 96 particles)
 OK    res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json  sword_slash_sfx (sfx, 2 layer(s), 4 audio file(s))
-15 valid, 0 invalid
+17 valid, 0 invalid
 
 $ $OASIS import-rig res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn --out presets/chef_rig.rig.json
 OK    res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn -> presets/chef_rig.rig.json  chef_rig (rig, 5 bone(s), 15 part(s), 0 IK chain(s), 0 skin(s), 0 pose(s))

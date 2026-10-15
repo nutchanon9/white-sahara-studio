@@ -328,6 +328,80 @@
           "type": "boolean",
           "description": "false = hidden unless a skin shows it.",
           "default": true
+        },
+        "uv": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": -100000.0,
+              "maximum": 100000.0
+            }
+          },
+          "description": "Texture coordinates of a textured polygon part in pixels of its image, one [x, y] per polygon point; [] = the points themselves (plus offset).",
+          "default": []
+        },
+        "internal_vertex_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 253,
+          "description": "How many of the last polygon points lie inside the outline (extra points for smoother bending); they are drawn only through polygons.",
+          "default": 0
+        },
+        "polygons": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 256,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "description": "Custom pieces of a polygon part: lists of point indices (3 or more each), e.g. triangles that use the internal points; [] = fill the outline.",
+          "default": []
+        },
+        "weights": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/weight"
+          },
+          "description": "Bone weights that bend (deform) a polygon part with up to 8 bones; [] = rigid. A weighted part is attached to the rig root (bone \"\").",
+          "default": []
+        }
+      }
+    },
+    "weight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bone",
+        "values"
+      ],
+      "properties": {
+        "bone": {
+          "$ref": "#/$defs/id",
+          "description": "Bone that pulls the points."
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "description": "One weight 0 … 1 per polygon point, in polygon order; a point's weights are divided by their sum, so it follows its bones in proportion."
         }
       }
     },

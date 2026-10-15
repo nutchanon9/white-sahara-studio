@@ -92,6 +92,12 @@ static func _property(spec: Dictionary) -> Dictionary:
 		"points":
 			p = {"type": "array", "maxItems": RigSpec.MAX_POINTS, "items": {"type": "array", "minItems": 2, "maxItems": 2,
 				"items": {"type": "number", "minimum": spec.min, "maximum": spec.max}}}
+		"number_list":
+			p = {"type": "array", "minItems": spec.min_items, "maxItems": spec.max_items,
+				"items": {"type": "number", "minimum": spec.min, "maximum": spec.max}}
+		"index_lists":
+			p = {"type": "array", "maxItems": spec.max_items, "items": {"type": "array", "minItems": 3, "maxItems": RigSpec.MAX_POINTS,
+				"items": {"type": "integer", "minimum": spec.min, "maximum": spec.max}}}
 		"rect":
 			p = {"type": "array", "anyOf": [
 				{"maxItems": 0},

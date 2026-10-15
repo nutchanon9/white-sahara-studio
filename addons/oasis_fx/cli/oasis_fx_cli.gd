@@ -15,6 +15,8 @@ extends SceneTree
 ##   schema [TYPE] [--write]                    print a JSON Schema, or rewrite all schema files
 ##   import-rig <scene.tscn> --out <f.rig.json> make a rig preset from an existing scene
 ##            [--id ID] [--force]
+##   auto-weights <f.rig.json> --part ID       make a polygon part bend with nearby bones
+##            [--bones a,b,c]
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
 ##
@@ -31,6 +33,7 @@ const Serializer := preload("res://addons/oasis_fx/src/core/preset_serializer.gd
 const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 const RigImporter := preload("res://addons/oasis_fx/src/core/rig_importer.gd")
+const RigWeights := preload("res://addons/oasis_fx/src/core/rig_weights.gd")
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 
 const EXIT_OK := 0
@@ -56,6 +59,9 @@ Commands:
   import-rig <scene>     Make a rig preset from an existing scene with a Skeleton2D
                          (the scene is not changed). Needs --out <file.rig.json>;
                          --id sets the rig id, --force overwrites the preset.
+  auto-weights <rig>     Make polygon part --part ID bend (deform) with its nearest bones
+                         (--bones a,b,c to choose them): moves it to the rig root and
+                         writes its weights into the preset (rewritten in canonical form).
   version                Print the OasisFx version.
   help                   Show this help.
 
@@ -118,6 +124,17 @@ func _run(args: PackedStringArray) -> int:
 			if parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check"):
 				return _usage_error("import-rig only accepts --out, --id and --force")
 			return _import_rig(rest[0], parsed.flags.out, parsed.flags.get("id", ""), parsed.flags.has("force"))
+		"auto-weights":
+			if rest.size() != 1:
+				return _usage_error("auto-weights expects exactly one rig preset (.rig.json)")
+			if not parsed.flags.has("part"):
+				return _usage_error("auto-weights needs --part <part id>")
+			if parsed.flags.has("out") or parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check") or parsed.flags.has("force"):
+				return _usage_error("auto-weights only accepts --part and --bones")
+			var bones := PackedStringArray()
+			for b in String(parsed.flags.get("bones", "")).split(",", false):
+				bones.append(b.strip_edges())
+			return _auto_weights(rest[0], parsed.flags.part, bones)
 		"version":
 			_emit({"command": "version", "ok": true, "version": OasisFx.VERSION}, "OasisFx " + OasisFx.VERSION)
 			return EXIT_OK
@@ -203,6 +220,52 @@ func _import_rig(scene_arg: String, out_arg: String, id: String, force: bool) ->
 	var data := report.to_dict()
 	data["notes"] = imported.notes
 	_emit({"command": "import-rig", "ok": report.is_ok(), "output_path": out, "results": [data]}, "\n".join(lines))
+	return EXIT_OK if report.is_ok() else EXIT_FAILED
+
+
+## Rewrites a rig preset so polygon part `part_id` bends with `bones` (all
+## bones when empty), using automatic weights (rig_weights.gd).
+func _auto_weights(arg: String, part_id: String, bones: PackedStringArray) -> int:
+	var path := PathUtils.resolve_input_path(arg)
+	var report := Report.new(path)
+	var preset := Validator.validate_file(path, report)
+	if not report.is_ok():
+		var failed := PackedStringArray(["FAIL  %s  (fix these first)" % path])
+		failed.append_array(report.format_lines())
+		_emit({"command": "auto-weights", "ok": false, "results": [report.to_dict()]}, "\n".join(failed))
+		return EXIT_FAILED
+	if preset.asset_type != "rig":
+		return _fail_message("auto-weights", "%s is not a rig preset" % path)
+	var index := -1
+	for i in preset.parts.size():
+		if preset.parts[i].id == part_id:
+			index = i
+	if index < 0:
+		return _fail_message("auto-weights", "no part \"%s\" in %s (parts: %s)" % [part_id, path, ", ".join(PackedStringArray(preset.parts.map(func(p): return p.id)))])
+	if preset.parts[index].kind != "polygon":
+		return _fail_message("auto-weights", "part \"%s\" is a sprite; only polygon parts can bend" % part_id)
+	var bone_ids: Array = preset.bones.map(func(b): return b.id)
+	for b in bones:
+		if not bone_ids.has(b):
+			return _fail_message("auto-weights", "no bone \"%s\" (bones: %s)" % [b, ", ".join(PackedStringArray(bone_ids))])
+	var updated := RigWeights.make_deforming(preset, preset.parts[index], Array(bones))
+	var raw: Dictionary = Loader.load_file(path, Report.new(path))
+	for key in ["bone", "position", "rotation_degrees", "scale", "weights"]:
+		raw.parts[index][key] = updated[key]
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return _fail_message("auto-weights", "cannot write %s: %s" % [path, error_string(FileAccess.get_open_error())])
+	file.store_string(Serializer.to_text(raw))
+	file.close()
+	report = Report.new(path)
+	Validator.validate_file(path, report)
+	var used := PackedStringArray(updated.weights.map(func(w): return w.bone))
+	var lines := PackedStringArray(["%s  %s  part %s bends with %s (%d points)" % ["OK  " if report.is_ok() else "FAIL", path, part_id, ", ".join(used), updated.polygon.size()]])
+	lines.append_array(report.format_lines())
+	var data := report.to_dict()
+	data["part"] = part_id
+	data["bones"] = Array(used)
+	_emit({"command": "auto-weights", "ok": report.is_ok(), "results": [data]}, "\n".join(lines))
 	return EXIT_OK if report.is_ok() else EXIT_FAILED
 
 
@@ -370,8 +433,9 @@ static func _type_list() -> String:
 
 static func _summary(preset: Dictionary) -> String:
 	if preset.get("asset_type") == "rig":
-		return "%s (rig, %d bone(s), %d part(s), %d IK chain(s), %d skin(s), %d pose(s))" % [preset.id, preset.bones.size(),
-				preset.parts.size(), preset.ik_chains.size(), preset.skins.size(), preset.poses.size()]
+		var bending: int = preset.parts.filter(func(p): return not p.weights.is_empty()).size()
+		return "%s (rig, %d bone(s), %d part(s)%s, %d IK chain(s), %d skin(s), %d pose(s))" % [preset.id, preset.bones.size(),
+				preset.parts.size(), " (%d bending)" % bending if bending > 0 else "", preset.ik_chains.size(), preset.skins.size(), preset.poses.size()]
 	if preset.get("asset_type") == "animation":
 		return "%s (animation, %d track(s), %d event(s), %s s%s)" % [preset.id, preset.tracks.size(), preset.events.size(),
 				Serializer.number(preset.duration_seconds), ", loop" if preset.loop else ""]
@@ -416,6 +480,11 @@ func _parse(args: PackedStringArray) -> Dictionary:
 				return {"flags": flags, "positional": positional, "error": "--id needs a rig id"}
 			i += 1
 			flags["id"] = args[i]
+		elif arg in ["--part", "--bones"]:
+			if i + 1 >= args.size():
+				return {"flags": flags, "positional": positional, "error": "%s needs a value" % arg}
+			i += 1
+			flags[arg.substr(2)] = args[i]
 		elif arg in ["--help", "-h"]:
 			positional.push_front("help")
 		elif arg.begins_with("-"):

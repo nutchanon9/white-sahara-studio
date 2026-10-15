@@ -11,7 +11,7 @@ extends RefCounted
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 
 ## Lists whose items are written one per line in compact form ({"time": 0, "value": 1}).
-const INLINE_ITEMS := ["key"]
+const INLINE_ITEMS := ["key", "weight"]
 
 ## Decimal places kept for non-integral numbers (hides float noise such as
 ## 0.35000000000000003 from UI spin boxes).
