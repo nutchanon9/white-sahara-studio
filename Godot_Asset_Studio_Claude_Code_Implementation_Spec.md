@@ -1,5 +1,7 @@
 # Godot Asset Studio — Implementation Specification for Claude Code
 
+> **Naming note (2026-10-15):** the tool described here is named **OasisFx**. The addon lives in `addons/oasis_fx/` instead of `addons/godot_asset_studio/`, and the CLI is `addons/oasis_fx/cli/oasis_fx_cli.gd`. The rest of this document is kept as originally written; see `AUDIT.md` for the decisions taken.
+
 **Version:** 1.0 (planning / initial implementation)  
 **Target:** Godot 4.x / GDScript; first consumer: White Sahara  
 **Execution environment:** GitHub-hosted Claude Code cloud session (may be headless)  

@@ -1,0 +1,15 @@
+# Godot editor cache and imports (regenerated automatically)
+.godot/
+*.import.tmp
+
+# Generated VFX output of this development project (regenerate with the CLI)
+/generated/
+
+# Local render/preview output
+/build/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+/_oasis_fx_test_output/
