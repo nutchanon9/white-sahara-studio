@@ -210,3 +210,21 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 
 แก้ข้อสังเกตเดิมในภาคผนวก 9 ("ข้อความไม่ตรงกับ CLI"): ตั้งแต่ 0.5.1 ตรงกันแล้ว สำหรับ build Linux ที่ตรวจจริง; Windows ยังไม่ได้รัน
 
+
+---
+
+## 12. ภาคผนวก (2026-10-15): Phase 4 — Rigging (0.6.0)
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| รูปแบบ | preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`) ใช้ registry เดิม (`asset_types.gd`), field table `rig_spec.gd`, schema สร้างจาก table | validator/schema/serializer/CLI/แอปใช้ร่วมกันโดยไม่ต้องเขียนแยก |
+| node ที่สร้าง | Skeleton2D + Bone2D (rest, length, bone_angle ตั้งเอง) + Sprite2D/Polygon2D แบบแข็ง + Marker2D + `SkeletonModification2DTwoBoneIK` + AnimationPlayer (RESET, `pose_<name>`) + `OasisAnimationEvents` | ทั้งหมดเป็น node มาตรฐานของ Godot 4.7.2; animation preset (Phase 3) ใช้กับ rig ที่สร้างได้ทันที |
+| skin | เก็บใน dictionary ที่ export ของ `oasis_rig.gd` (`{skin: {part path: {texture, color, visible}}}`) | ไม่ต้องมี scene ซ้ำต่อชุด; คืนค่าเดิมได้เสมอ (เก็บค่า base ก่อนเปลี่ยน) |
+| IK หลาย instance | runtime สร้าง modification stack ใหม่ต่อ instance ใน `_ready()` | instance ของ scene เดียวกันแชร์ stack resource; ทดลองแล้วว่าขาของ rig ตัวที่สองผิด; `resource_local_to_scene` ทำให้ log "Bone index out of range" |
+| นำเข้า rig เดิม | อ่าน `.tscn` แบบข้อความด้วย `scene_outline.gd`, พับ transform ของ node คั่นกลางเข้า bone/part, ลำดับการวาด → `z_index` 0…100, ชื่อ → snake_case | ไม่โหลด/รัน script ของเกมและไม่แก้ scene เดิม; สิ่งที่แปลงไม่ได้รายงานเป็น note (weight, IK, skew, region, animation, ชื่อที่เปลี่ยน) |
+| ขอบเขต | ไม่ทำ mesh deformation/bone weight, IK แบบอื่น, rig อัตโนมัติ | สเปก §10 ให้ "optional deformation" และให้ทำอย่างสมจริง; weight ต้องมีเครื่องมือวาด weight ซึ่งเกินขอบเขต milestone นี้ |
+
+ข้อค้นพบ:
+- IK ใน headless ทำงาน (ทดสอบก่อนเริ่ม); modification stack ต้อง `enabled = true` และ target เป็น path เทียบกับ Skeleton2D
+- import: ถ้า z ของชิ้นส่วนติดลบ ชิ้นส่วนจะไปอยู่หลังพื้นหลังของเกม → เริ่มที่ 0
+- แอป: แถบ preview ยาวเกินหน้าจอเมื่อเพิ่มตัวเลือก skin/pose → ย้ายไปแถวของตัวเอง (เห็นจากภาพหน้าจอ); list editor ซ้อนกันวางเต็มความกว้าง

@@ -71,6 +71,15 @@ stable ext ids, default runtime properties dropped) because release builds ignor
 (`tests/fixtures/release_build/`), the packaged Linux `--smoke-test` (`matches_cli`) and a
 direct comparison with CLI output in the same game; Windows NOT RUN. Full suite 164 passed, 0 failed (also on a fresh copy).
 
+**Phase 4 Rigging (user requested "continue", 2026-10-15), 0.6.0:** implemented — `rig` preset type
+(`rig_spec.gd`, `rig_builder.gd`, `rig.v1.schema.json`, `docs/rig_format.md`): Skeleton2D/Bone2D with rigid
+Sprite2D/Polygon2D parts, markers, two-bone IK (per-instance stack in runtime `src/runtime/oasis_rig.gd`), skins,
+poses; `import-rig` (`rig_importer.gd`, scene read as text, never changed); example `oasis_chef` (CC0 parts) +
+`oasis_chef_reach` animation; app (New ▾ rig / rig from a scene, rig preview with draggable IK targets, skin/pose
+row, list editors). Full suite 179 passed, 0 failed (also on a fresh copy); packaged Linux smoke test incl. rig
+passed, packaged exports byte-identical to CLI; Windows launch and importing White Sahara's real `mannequin.tscn`
+NOT RUN; mesh deformation / bone weights not implemented. Awaiting owner acceptance; all spec phases now exist.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

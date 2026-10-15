@@ -1,6 +1,6 @@
 # white-sahara-studio — OasisFx
 
-ชุดเครื่องมือสร้าง asset (VFX, SFX, Animation และ Sprite frames) สำหรับ Godot 4
+ชุดเครื่องมือสร้าง asset (VFX, SFX, Animation, Sprite frames และ Rig ตัวละคร 2D) สำหรับ Godot 4
 ชื่อเครื่องมือคือ **OasisFx** (ในสเปกเดิมเรียกว่า "Godot Asset Studio")
 
 แนวคิด: คน, ChatGPT หรือ Claude เขียน **preset เป็น JSON** → CLI ตรวจความถูกต้อง →
@@ -15,12 +15,15 @@
 **Phase 1C ทำแล้ว:** แอปอยู่ใน `app/` build เป็น `OasisFx.exe` ได้ (ดู [desktop.md](addons/oasis_fx/docs/desktop.md))
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 **Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
+**Phase 4 ทำแล้ว:** rig ตัวละคร 2D แบบ cutout — bone, ชิ้นส่วน PNG/polygon, IK สองท่อน, skin (เปลี่ยนชุด), pose และนำเข้า rig จาก scene เดิม (ดู [rig_format.md](addons/oasis_fx/docs/rig_format.md))
 
 ![OasisFx desktop app](docs/images/desktop_app.png)
 
 ![OasisFx — แก้เสียง](docs/images/desktop_sfx.png)
 
 ![OasisFx — แก้ animation](docs/images/desktop_animation.png)
+
+![OasisFx — แก้ rig](docs/images/desktop_rig.png)
 
 รายละเอียดและคำสั่งงานล่าสุดอยู่ใน [Spec v1.1](Godot_Asset_Studio_Claude_Code_Implementation_Spec.md)
 และ [CLAUDE.md](CLAUDE.md) ซึ่งใช้แทนทิศทาง UI เดิมใน audit
@@ -35,7 +38,7 @@
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
 | 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
 | 3 | Animation Timeline: keyframe ของ node ใน scene เดิม (bone, sprite, polygon), event ที่เรียก VFX/SFX, sprite frames, timeline + preview ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองกับตัวละครจริงของ White Sahara — repo เกมไม่อยู่ใน session นี้) |
-| 4 | Rigging (สร้าง/แก้ rig, IK, costume) | ยังไม่เริ่ม |
+| 4 | Rigging: สร้าง/นำเข้า rig (Skeleton2D/Bone2D), ชิ้นส่วน PNG/polygon, marker, IK สองท่อน, skin, pose, ลาก IK ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองนำเข้า mannequin จริงของ White Sahara; ไม่มี mesh deformation / bone weight) |
 
 ## โครงสร้าง repo
 
@@ -47,7 +50,7 @@ tests/                 เทสต์ระดับ repo (แอป, เดโ
 docs/images/           ภาพ preview ที่ render จริง
 app/                   แอป desktop (main.tscn, ui/, services/, export/ = plugin ตอน build)
 export_presets.cfg     การตั้งค่า export สำหรับ Windows และ Linux
-tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียงและวาด sprite sheet ตัวอย่าง)
+tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียง, วาด sprite sheet และชิ้นส่วน rig ตัวอย่าง)
 AUDIT.md               รายงาน Phase 0
 CLAUDE.md              คำแนะนำเริ่มงานและ milestone ปัจจุบัน
 Godot_Asset_Studio_Claude_Code_Implementation_Spec.md   สเปกต้นฉบับ
@@ -71,7 +74,8 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd
 ```
 
 ดู effect ทำงานจริง: เปิดโปรเจกต์ใน Godot → เปิด `examples/runtime_demo/runtime_demo.tscn` → กด F6
-(คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร, A = เชฟฟาดทัพพี, S = เชฟดีใจ) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
+(คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร, A = เชฟฟาดทัพพี, S = เชฟดีใจ,
+R = rig เอื้อมคน (IK), K = เปลี่ยน skin, P = เปลี่ยน pose) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
 
 ภาพหน้าจอจริงของเดโม (render ใน cloud ด้วย software OpenGL ผ่าน Xvfb):
 
@@ -231,6 +235,35 @@ OasisFx ไม่ได้สร้างเสียงเองหรือด
   ไฟล์ที่ export จากแอปแพ็กแล้วกับไฟล์ที่ CLI สร้างในเกมเดียวกันตรงกันทุก byte (4 ชนิด)
 - เทสต์ทั้งหมด **164 passed, 0 failed (also on a fresh copy)**
 - **NOT RUN:** เทียบแบบเดียวกันบน build Windows (ไม่มีเครื่อง Windows)
+
+## Phase 4: Rigging (0.6.0)
+
+preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตัวละคร 2D แบบ cutout ที่ใช้ node มาตรฐานของ Godot
+(`Skeleton2D`, `Bone2D`, `Sprite2D`, `Polygon2D`, `Marker2D`, IK สองท่อนใน modification stack, `AnimationPlayer`)
+
+- **bone** เรียงจากพ่อไปลูก (ตำแหน่งเทียบกับ bone พ่อ), **part** เป็นรูป PNG หรือ polygon ติดกับ bone (แข็ง ไม่บิดงอ),
+  ลำดับการวาดใช้ `z_index`, **marker** เป็นจุดบน bone (ปลายทัพพี มือ) ใช้เป็นที่เกิด effect ของ event
+- **IK สองท่อน** (ขา/แขน): ขยับ `IKTargets/<chain>` แล้วข้อพับเอง; ทุก instance ได้ IK stack ของตัวเอง
+  (Godot แชร์ stack ระหว่าง instance โดยปกติ ทำให้หลายตัวในฉากพัง — runtime แก้ให้แล้ว)
+- **skin** เปลี่ยนรูป/สี/การแสดงของ part (`apply_skin("night_shift")`), **pose** ตั้งท่าทันที (`set_pose("wave")`)
+- **นำเข้า rig เดิม:** `import-rig <scene.tscn> --out <file.rig.json>` หรือในแอป *New ▾ → Rig from a scene in the game…*
+  อ่าน `.tscn` แบบข้อความ ไม่แก้ scene เดิม; สิ่งที่แปลงไม่ได้ (bone weight, IK เดิม, skew, region, animation, ชื่อที่เปลี่ยน)
+  แจ้งเป็น note ทั้งหมด
+- **ตัวอย่าง:** Oasis Chef (11 bone, 18 part, รูป PNG CC0 จาก `tools/synth_example_rig_parts.gd`, IK 3 ชุด, skin 3, pose 2)
+  และ animation `oasis_chef_reach` ที่ขยับ IK target ของ rig ที่ generate แล้ว พร้อม event ที่ปลายทัพพี
+- **แอป:** New ▾ → Rig / Rig from a scene; preview เป็น rig จริงพร้อมเส้น bone และ IK target ที่ลากด้วยเมาส์ได้,
+  แถวเลือก skin/pose, inspector มี list editor สำหรับ parts/markers/IK/skins/poses (มีรายการ id ให้เลือก), export เข้าเกม
+  พร้อม runtime และรูปชิ้นส่วน
+- **ยังไม่ทำ (ตั้งใจ):** mesh deformation / bone weight, IK แบบอื่น (FABRIK/CCDIK), rig อัตโนมัติจากภาพเดียว
+
+**ผลการตรวจ Phase 4:**
+- เทสต์ทั้งหมด **179 passed, 0 failed** (exit 0) และได้ผลเดียวกันบนสำเนาใหม่ที่ไม่มี `.godot/`
+- preset ตัวอย่าง 15 ไฟล์ผ่าน JSON Schema (rig ใหม่ + ผล import ของ `chef_rig.tscn`) ด้วย Python `jsonschema`
+- import `chef_rig.tscn` แล้วสร้างใหม่ได้ตำแหน่ง/มุมของทุก bone, polygon และสีตรงกับต้นฉบับ (เทสต์)
+- rig ที่ export เข้าโปรเจกต์แยก: 2 ตัวพร้อมกัน, skin, pose, animation + event ทำงาน, IK stack แยกกัน (เทสต์)
+- build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` รวม rig (`matches_cli: true`, export เข้าโฟลเดอร์ชื่อไทย),
+  ไฟล์ที่ export จากแอปแพ็กแล้ว 5 ชนิดตรงกับ CLI ทุก byte, ภาพหน้าจอจริงใน `docs/images/desktop_rig.png` และ `runtime_demo.png`
+- **NOT RUN:** เปิด .exe บน Windows, นำเข้า `mannequin.tscn` จริงของ White Sahara (repo เกมไม่อยู่ใน session นี้), GPU จริง
 
 ## License
 

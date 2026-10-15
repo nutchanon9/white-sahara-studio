@@ -18,11 +18,13 @@ OASIS="godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli
 $OASIS validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
 $OASIS validate addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json
 $OASIS validate addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json
+$OASIS validate addons/oasis_fx/presets/examples/oasis_chef.rig.json
 $OASIS validate-all addons/oasis_fx/presets/examples
 $OASIS generate addons/oasis_fx/presets/examples/fire_burst.vfx.json --out res://generated/oasis_fx
 $OASIS generate-all addons/oasis_fx/presets/examples --out res://generated/oasis_fx --dry-run
 $OASIS --json validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
 $OASIS schema sfx
+$OASIS import-rig res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn --out presets/chef_rig.rig.json
 $OASIS help
 ```
 
@@ -36,18 +38,19 @@ Every command handles all asset types; the type comes from the preset's `asset_t
 | `sfx` layered sound | `*.sfx.json` | `<id>.tscn` | [sfx_format.md](sfx_format.md) |
 | `animation` keyframes + events for an existing scene | `*.anim.json` | `<id>.tres` (Animation) | [animation_format.md](animation_format.md) |
 | `sprite_frames` sprite-sheet animations | `*.frames.json` | `<id>.tres` (SpriteFrames) | [animation_format.md](animation_format.md) |
-The type comes from the preset's `asset_type`.
+| `rig` 2D cutout character (bones, parts, IK, skins, poses) | `*.rig.json` | `<id>.tscn` | [rig_format.md](rig_format.md) |
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `validate <preset>` | Parses and validates one preset. Prints errors with field paths. |
-| `validate-all <dir>` | Validates every preset file (`*.vfx.json`, `*.sfx.json`, `*.anim.json`, `*.frames.json`) under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across all of them. |
+| `validate-all <dir>` | Validates every preset file (`*.vfx.json`, `*.sfx.json`, `*.anim.json`, `*.frames.json`, `*.rig.json`) under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across all of them. |
 | `generate <preset>` | Validates, then writes `<out>/<id>.tscn` (or `<id>.tres`), loads it back to verify it, and updates `<out>/oasis_fx_manifest.json`. |
 | `generate-all <dir>` | Generates every preset under `<dir>`. **All or nothing:** if any preset is invalid, two presets share an id, or (without `--force`) any output file exists, nothing is written and the presets that would have been fine are reported as `SKIP`. |
 | `format <preset\|dir> [--check]` | Rewrites presets in canonical form (field order, 2-space indent, whole numbers without `.0`) — the same text the desktop app saves. `--check` only reports files that are not canonical (exit 1). |
-| `schema [TYPE] [--write]` | Prints the JSON Schema of an asset type (`vfx` (default), `sfx`, `animation`, `sprite_frames`) built from the validator's field tables; `--write` rewrites every `schemas/<type>.v1.schema.json` (a test fails while any is out of date). |
+| `schema [TYPE] [--write]` | Prints the JSON Schema of an asset type (`vfx` (default), `sfx`, `animation`, `sprite_frames`, `rig`) built from the validator's field tables; `--write` rewrites every `schemas/<type>.v1.schema.json` (a test fails while any is out of date). |
+| `import-rig <scene> --out <file.rig.json>` | Creates a rig preset from an existing `.tscn` with a `Skeleton2D` (bones, Polygon2D/Sprite2D parts, Marker2D points), read as text — the scene is never loaded or changed. Prints what was not imported as `note:` lines (bone weights, IK, skew, regions, animations, renamed nodes). `--id` sets the rig id (default: the scene root's name in snake_case); without `--force` an existing preset file is an error. See [rig_format.md](rig_format.md#importing-an-existing-rig-scene). |
 | `version` | Prints the OasisFx version. |
 | `help` | Prints usage. |
 
@@ -55,8 +58,9 @@ The type comes from the preset's `asset_type`.
 
 | Option | Applies to | Meaning |
 |---|---|---|
-| `--out <dir>` / `--out=<dir>` | generate, generate-all | Output folder, `res://` or `user://`. Default `res://generated/oasis_fx`. |
-| `--force` | generate, generate-all | Allow overwriting existing `<id>.tscn` / `<id>.tres` files. Without it an existing file is an error. |
+| `--out <dir>` / `--out=<dir>` | generate, generate-all | Output folder, `res://` or `user://`. Default `res://generated/oasis_fx`. For import-rig: the preset file to write. |
+| `--force` | generate, generate-all, import-rig | Allow overwriting existing `<id>.tscn` / `<id>.tres` files (the preset file for import-rig). Without it an existing file is an error. |
+| `--id <id>` | import-rig | Id of the imported rig. |
 | `--dry-run` | generate, generate-all | Validate and report the target paths; write nothing (no folders either). |
 | `--json` | all | Print one JSON object on its own line instead of text. |
 | `--write` | schema | Write the schema file instead of printing it. |
@@ -97,9 +101,17 @@ OK    res://addons/oasis_fx/presets/examples/cooking_success_sfx.sfx.json  cooki
 OK    res://addons/oasis_fx/presets/examples/fire_burst.vfx.json  fire_burst (3 emitter(s), 68 particles)
 OK    res://addons/oasis_fx/presets/examples/fire_burst_sfx.sfx.json  fire_burst_sfx (sfx, 3 layer(s), 3 audio file(s))
 OK    res://addons/oasis_fx/presets/examples/ice_nova.vfx.json  ice_nova (4 emitter(s), 49 particles)
+OK    res://addons/oasis_fx/presets/examples/oasis_chef.rig.json  oasis_chef (rig, 11 bone(s), 18 part(s), 3 IK chain(s), 3 skin(s), 2 pose(s))
+OK    res://addons/oasis_fx/presets/examples/oasis_chef_reach.anim.json  oasis_chef_reach (animation, 3 track(s), 1 event(s), 1.2 s)
 OK    res://addons/oasis_fx/presets/examples/sword_slash.vfx.json  sword_slash (3 emitter(s), 96 particles)
 OK    res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json  sword_slash_sfx (sfx, 2 layer(s), 4 audio file(s))
-13 valid, 0 invalid
+15 valid, 0 invalid
+
+$ $OASIS import-rig res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn --out presets/chef_rig.rig.json
+OK    res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn -> presets/chef_rig.rig.json  chef_rig (rig, 5 bone(s), 15 part(s), 0 IK chain(s), 0 skin(s), 0 pose(s))
+  note: the scene's drawing order is kept as z_index values
+  note: animations of AnimationPlayer are not imported; recreate them as animation presets for the new rig
+  note: node names became snake_case ids: Hips → hips, Chest → chest, ArmL → arm_l, … (shortened here)
 
 $ $OASIS validate presets/ice_nova.vfx.json
 FAIL  res://presets/ice_nova.vfx.json
@@ -131,6 +143,11 @@ take the line that starts with `{` (for example `| grep '^{'`).
   `res://addons/oasis_fx/src/runtime/oasis_animation_events.gd`, needed only when the animation has events).
 - `<id>.tres` of a `sprite_frames` preset: a `SpriteFrames` resource with one `AtlasTexture` per
   used sheet cell, referencing the sheet by path.
+- `<id>.tscn` of a `rig` preset: a `Node2D` with `res://addons/oasis_fx/src/runtime/oasis_rig.gd`,
+  a `Skeleton2D` with `Bone2D`s and their `Sprite2D` / `Polygon2D` parts and `Marker2D`s,
+  two-bone IK targets under `IKTargets`, an `OasisAnimationEvents` node (so animation presets'
+  events work) and an `AnimationPlayer` with `RESET` and `pose_<name>`; part images are
+  referenced by path. It needs both `oasis_rig.gd` and `oasis_animation_events.gd`.
 - **The game project needs the runtime script** at the same path (only the file the scene
   uses), and the audio/image files and effect scenes the preset references. The manifest
   lists them per entry (for animations including what their effect scenes need).

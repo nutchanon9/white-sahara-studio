@@ -3,8 +3,8 @@
 OasisFx is also a standalone desktop application, built with Godot 4.7.2 from this
 repository (`app/`, entry scene `app/main.tscn`). It needs neither Godot Editor nor the
 game project to run. It edits particle effects (`.vfx.json`), layered sound effects
-(`.sfx.json`, Phase 2), and animations (`.anim.json`) and sprite frames (`.frames.json`,
-Phase 3). It uses the same core as the CLI (`addons/oasis_fx/src/core/`): the
+(`.sfx.json`, Phase 2), animations (`.anim.json`) and sprite frames (`.frames.json`,
+Phase 3), and 2D cutout rigs (`.rig.json`, Phase 4). It uses the same core as the CLI (`addons/oasis_fx/src/core/`): the
 inspector is generated from the validator's field table, the preview is built by the
 generator's builder, and export calls the generator.
 
@@ -30,20 +30,26 @@ from the scene's text; the `attack_start` marker is the preview's stand-in for e
 *Campfire Flame: the selected animation playing (left) and the sheet with its frame grid,
 the frames the animation uses and the current frame (right).*
 
+![OasisFx desktop app editing a rig](../../../docs/images/desktop_rig.png)
+
+*Oasis Chef (Phase 4) with the `night_shift` skin and the `wave` pose; the right arm's IK
+target was moved, so the arm reaches up and the elbow bends. Bones (blue) and IK targets
+(orange circles) are drawn on top; the inspector shows the parts list editor.*
+
 ## Using it
 
 | Area | What it does |
 |---|---|
-| Toolbar | **New ▾**: effect (Ctrl+N), sound (Ctrl+Shift+N), animation (Ctrl+Alt+N), sprite frames; **Open…** (Ctrl+O), **Save** (Ctrl+S), **Save As…**, **Export to game…** (Ctrl+E), **Game project…** (the game whose `res://` files presets use). The title shows the file, `*` for unsaved changes, and "read-only example" for shipped presets. |
-| Presets (left) | *Examples (read-only)* shipped inside the app, and *My presets* in the workspace folder; sounds are marked ♪, animations ▶, sprite frames ▦. Click to open. |
-| Preview (center) | Effects: the effect in its own viewport, with background color, grid with the spawn point and zoom. Sounds: the timeline (one row per layer, fades, loop repeats, playhead) and the sound plays through the speakers. Animations: the target scene's stand-in posed by the animation, event markers at their nodes, and a track timeline below (click a row to select the track, click/drag the time area to see that pose). Sprite frames: the selected animation and the sheet with its grid. All: Play / Stop / Restart / Pause, **Replay** (restart one-shot effects automatically) and the clock. |
-| Diagnostics (below preview) | "Valid — N emitters, M particles" / "Valid — N layer(s)" / "Valid — N track(s), M event(s)" / "Valid — N animation(s)" or the errors and warnings from the shared validator, each with its field path. Clicking an entry of an item (`emitters[i]`, `layers[i]`, `tracks[i]`, `animations[i]`) selects it. |
-| Inspector (right) | Effect or sound settings and the selected emitter or layer, grouped (effects: Emission, Spawn area, Motion, Look; sounds: Sound, Mix, Position; layers: Audio, Timing, Mix). Every control is typed and limited to the documented range; hover a label for the field's description. File fields (audio, image) have a **…** button that picks a file inside the game project and stores its `res://` path. Items can be added, duplicated, removed and reordered (emitters/layers 1–8, tracks 0–32, sprite animations 1–32). Animations add a **Keys** editor for the selected track (time, a value control matching the property, ease, remove, *Add key*) and an **Events** editor (time, name, position node, effect scenes, *Add event*); node fields have a **▾** list of the target scene's nodes. Sprite animations take frames as `0, 1, 2, 3`. |
+| Toolbar | **New ▾**: effect (Ctrl+N), sound (Ctrl+Shift+N), animation (Ctrl+Alt+N), sprite frames, rig, rig from a scene in the game; **Open…** (Ctrl+O), **Save** (Ctrl+S), **Save As…**, **Export to game…** (Ctrl+E), **Game project…** (the game whose `res://` files presets use). The title shows the file, `*` for unsaved changes, and "read-only example" for shipped presets. |
+| Presets (left) | *Examples (read-only)* shipped inside the app, and *My presets* in the workspace folder; sounds are marked ♪, animations ▶, sprite frames ▦, rigs ✦. Click to open. |
+| Preview (center) | Effects: the effect in its own viewport, with background color, grid with the spawn point and zoom. Sounds: the timeline (one row per layer, fades, loop repeats, playhead) and the sound plays through the speakers. Animations: the target scene's stand-in posed by the animation, event markers at their nodes, and a track timeline below (click a row to select the track, click/drag the time area to see that pose). Sprite frames: the selected animation and the sheet with its grid. Rigs: the rig built by the generator's builder with its part images, bones and IK targets drawn on top (**Bones**), a row with **skin** and **pose** pickers; drag an IK target with the mouse to bend its chain. All: Play / Stop / Restart / Pause, **Replay** (restart one-shot effects automatically) and the clock. |
+| Diagnostics (below preview) | "Valid — N emitters, M particles" / "Valid — N layer(s)" / "Valid — N track(s), M event(s)" / "Valid — N animation(s)" / "Valid — N bone(s), M part(s), …" or the errors and warnings from the shared validator, each with its field path. Clicking an entry of an item (`emitters[i]`, `layers[i]`, `tracks[i]`, `animations[i]`, `bones[i]`) selects it. |
+| Inspector (right) | Effect or sound settings and the selected emitter or layer, grouped (effects: Emission, Spawn area, Motion, Look; sounds: Sound, Mix, Position; layers: Audio, Timing, Mix). Every control is typed and limited to the documented range; hover a label for the field's description. File fields (audio, image) have a **…** button that picks a file inside the game project and stores its `res://` path. Items can be added, duplicated, removed and reordered (emitters/layers 1–8, tracks 0–32, sprite animations 1–32). Animations add a **Keys** editor for the selected track (time, a value control matching the property, ease, remove, *Add key*) and an **Events** editor (time, name, position node, effect scenes, *Add event*); node fields have a **▾** list of the target scene's nodes. Sprite animations take frames as `0, 1, 2, 3`. Rigs: the items are the bones (shown as `3. head ← chest`); parts, markers, IK chains, skins and poses are **list editors** in the rig settings (a list, the selected entry's fields, *Add* / *Duplicate* / *Remove*; skins and poses contain a nested list of their changes). Bone and part references have a **▾** list of the rig's ids; polygon outlines are edited as one `x, y` point per line. |
 
 Edits update the preview about 0.15 s later. While a preset has errors the preview is
 empty and the errors explain why; nothing is lost.
 
-A preset path on the command line (`.vfx.json`, `.sfx.json`, `.anim.json`, `.frames.json`)
+A preset path on the command line (`.vfx.json`, `.sfx.json`, `.anim.json`, `.frames.json`, `.rig.json`)
 opens that preset (this is what Windows passes for "Open with OasisFx").
 
 ### Animations: the scene and its preview
@@ -56,6 +62,23 @@ look simpler than the game (for example a node driven by a script stands still),
 animated nodes move exactly as the generated Animation moves them. Event effects are not
 played in the preview (the game's effect scenes may need game resources); a marker with
 the event name appears at the event's node instead.
+
+### Rigs: making, importing and checking
+
+**New ▾ → Rig** starts a two-bone figure made of polygons. Add bones with the item buttons
+(a new bone hangs from the last one), parts with *Add* under **Parts** (attached to the first
+bone; pick another with **▾**), and IK chains, skins and poses the same way. Images for
+sprite parts come from the game project (**…**).
+
+**New ▾ → Rig from a scene in the game…** reads a character scene of the game (with a
+`Skeleton2D`) as text and turns it into a rig preset, as the CLI's `import-rig` does. The
+scene is never changed. A message lists what was not imported (bone weights, IK, skew,
+sprite regions, animations, renamed nodes); the preset opens unsaved, ready for IK chains,
+skins and poses. Export it as a **new** scene. Details: [rig_format.md](rig_format.md).
+
+The preview is the generated rig itself (same builder, same runtime script), so skins,
+poses and IK behave as in the game. Moving a target in the preview does not change the
+preset; IK targets start where the preset says (`target`, or the rest pose).
 
 ### The game project and its files
 
@@ -95,10 +118,11 @@ and keeps the changes.
    `MyGame/vfx`). OasisFx finds the game by looking for `project.godot` in that folder or
    above it, and maps the folder to the game's `res://` path (`res://vfx`).
 2. OasisFx shows every file it will write before writing anything:
-   - `CREATE/OVERWRITE/UNCHANGED  res://vfx/<id>.tscn` — the effect or sound scene, or
+   - `CREATE/OVERWRITE/UNCHANGED  res://vfx/<id>.tscn` — the effect, sound or rig scene, or
      `<id>.tres` for an animation or sprite frames;
    - `… res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd` (effects),
-     `oasis_sfx_effect.gd` (sounds) or `oasis_animation_events.gd` (animations with events)
+     `oasis_sfx_effect.gd` (sounds), `oasis_animation_events.gd` (animations with events) or
+     `oasis_rig.gd` + `oasis_animation_events.gd` (rigs)
      — the small runtime script the file needs (copied only if missing or different; sprite
      frames and animations without events need none);
    - the audio, image and effect-scene files the preset uses (see below);
@@ -109,7 +133,9 @@ and keeps the changes.
    `OasisFxEffect.spawn(scene, parent, position)` / `OasisSfxEffect.spawn(…)`); it plays and
    frees itself. An animation is added to the character's AnimationPlayer (Animation panel →
    Manage Animations → Load); sprite frames go into an AnimatedSprite2D (see
-   [animation_format.md](animation_format.md)). The app's message after exporting says which.
+   [animation_format.md](animation_format.md)); a rig is a scene to instantiate (skins, poses
+and IK through its `OasisRig` methods, see [rig_format.md](rig_format.md)). The app's message
+after exporting says which.
 
 **Audio, image and effect-scene files.** The exported file references them by `res://`
 path; export never rewrites those paths. For an animation this includes the effect scenes
@@ -118,7 +144,7 @@ its events show and everything those scenes need (from the manifest next to them
 | The file … | Export |
 |---|---|
 | exists in the game at that path | `USE` — referenced, **never overwritten** |
-| is one of the files bundled with OasisFx (example sounds, sprite sheet, example effects) | `CREATE` — copied into the game at the same path, with a warning to replace it before shipping |
+| is one of the files bundled with OasisFx (example sounds, sprite sheet, rig part images, example effects) | `CREATE` — copied into the game at the same path, with a warning to replace it before shipping |
 | is missing from the game and not bundled | error: put the file into the game first (nothing is written) |
 
 Godot imports copied audio the next time the game is opened in the editor (or with
@@ -166,7 +192,7 @@ The presets live in `export_presets.cfg`:
   preview reads audio and images like files of a game, the validator reads the example rig
   as text, export copies them into games), so the development-only editor plugin
   `app/export/` (enabled in `project.godot`) adds their original bytes to the package next
-  to the imported/converted versions: `presets/examples/audio`, `sprites`, `rigs` and
+  to the imported/converted versions: `presets/examples/audio`, `sprites`, `rigs`, `rig_parts` and
   `examples/runtime_demo/fx` (the example effects, with their manifest via the include
   filter). A test checks that every file an example uses is covered. Exporting therefore has to
   run with this project's editor plugins loaded — the commands above do that.
@@ -190,8 +216,9 @@ It prints one `SMOKE {...}` line and exits 0 when the bundled examples are liste
 valid, the preview builds, writes to packaged `res://` are refused, the runtime source is
 bundled, Fire Burst exports into the given folder, the Sword Slash SFX example
 validates, loads its audio from the package (real lengths on the timeline) and exports
-with its runtime and audio files, the Chef Ladle Attack animation and Campfire Flame
-sprite frames validate, preview (rig stand-in / sheet) and export, and every bundled
+with its runtime and audio files, the Chef Ladle Attack animation, Campfire Flame
+sprite frames and Oasis Chef rig validate, preview (rig stand-in / sheet / rig with its part
+images) and export, and every bundled
 example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 `OasisFx.console.exe` (same arguments) to see the output in a console.
 
@@ -245,6 +272,22 @@ example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 | Packaged Linux build `--smoke-test`: all 13 bundled examples generated in the release build equal the CLI output (`"matches_cli": true`, export into a folder named `เกม byte/fx`) | **PASS** |
 | Fire Burst, Sword Slash SFX, Chef Ladle Attack and Campfire Flame exported by the packaged Linux build vs. `oasis_fx_cli.gd -- generate` in the same game at the same paths | **PASS** — byte-identical |
 | Same comparison with the packaged Windows build | **NOT RUN** (no Windows; the Windows build uses the same release template code) |
+
+## Verification status (Phase 4 — rigs, 0.6.0, 2026-10-15)
+
+| Check | Result |
+|---|---|
+| Full suite (`run_tests.gd`, 17 test files incl. `test_rig.gd` and the rig app tests) | **PASS** — 179 passed, 0 failed; same result on a fresh copy without `.godot/` |
+| Example presets (15) against the five JSON Schemas, plus the `import-rig` result of `chef_rig.tscn` against `rig.v1` (Python `jsonschema` 4.26) | **PASS** |
+| Import of the example `chef_rig.tscn` regenerates every bone, polygon and color at the original global transforms (automated) | **PASS** |
+| Rig exported into a separate project: two instances with independent IK, skin swap (image file), pose, the `oasis_chef_reach` animation and its event (automated) | **PASS** |
+| App driven through its controls: rig preview, skin/pose pickers, IK target drag (`move_target`), list editors (add skin / nested change / IK chain / bad part id), new rig, rig from a scene (automated) | **PASS** |
+| Linux and Windows export builds with the raw `rig_parts` images packed | **PASS** |
+| Packaged Linux build `--smoke-test` incl. rig validate/preview (part images loaded)/export into a folder named `เกม rig 2/rig`, `"matches_cli": true` for all 15 examples | **PASS** |
+| Files exported by the packaged Linux build (rig, animation, effect, sound, sprite frames) vs. `oasis_fx_cli.gd -- generate` in the same game at the same paths | **PASS** — byte-identical |
+| App with a window (Xvfb, software OpenGL): rig preview with skin, pose and a moved IK target; runtime demo with the generated rig reaching | **PASS** — images above and in README |
+| Launching `OasisFx.exe` on Windows; dragging IK targets with a real mouse | **NOT RUN** (no Windows; dragging was driven by code) |
+| Importing White Sahara's real `mannequin.tscn` | **NOT RUN** — the game repository is not in this session |
 
 ## Manual QA checklist (Windows)
 
@@ -300,3 +343,21 @@ Animations and sprite frames (Phase 3):
     effects.
 21. Click **▦ campfire_flame**: the flame burns; select *flare*: it plays once; frames
     `0, 2, 4` update the preview. Export it and use it in an AnimatedSprite2D.
+
+Rigs (Phase 4):
+
+22. Click **✦ oasis_chef**: the chef stands with bones (blue) and three IK targets (orange
+    circles) drawn on top. Drag the `arm_r` circle: the arm follows and the elbow bends; drag
+    a foot target up: the knee bends. Untick **Bones**: the overlay disappears.
+23. Pick each skin (`night_shift`, `beret`, `no_hat`) and pose (`wave`, `crouch`); *(as
+    defined)* and *(rest)* restore the chef.
+24. In the inspector under **Skins**, *Add* a skin and change its first entry's *Visible* to
+    `hide`: the new skin appears in the picker and hides that part. Under **IK Chains**, *Add*
+    a chain: diagnostics report that its bones are already in another chain; *Remove* it.
+25. **New ▾ → Rig**: a two-bone figure; *Add* a bone and a part; Save As suggests `.rig.json`.
+26. **Game project…** → the White Sahara project. **New ▾ → Rig from a scene in the game…** →
+    the mannequin `.tscn`: a message lists what was not imported; the preview shows the
+    mannequin (rigid parts). Add `ik_chains` for the legs and try them.
+27. Export `oasis_chef` to `chars` in the test game: the list shows the scene, `oasis_rig.gd`,
+    `oasis_animation_events.gd` and the part images. In Godot, instantiate
+    `res://chars/oasis_chef.tscn` twice and call `apply_skin` / `set_pose` from a script.
