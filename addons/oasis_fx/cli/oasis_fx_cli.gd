@@ -12,7 +12,7 @@ extends SceneTree
 ##   generate-all <dir> [--out DIR]             generate every preset (all or nothing)
 ##            [--force] [--dry-run]
 ##   format <preset|dir> [--check]              rewrite presets in canonical form
-##   schema [--write]                           print (or rewrite) the JSON Schema
+##   schema [vfx|sfx] [--write]                 print a JSON Schema, or rewrite both files
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
 ##
@@ -38,13 +38,14 @@ Usage:
   godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- <command> [options]
 
 Commands:
-  validate <preset>      Validate a .vfx.json preset.
-  validate-all <dir>     Validate every *.vfx.json under <dir> (recursive) and check ids are unique.
+  validate <preset>      Validate a .vfx.json or .sfx.json preset.
+  validate-all <dir>     Validate every *.vfx.json and *.sfx.json under <dir> (recursive); ids must be unique.
   generate <preset>      Validate and write <out>/<id>.tscn.
   generate-all <dir>     Generate every preset under <dir>. Writes nothing unless all are valid.
   format <preset|dir>    Rewrite presets in canonical form (key order, spacing, numbers).
                          With --check, only report files that are not canonical.
-  schema [--write]       Print the preset JSON Schema, or rewrite schemas/vfx.v1.schema.json.
+  schema [vfx|sfx]       Print the JSON Schema of an asset type (default vfx).
+                         With --write, rewrite schemas/vfx.v1.schema.json and sfx.v1.schema.json.
   version                Print the OasisFx version.
   help                   Show this help.
 
@@ -115,9 +116,12 @@ func _run(args: PackedStringArray) -> int:
 				return _usage_error("format only accepts --check")
 			return _format(rest[0], parsed.flags.has("check"))
 		"schema":
-			if not rest.is_empty() or parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
-				return _usage_error("schema takes no arguments except --write")
-			return _schema(parsed.flags.has("write"))
+			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out") or rest.size() > 1:
+				return _usage_error("schema takes an optional asset type (vfx or sfx) and --write")
+			var type: String = rest[0] if rest.size() == 1 else "vfx"
+			if not Schema.PATHS.has(type):
+				return _usage_error("unknown asset type \"%s\" (vfx or sfx)" % type)
+			return _schema(parsed.flags.has("write"), type)
 		"validate-all":
 			if rest.size() != 1:
 				return _usage_error("validate-all expects exactly one directory")
@@ -160,7 +164,7 @@ func _format(arg: String, check: bool) -> int:
 	else:
 		return _fail_message("format", "not found: %s" % target)
 	if paths.is_empty():
-		return _fail_message("format", "no *%s files found under %s" % [OasisFx.VFX_PRESET_SUFFIX, target])
+		return _fail_message("format", "no *.vfx.json or *.sfx.json files found under %s" % target)
 	var entries := []
 	var lines := PackedStringArray()
 	var ok := true
@@ -197,17 +201,19 @@ func _format(arg: String, check: bool) -> int:
 	return EXIT_OK if ok else EXIT_FAILED
 
 
-func _schema(write: bool) -> int:
-	var text := Schema.to_text()
+func _schema(write: bool, asset_type: String) -> int:
 	if not write:
-		print(text.strip_edges())
+		print(Schema.to_text(asset_type).strip_edges())
 		return EXIT_OK
-	var file := FileAccess.open(OasisFx.SCHEMA_PATH, FileAccess.WRITE)
-	if file == null:
-		return _fail_message("schema", "cannot write %s: %s" % [OasisFx.SCHEMA_PATH, error_string(FileAccess.get_open_error())])
-	file.store_string(text)
-	file.close()
-	_emit({"command": "schema", "ok": true, "output_path": OasisFx.SCHEMA_PATH}, "OK    wrote " + OasisFx.SCHEMA_PATH)
+	var written := []
+	for type in Schema.PATHS:
+		var file := FileAccess.open(Schema.PATHS[type], FileAccess.WRITE)
+		if file == null:
+			return _fail_message("schema", "cannot write %s: %s" % [Schema.PATHS[type], error_string(FileAccess.get_open_error())])
+		file.store_string(Schema.to_text(type))
+		file.close()
+		written.append(Schema.PATHS[type])
+	_emit({"command": "schema", "ok": true, "output_paths": written}, "OK    wrote " + ", ".join(PackedStringArray(written)))
 	return EXIT_OK
 
 
@@ -217,7 +223,7 @@ func _validate_all(arg: String) -> int:
 		return _fail_message("validate-all", "directory not found: %s" % dir)
 	var paths := Generator.find_presets(dir)
 	if paths.is_empty():
-		return _fail_message("validate-all", "no *%s files found under %s" % [OasisFx.VFX_PRESET_SUFFIX, dir])
+		return _fail_message("validate-all", "no *.vfx.json or *.sfx.json files found under %s" % dir)
 	var validation := Generator.validate_many(paths)
 	var entries := []
 	var lines := PackedStringArray()
@@ -251,7 +257,7 @@ func _generate_all(arg: String, out_dir: String, options: Dictionary) -> int:
 		return _fail_message("generate-all", "directory not found: %s" % dir)
 	var paths := Generator.find_presets(dir)
 	if paths.is_empty():
-		return _fail_message("generate-all", "no *%s files found under %s" % [OasisFx.VFX_PRESET_SUFFIX, dir])
+		return _fail_message("generate-all", "no *.vfx.json or *.sfx.json files found under %s" % dir)
 	var batch := Generator.generate_many(paths, out_dir, options)
 	var entries := []
 	var lines := PackedStringArray()
@@ -298,6 +304,11 @@ func _fail_message(command: String, message: String) -> int:
 
 
 static func _summary(preset: Dictionary) -> String:
+	if preset.get("asset_type") == "sfx":
+		var files := 0
+		for layer in preset.layers:
+			files += 1 + layer.variants.size()
+		return "%s (sfx, %d layer(s), %d audio file(s))" % [preset.id, preset.layers.size(), files]
 	return "%s (%d emitter(s), %d particles)" % [preset.id, preset.emitters.size(), _total_particles(preset)]
 
 

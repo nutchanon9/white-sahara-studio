@@ -1,0 +1,47 @@
+[gd_scene format=3 uid="uid://cjqlkafl68rj"]
+
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/impact.wav" id="impact_source"]
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd" id="oasis_sfx_runtime"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/whoosh_1.wav" id="whoosh_source"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/whoosh_2.wav" id="whoosh_variant_1"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/whoosh_3.wav" id="whoosh_variant_2"]
+
+[node name="sword_slash_sfx" type="Node2D" unique_id=54784230]
+script = ExtResource("oasis_sfx_runtime")
+effect_id = "sword_slash_sfx"
+random_pitch_percent = 4.0
+layer_settings = {
+"impact": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 120.0,
+"length_ms": 0.0,
+"loop": false,
+"random_pitch_percent": 0.0,
+"random_volume_db": 1.5,
+"start_ms": 140.0,
+"trim_start_ms": 0.0,
+"variants": []
+},
+"whoosh": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": false,
+"random_pitch_percent": 6.0,
+"random_volume_db": 1.5,
+"start_ms": 0.0,
+"trim_start_ms": 0.0,
+"variants": [ExtResource("whoosh_variant_1"), ExtResource("whoosh_variant_2")]
+}
+}
+
+[node name="whoosh" type="AudioStreamPlayer2D" parent="." unique_id=331019853]
+stream = ExtResource("whoosh_source")
+volume_db = -2.0
+max_distance = 1600.0
+
+[node name="impact" type="AudioStreamPlayer2D" parent="." unique_id=1936557779]
+stream = ExtResource("impact_source")
+volume_db = -3.0
+pitch_scale = 1.15
+max_distance = 1600.0

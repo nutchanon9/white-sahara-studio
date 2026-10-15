@@ -1,0 +1,2 @@
+These example sounds were synthesized by tools/synth_example_sounds.gd for OasisFx.
+They contain no recorded or third-party material and are dedicated to the public domain (CC0 1.0).

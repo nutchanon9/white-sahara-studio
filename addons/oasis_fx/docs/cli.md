@@ -16,26 +16,31 @@ and verifying its argument dispatcher.
 OASIS="godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd --"
 
 $OASIS validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
+$OASIS validate addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json
 $OASIS validate-all addons/oasis_fx/presets/examples
 $OASIS generate addons/oasis_fx/presets/examples/fire_burst.vfx.json --out res://generated/oasis_fx
 $OASIS generate-all addons/oasis_fx/presets/examples --out res://generated/oasis_fx --dry-run
 $OASIS --json validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
-$OASIS schema
+$OASIS schema sfx
 $OASIS help
 ```
 
 Everything after `--` belongs to OasisFx; everything before it belongs to Godot.
+
+Every command handles both asset types: particle effects (`*.vfx.json`,
+[preset_format.md](preset_format.md)) and sounds (`*.sfx.json`, [sfx_format.md](sfx_format.md)).
+The type comes from the preset's `asset_type`.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `validate <preset>` | Parses and validates one preset. Prints errors with field paths. |
-| `validate-all <dir>` | Validates every `*.vfx.json` under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across files. |
+| `validate-all <dir>` | Validates every `*.vfx.json` and `*.sfx.json` under `<dir>` (recursive, sorted, hidden folders skipped) and checks that ids are unique across all of them. |
 | `generate <preset>` | Validates, then writes `<out>/<id>.tscn`, loads it back to verify it, and updates `<out>/oasis_fx_manifest.json`. |
 | `generate-all <dir>` | Generates every preset under `<dir>`. **All or nothing:** if any preset is invalid, two presets share an id, or (without `--force`) any output file exists, nothing is written and the presets that would have been fine are reported as `SKIP`. |
 | `format <preset\|dir> [--check]` | Rewrites presets in canonical form (field order, 2-space indent, whole numbers without `.0`) — the same text the desktop app saves. `--check` only reports files that are not canonical (exit 1). |
-| `schema [--write]` | Prints the JSON Schema built from the validator's field table; `--write` rewrites `schemas/vfx.v1.schema.json` (a test fails while the file is out of date). |
+| `schema [vfx\|sfx] [--write]` | Prints the JSON Schema of an asset type (default `vfx`) built from the validator's field table; `--write` rewrites both `schemas/vfx.v1.schema.json` and `schemas/sfx.v1.schema.json` (a test fails while either is out of date). |
 | `version` | Prints the OasisFx version. |
 | `help` | Prints usage. |
 
@@ -75,11 +80,15 @@ Text mode (real output):
 ```
 $ $OASIS validate-all addons/oasis_fx/presets/examples
 OK    res://addons/oasis_fx/presets/examples/campfire_loop.vfx.json  campfire_loop (3 emitter(s), 44 particles)
+OK    res://addons/oasis_fx/presets/examples/cooking_sizzle_loop.sfx.json  cooking_sizzle_loop (sfx, 2 layer(s), 2 audio file(s))
 OK    res://addons/oasis_fx/presets/examples/cooking_success.vfx.json  cooking_success (4 emitter(s), 47 particles)
+OK    res://addons/oasis_fx/presets/examples/cooking_success_sfx.sfx.json  cooking_success_sfx (sfx, 2 layer(s), 2 audio file(s))
 OK    res://addons/oasis_fx/presets/examples/fire_burst.vfx.json  fire_burst (3 emitter(s), 68 particles)
+OK    res://addons/oasis_fx/presets/examples/fire_burst_sfx.sfx.json  fire_burst_sfx (sfx, 3 layer(s), 3 audio file(s))
 OK    res://addons/oasis_fx/presets/examples/ice_nova.vfx.json  ice_nova (4 emitter(s), 49 particles)
 OK    res://addons/oasis_fx/presets/examples/sword_slash.vfx.json  sword_slash (3 emitter(s), 96 particles)
-5 valid, 0 invalid
+OK    res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json  sword_slash_sfx (sfx, 2 layer(s), 4 audio file(s))
+9 valid, 0 invalid
 
 $ $OASIS validate presets/ice_nova.vfx.json
 FAIL  res://presets/ice_nova.vfx.json
@@ -101,14 +110,19 @@ take the line that starts with `{` (for example `| grep '^{'`).
 
 ## Generated files
 
-- `<id>.tscn`: a `Node2D` with the runtime script `res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd`
-  and one `GPUParticles2D` per emitter. **The game project needs the addon folder** (at least
-  `src/runtime/`) at the same path.
+- `<id>.tscn` of a `vfx` preset: a `Node2D` with the runtime script
+  `res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd` and one `GPUParticles2D` per emitter.
+- `<id>.tscn` of an `sfx` preset: a `Node2D` with `res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd`
+  and one `AudioStreamPlayer` (or `AudioStreamPlayer2D`) per layer, referencing the audio files
+  by path.
+- **The game project needs the runtime script** at the same path (only the file the scene
+  uses), and the audio/image files the preset references.
 - Deterministic: the same preset gives a byte-identical `.tscn` (fixed sub-resource and
   ext_resource ids, stable node ids, a scene UID derived from the output path). Checked by
-  tests, including committed golden files in `examples/runtime_demo/vfx/`.
-- Only built-in resources; procedural textures are embedded, file textures are referenced
-  by path.
+  tests, including committed golden files in `examples/runtime_demo/fx/`.
+- Only built-in resources; procedural textures are embedded, file textures and audio are
+  referenced by path. Generating does not load them, so the output is the same whether or
+  not the project has imported them.
 - Scenes written under `user://` have no UID line: Godot only assigns UIDs to project files.
 - `oasis_fx_manifest.json` (one per output folder, sorted, no timestamps) records for each id
   the preset path, a hash of the normalized preset, the scene path and hash, and the files
@@ -128,9 +142,10 @@ godot --version   # 4.7.2.stable.official.ed1daf0bf
 
 Pin the version: generated `.tscn` text may differ between Godot releases.
 
-On a fresh clone the CLI works without opening the editor first. If a preset references
-an image file (`texture: "file"`), import the project once so the texture can load:
-`godot --headless --path . --import`.
+On a fresh clone the CLI works without opening the editor first, also for presets that
+reference image or audio files (they only need to exist). To *play* generated sounds or
+show file textures, Godot needs the files imported: open the project in the editor once or
+run `godot --headless --path . --import`.
 
 ## Running the tests
 
@@ -143,6 +158,10 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd -- -
 By default the runner discovers `test_*.gd` in `addons/oasis_fx/tests/` and, when the host
 project has one, in `res://tests/` (this repository keeps its example/golden tests there).
 `--dir <dir>` runs a single folder instead.
+
+Some tests load the example audio. On a fresh clone the runner first runs
+`godot --headless --import` once (it prints `Importing project resources first…`) when any
+imported file is missing.
 
 The runner exits **0 only when every test passed** and **1** otherwise. A test fails when:
 
@@ -157,6 +176,13 @@ The run also fails when a test file cannot be loaded or parsed, does not extend
 option is given, an error is logged outside any test, or the runner itself hits an error.
 `tests/test_runner.gd` checks all of these cases by running the
 real runner command on throw-away test files in a separate Godot process.
+
+Headless Godot uses the Dummy audio driver. With it, Godot 4.7.2 sometimes prints
+`WARNING: N ObjectDB instances were leaked at exit` / `ERROR: N resources still in use at exit`
+**after** the summary line when sounds were played (`AudioStreamPlaybackWAV`). A plain
+`AudioStreamPlayer` that plays one file once shows the same message, so it is engine
+behaviour at shutdown, not an OasisFx leak; it is not a test failure and does not change the
+exit code.
 
 Tests write only under `user://oasis_fx_tests`, `user://oasis_fx_runner_fixtures` and a
 temporary `res://_oasis_fx_test_output` folder, and remove them afterwards.

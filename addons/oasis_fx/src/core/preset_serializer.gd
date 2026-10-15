@@ -9,6 +9,10 @@ extends RefCounted
 ## ones: unknown keys are kept, after the known ones, in their original order.
 
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
+const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
+
+## Multi-line list key -> field table of its items.
+const _LISTS := {"emitters": Spec.EMITTER_FIELDS, "layers": SfxSpec.LAYER_FIELDS}
 
 ## Decimal places kept for non-integral numbers (hides float noise such as
 ## 0.35000000000000003 from UI spin boxes).
@@ -16,7 +20,8 @@ const DECIMALS := 6
 
 
 static func to_text(preset: Dictionary) -> String:
-	return _object(preset, Spec.EFFECT_FIELDS, 0) + "\n"
+	var fields: Dictionary = SfxSpec.EFFECT_FIELDS if preset.get("asset_type") == "sfx" else Spec.EFFECT_FIELDS
+	return _object(preset, fields, 0) + "\n"
 
 
 static func _object(obj: Dictionary, fields: Dictionary, depth: int) -> String:
@@ -39,13 +44,13 @@ static func _object(obj: Dictionary, fields: Dictionary, depth: int) -> String:
 static func _value(value: Variant, key: Variant, depth: int) -> String:
 	match typeof(value):
 		TYPE_DICTIONARY:
-			return _object(value, Spec.EMITTER_FIELDS if key is int else {}, depth)
+			return _object(value, key if key is Dictionary else {}, depth)
 		TYPE_ARRAY:
-			if key == "emitters" and not value.is_empty():
+			if _LISTS.has(key) and not value.is_empty() and value.any(func(v): return v is Dictionary):
 				var pad := "  ".repeat(depth + 1)
 				var items := PackedStringArray()
 				for i in value.size():
-					items.append(pad + _value(value[i], i, depth + 1))
+					items.append(pad + _value(value[i], _LISTS[key], depth + 1))
 				return "[\n" + ",\n".join(items) + "\n" + "  ".repeat(depth) + "]"
 			var parts := PackedStringArray()
 			for item in value:

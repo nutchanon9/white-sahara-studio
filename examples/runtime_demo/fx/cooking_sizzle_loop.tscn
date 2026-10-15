@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://kqv4888244aw"]
+
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/fire_crackle.wav" id="crackle_source"]
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd" id="oasis_sfx_runtime"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/sizzle_loop.wav" id="sizzle_source"]
+
+[node name="cooking_sizzle_loop" type="Node2D" unique_id=1028365264]
+script = ExtResource("oasis_sfx_runtime")
+effect_id = "cooking_sizzle_loop"
+layer_settings = {
+"crackle": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": true,
+"random_pitch_percent": 10.0,
+"random_volume_db": 0.0,
+"start_ms": 0.0,
+"trim_start_ms": 0.0,
+"variants": []
+},
+"sizzle": {
+"fade_in_ms": 400.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": true,
+"random_pitch_percent": 0.0,
+"random_volume_db": 0.0,
+"start_ms": 0.0,
+"trim_start_ms": 0.0,
+"variants": []
+}
+}
+
+[node name="sizzle" type="AudioStreamPlayer" parent="." unique_id=36676096]
+stream = ExtResource("sizzle_source")
+volume_db = -6.0
+
+[node name="crackle" type="AudioStreamPlayer" parent="." unique_id=195919700]
+stream = ExtResource("crackle_source")
+volume_db = -14.0

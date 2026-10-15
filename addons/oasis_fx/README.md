@@ -1,11 +1,17 @@
 # OasisFx (Godot 4 addon)
 
-OasisFx turns small, versioned JSON presets into native Godot 4 effect scenes. Humans,
-ChatGPT and Claude can all write the same presets; a headless CLI validates them and
-generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D`,
-`ParticleProcessMaterial`, …) plus one small runtime script that handles playback.
+OasisFx turns small, versioned JSON presets into native Godot 4 effect and sound scenes.
+Humans, ChatGPT and Claude can all write the same presets; a headless CLI validates them
+and generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D`,
+`ParticleProcessMaterial`, `AudioStreamPlayer`, …) plus one small runtime script that
+handles playback.
 
-**Status: 0.3.0 — Phase 1C.** Up to 8 emitters per effect, five example presets (Fire
+**Status: 0.4.0 — Phase 2.** Sound presets (`*.sfx.json`): layers of existing audio files
+with start offsets, volume, pitch, trim, fades, loops, random variants/pitch/volume and
+license metadata, played by `OasisSfxEffect`; four example sounds; see
+[docs/sfx_format.md](docs/sfx_format.md).
+
+Phase 1C: Up to 8 emitters per effect, five example presets (Fire
 Burst, Ice Nova, Sword Slash, Cooking Success Sparkle, Campfire Loop), batch commands
 (`validate-all`, `generate-all`), an output manifest, and runtime playback with delays,
 loops, restart/pause and automatic cleanup. A canonical `format` command keeps preset
@@ -19,8 +25,9 @@ on the app.
 2. That's it. There is no editor plugin to enable, no autoload and no project setting to
    change.
 
-Generated scenes reference `res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd`, so a
-game that uses them must contain the addon (at least `src/runtime/`) at that path.
+Generated scenes reference `res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd` (effects)
+or `oasis_sfx_effect.gd` (sounds), so a game that uses them must contain the addon (at
+least `src/runtime/`) at that path, plus the audio/image files the presets reference.
 OasisFx only writes into the output folder you give it.
 
 ## Quick start
@@ -40,6 +47,15 @@ const FIRE_BURST := preload("res://vfx/fire_burst.tscn")
 func _on_hit_landed(at: Vector2) -> void:
 	# Plays immediately and frees itself (only itself) when the last particle is gone.
 	OasisFxEffect.spawn(FIRE_BURST, $Effects, at)
+```
+
+Sounds work the same way:
+
+```gdscript
+const SWORD_SLASH_SFX := preload("res://sfx/sword_slash_sfx.tscn")
+
+func _on_attack_hit_frame() -> void:
+	OasisSfxEffect.spawn(SWORD_SLASH_SFX, self, global_position)
 ```
 
 Or trigger it from an animation: add a **Call Method** track to the attack animation and
@@ -70,9 +86,10 @@ registered class names (e.g. `--script` tools on a fresh clone), use
 addons/oasis_fx/
   cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], format, schema)
   src/core/                      shared loader, validator, builder, generator, manifest
-  src/runtime/oasis_fx_effect.gd playback script attached to generated scenes
-  schemas/vfx.v1.schema.json     JSON Schema for presets (generated from the field table)
-  presets/examples/              example presets
+  src/runtime/oasis_fx_effect.gd playback script attached to generated effect scenes
+  src/runtime/oasis_sfx_effect.gd playback script attached to generated sound scenes
+  schemas/                       JSON Schemas vfx.v1 / sfx.v1 (generated from the field tables)
+  presets/examples/              example presets; audio/ holds the CC0 example sounds
   docs/                          preset format, CLI reference, AI authoring guide
   tests/                         headless test suite (run_tests.gd)
 ```
@@ -80,6 +97,7 @@ addons/oasis_fx/
 ## Documentation
 
 - [Preset format](docs/preset_format.md) — every field, unit, range, rule and the runtime behavior
+- [Sound preset format](docs/sfx_format.md) — `sfx` fields, rules, runtime, export and licensing
 - [CLI](docs/cli.md) — commands, options, exit codes, manifest, CI setup, tests
 - [AI authoring guide](docs/ai_authoring_guide.md) — prompt, rules, examples and edit recipes for ChatGPT/Claude
 - [Desktop app](docs/desktop.md) — using, building and verifying the standalone app

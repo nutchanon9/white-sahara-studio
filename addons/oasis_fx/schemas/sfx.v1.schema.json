@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/sfx.v1.schema.json",
+  "title": "OasisFx SFX preset v1",
+  "description": "Data-only description of a layered sound effect that OasisFx turns into a Godot 4 scene of audio players. Generated from addons/oasis_fx/src/core/sfx_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/sfx_format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset_type",
+    "id",
+    "display_name",
+    "layers"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Preset format version. Must be 1."
+    },
+    "asset_type": {
+      "enum": [
+        "sfx"
+      ],
+      "description": "Asset kind: \"sfx\" for a layered sound effect."
+    },
+    "id": {
+      "$ref": "#/$defs/id",
+      "description": "Stable identifier; also the output file name (<id>.tscn). Lowercase snake_case."
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "description": "Human-readable name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "What the sound is for.",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+      },
+      "description": "Up to 16 lowercase search tags.",
+      "default": []
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who made the preset (person or AI tool).",
+      "default": ""
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Free-form authoring notes.",
+      "default": ""
+    },
+    "volume_db": {
+      "type": "number",
+      "minimum": -60.0,
+      "maximum": 12.0,
+      "description": "Overall volume in dB, added to every layer's gain_db.",
+      "default": 0.0
+    },
+    "pitch_scale": {
+      "type": "number",
+      "minimum": 0.25,
+      "maximum": 4.0,
+      "description": "Overall pitch and speed multiplier (2 = one octave up and twice as fast).",
+      "default": 1.0
+    },
+    "random_pitch_percent": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 50.0,
+      "description": "Random pitch change per play for the whole sound, up to ± this many percent.",
+      "default": 0.0
+    },
+    "bus": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_ -]{0,31}$",
+      "description": "Audio bus name (e.g. \"SFX\"); Godot falls back to Master if the game has no such bus.",
+      "default": "Master"
+    },
+    "positional": {
+      "type": "boolean",
+      "description": "true = AudioStreamPlayer2D (quieter and panned with distance from the listener); false = plays at full volume everywhere.",
+      "default": false
+    },
+    "max_distance": {
+      "type": "number",
+      "minimum": 1.0,
+      "maximum": 20000.0,
+      "description": "Positional only: distance in pixels at which the sound becomes silent.",
+      "default": 2000.0
+    },
+    "attenuation": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 20.0,
+      "description": "Positional only: how quickly volume falls off with distance (1 = linear-ish, higher = faster).",
+      "default": 1.0
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 2147483647,
+      "description": "-1 = unpredictable random choices; 0 or more = the same sequence of variant/pitch/volume choices in every run (tests, debugging).",
+      "default": -1
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/layer"
+      },
+      "description": "Sound layers, 1 to 8, each an audio file with its own timing and mix."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Layer identifier, unique within the sound; becomes the player node name."
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^res://.*\\.(wav|ogg|mp3)$",
+          "description": "Audio file in the project, res://… (wav, ogg or mp3)."
+        },
+        "variants": {
+          "type": "array",
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^res://.*\\.(wav|ogg|mp3)$"
+          },
+          "description": "Alternative files; each play picks one of source + variants at random, never the same one twice in a row.",
+          "default": []
+        },
+        "start_ms": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 30000.0,
+          "description": "When this layer starts, in milliseconds after the sound starts.",
+          "default": 0.0
+        },
+        "gain_db": {
+          "type": "number",
+          "minimum": -60.0,
+          "maximum": 12.0,
+          "description": "Layer volume in dB (0 = as recorded, -6 = about half as loud).",
+          "default": 0.0
+        },
+        "pitch_scale": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4.0,
+          "description": "Layer pitch and speed multiplier.",
+          "default": 1.0
+        },
+        "random_pitch_percent": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 50.0,
+          "description": "Random pitch change per play for this layer, up to ± this many percent.",
+          "default": 0.0
+        },
+        "random_volume_db": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 24.0,
+          "description": "Random volume change per play, up to ± this many dB.",
+          "default": 0.0
+        },
+        "trim_start_ms": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 60000.0,
+          "description": "Skip this much of the file's beginning, in milliseconds.",
+          "default": 0.0
+        },
+        "length_ms": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 60000.0,
+          "description": "Play at most this long, in milliseconds of the file (0 = to the end of the file).",
+          "default": 0.0
+        },
+        "fade_in_ms": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10000.0,
+          "description": "Fade-in time in milliseconds. A looping layer fades in only when the sound starts, not on every repeat.",
+          "default": 0.0
+        },
+        "fade_out_ms": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10000.0,
+          "description": "Fade-out time in milliseconds before the layer ends.",
+          "default": 0.0
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "Repeat this layer until the sound is stopped (ambience); a sound with a looping layer never finishes by itself.",
+          "default": false
+        },
+        "source_author": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Who made or recorded the source audio.",
+          "default": ""
+        },
+        "source_license": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "License of the source audio, e.g. \"CC0\", \"CC-BY 4.0 (credit X)\", \"own recording\".",
+          "default": ""
+        }
+      }
+    }
+  }
+}

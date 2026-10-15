@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "asset_type": "sfx",
+  "id": "fire_burst_sfx",
+  "display_name": "Fire Burst SFX",
+  "description": "Low whoosh, a thump and fire crackle; pairs with the Fire Burst VFX.",
+  "tags": ["fire", "combat", "impact"],
+  "author": "OasisFx examples",
+  "random_pitch_percent": 5,
+  "layers": [
+    {
+      "id": "whoosh",
+      "source": "res://addons/oasis_fx/presets/examples/audio/whoosh_3.wav",
+      "gain_db": -6,
+      "pitch_scale": 0.7,
+      "fade_in_ms": 30,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    },
+    {
+      "id": "thump",
+      "source": "res://addons/oasis_fx/presets/examples/audio/impact.wav",
+      "start_ms": 50,
+      "gain_db": -2,
+      "pitch_scale": 0.85,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    },
+    {
+      "id": "crackle",
+      "source": "res://addons/oasis_fx/presets/examples/audio/fire_crackle.wav",
+      "start_ms": 80,
+      "gain_db": -4,
+      "length_ms": 700,
+      "fade_out_ms": 250,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    }
+  ]
+}

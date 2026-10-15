@@ -9,7 +9,8 @@ preset. The JSON Schema and the validator are the final word.
 | Asset type | Schema | Status |
 |---|---|---|
 | `vfx` — 2D particle effect | `schema_version: 1`, [`schemas/vfx.v1.schema.json`](../schemas/vfx.v1.schema.json) | supported (OasisFx 0.2) |
-| `sfx`, `animation` | — | planned; presets with these types are rejected |
+| `sfx` — layered sound effect from existing audio files | `schema_version: 1`, [`schemas/sfx.v1.schema.json`](../schemas/sfx.v1.schema.json) | supported (OasisFx 0.4); see [section 9](#9-sound-effects-sfx) |
+| `animation` | — | planned; presets with this type are rejected |
 
 A `vfx` preset describes one effect made of **1–8 emitters**. Each emitter becomes a Godot
 `GPUParticles2D`. Every field, unit, range and default is listed in
@@ -60,7 +61,7 @@ A `vfx` preset describes one effect made of **1–8 emitters**. Each emitter bec
   an existing file **inside the project**, start with `res://`, contain no `..`, and end in
   png/webp/jpg/jpeg/svg/tres/res. URLs, `user://` and absolute paths are rejected.
 - If you do not know a real path, use a generated texture. Never invent a path.
-- Audio is not part of `vfx` presets.
+- Audio is not part of `vfx` presets; sounds are separate `sfx` presets (section 9).
 
 ## 5. Validate and read the errors
 
@@ -224,6 +225,84 @@ sync with `presets/examples/`).
     {"id": "smoke", "kind": "particles_2d", "amount": 6, "one_shot": false, "lifetime_seconds": 2.0, "preprocess_seconds": 2.0, "position": [0, -40], "emission_shape": "rect", "emission_rect_size": [20, 4], "direction_degrees": -90, "spread_degrees": 10, "initial_velocity_min": 20, "initial_velocity_max": 40, "scale_min": 0.6, "scale_max": 1.0, "scale_end_ratio": 2.0, "color_start": "#3A302C44", "color_end": "#2A222000", "texture": "soft_circle", "texture_size_px": 64, "z_index": -1},
     {"id": "fire", "kind": "particles_2d", "amount": 30, "one_shot": false, "lifetime_seconds": 0.8, "lifetime_randomness": 0.3, "preprocess_seconds": 1.0, "emission_shape": "rect", "emission_rect_size": [36, 4], "direction_degrees": -90, "spread_degrees": 12, "initial_velocity_min": 40, "initial_velocity_max": 80, "gravity": [0, -80], "scale_min": 0.5, "scale_max": 0.9, "scale_end_ratio": 0.2, "color_start": "#FFE27AFF", "color_mid": "#FF6A1AAA", "color_end": "#8A1A0A00", "texture": "soft_circle", "texture_size_px": 48, "blend_mode": "add"},
     {"id": "embers", "kind": "particles_2d", "amount": 8, "one_shot": false, "lifetime_seconds": 1.4, "preprocess_seconds": 1.0, "emission_shape": "rect", "emission_rect_size": [30, 4], "direction_degrees": -90, "spread_degrees": 20, "initial_velocity_min": 50, "initial_velocity_max": 110, "tangential_accel_min": -30, "tangential_accel_max": 30, "scale_min": 0.6, "scale_max": 1.0, "color_start": "#FFD27AFF", "color_end": "#FF5A1000", "texture": "hard_circle", "texture_size_px": 6, "blend_mode": "add"}
+  ]
+}
+```
+
+## 9. Sound effects (`sfx`)
+
+An `sfx` preset **arranges audio files that already exist in the game**: which file plays
+when, how loud, at what pitch, which part of it, with fades, loops and random variation.
+Every field is listed in [sfx_format.md](sfx_format.md). OasisFx does not create audio: an
+assistant must never invent a file path, and must not claim to have made, downloaded or
+"generated" a sound.
+
+### Copy-paste prompt
+
+> You are writing an OasisFx sound preset for Godot 4. Read
+> `addons/oasis_fx/docs/sfx_format.md` and `addons/oasis_fx/schemas/sfx.v1.schema.json`
+> first. Output only one JSON object with `"asset_type": "sfx"` and schema_version 1. Use
+> only these audio files (do not invent paths): **<list the res:// paths and what each
+> sounds like, with author and license>**. Fill in `source_author` and `source_license` for
+> every layer from that list. Save it as `<id>.sfx.json`, then run
+> `godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- validate <file>`
+> and fix every error and warning before you finish.
+>
+> Sound: **<describe it: what happens, how long, one-shot or loop, heard everywhere or from a position on screen>**
+
+### Rules that matter most
+
+1. **Required:** `schema_version` (1), `asset_type` ("sfx"), `id`, `display_name`, `layers`;
+   on every layer `id` and `source`.
+2. **Files:** `source` and `variants` are `res://` paths to existing wav/ogg/mp3 files; a
+   variant must not repeat the source. Up to 8 layers, up to 7 variants per layer.
+3. **Times are milliseconds.** `start_ms` is when the layer starts after the sound starts;
+   `trim_start_ms` and `length_ms` select the part of the file; fades are inside that part
+   (with `length_ms`, `fade_in_ms + fade_out_ms` ≤ `length_ms`).
+4. **Volume in dB** (`volume_db` for the whole sound, `gain_db` per layer): −6 ≈ half as loud.
+   Keep layers at or below 0 dB; lower the quieter layers instead of raising the loud one.
+5. **Pitch is also speed** (2 = an octave up and twice as fast). Small random ranges make
+   repeated sounds less mechanical: `random_pitch_percent` 3–8, `random_volume_db` 1–2.
+6. **Variants** are for sounds heard often (footsteps, hits, swings): 2–4 similar files.
+7. **Loops** (`loop: true`) are for ambience; such a sound plays until the game stops it.
+   Use `fade_in_ms` for a soft start; avoid `fade_out_ms` on loops.
+8. **Positional** sounds (`positional: true`) get quieter with distance (`max_distance` in
+   pixels); use them for things in the world, not for UI.
+9. **Licenses:** never leave `source_license` empty; write what the user told you
+   ("CC0", "CC-BY 4.0 (credit Name)", "own recording"). Ask if you do not know.
+
+### Changing an existing sound
+
+| Request | Change |
+|---|---|
+| "punchier / more impact" | raise the impact layer's `gain_db` a little, lower `pitch_scale` (0.85–0.95), shorten fades |
+| "less repetitive" | add `variants`, `random_pitch_percent` 4–8, `random_volume_db` 1–2 |
+| "the hit comes too late / early" | change that layer's `start_ms` |
+| "shorter" | `length_ms` with a `fade_out_ms` of 30–120 to avoid a click |
+| "brighter / smaller" | `pitch_scale` 1.1–1.3 (also faster) |
+| "quieter overall" | `volume_db` −3 … −6 |
+| "heard only nearby" | `positional: true`, smaller `max_distance` |
+
+Generate (`generate my_sound.sfx.json --out res://sfx`) and **listen to it** in the game or the
+desktop app before using it; a valid preset can still sound wrong.
+
+### Complete example: Sword Slash SFX (whoosh with variants, then a hit)
+
+```json
+{
+  "schema_version": 1,
+  "asset_type": "sfx",
+  "id": "sword_slash_sfx",
+  "display_name": "Sword Slash SFX",
+  "description": "Swing whoosh (three variants) followed by a hit thump; pairs with the Sword Slash VFX.",
+  "tags": ["slash", "melee", "combat", "impact"],
+  "author": "OasisFx examples",
+  "random_pitch_percent": 4,
+  "positional": true,
+  "max_distance": 1600,
+  "layers": [
+    {"id": "whoosh", "source": "res://addons/oasis_fx/presets/examples/audio/whoosh_1.wav", "variants": ["res://addons/oasis_fx/presets/examples/audio/whoosh_2.wav", "res://addons/oasis_fx/presets/examples/audio/whoosh_3.wav"], "gain_db": -2, "random_pitch_percent": 6, "random_volume_db": 1.5, "source_author": "OasisFx (synthesized)", "source_license": "CC0"},
+    {"id": "impact", "source": "res://addons/oasis_fx/presets/examples/audio/impact.wav", "start_ms": 140, "gain_db": -3, "pitch_scale": 1.15, "random_volume_db": 1.5, "fade_out_ms": 120, "source_author": "OasisFx (synthesized)", "source_license": "CC0"}
   ]
 }
 ```

@@ -4,6 +4,10 @@ extends RefCounted
 ## such as `emitters[0].lifetime_seconds`.
 
 var source := ""
+## Where res:// file references are looked up, in order: absolute folders
+## (a game project) or "res://" for the running project. Empty = the running
+## project only. The desktop app checks the game first, then its own files.
+var res_roots: PackedStringArray = []
 var errors: Array[Dictionary] = []
 var warnings: Array[Dictionary] = []
 

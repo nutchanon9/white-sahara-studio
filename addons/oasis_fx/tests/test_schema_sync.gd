@@ -1,8 +1,10 @@
 extends "res://addons/oasis_fx/tests/oasis_test_case.gd"
-## schemas/vfx.v1.schema.json must be exactly what vfx_schema.gd builds from
-## the validator's field table. Regenerate with: oasis_fx_cli.gd -- schema --write
+## schemas/vfx.v1.schema.json and sfx.v1.schema.json must be exactly what
+## vfx_schema.gd builds from the validator's field tables, and the format docs
+## must list every field. Regenerate with: oasis_fx_cli.gd -- schema --write
 
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
+const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const Schema := preload("res://addons/oasis_fx/src/core/vfx_schema.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 
@@ -10,6 +12,8 @@ const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 func test_schema_file_is_up_to_date() -> void:
 	var committed := FileAccess.get_file_as_string(OasisFx.SCHEMA_PATH)
 	check(committed == Schema.to_text(), "%s is out of date; run: godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- schema --write" % OasisFx.SCHEMA_PATH)
+	var sfx := FileAccess.get_file_as_string(OasisFx.SFX_SCHEMA_PATH)
+	check(sfx == Schema.to_text("sfx"), "%s is out of date; run the same command" % OasisFx.SFX_SCHEMA_PATH)
 
 
 func test_schema_covers_every_field() -> void:
@@ -22,11 +26,29 @@ func test_schema_covers_every_field() -> void:
 	check_eq(schema["$defs"].emitter.properties.texture.enum, Spec.EMITTER_FIELDS.texture.values, "texture enum")
 
 
+func test_sfx_schema_covers_every_field() -> void:
+	var schema: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(OasisFx.SFX_SCHEMA_PATH))
+	check_eq(schema.properties.keys(), SfxSpec.EFFECT_FIELDS.keys(), "effect properties in canonical order")
+	check_eq(schema["$defs"].layer.properties.keys(), SfxSpec.LAYER_FIELDS.keys(), "layer properties in canonical order")
+	check_eq(schema["$defs"].layer.additionalProperties, false, "layer rejects unknown properties")
+	check_eq(schema.properties.layers.maxItems, SfxSpec.MAX_LAYERS, "layers maxItems")
+	check_eq(schema["$defs"].layer.properties.variants.maxItems, SfxSpec.MAX_VARIANTS, "variants maxItems")
+
+
 func test_preset_format_doc_lists_every_field() -> void:
 	var doc := FileAccess.get_file_as_string("res://addons/oasis_fx/docs/preset_format.md")
 	for fields in [Spec.EFFECT_FIELDS, Spec.EMITTER_FIELDS]:
 		for name in fields:
 			check(doc.contains("| `%s` |" % name), "docs/preset_format.md has a table row for `%s`" % name)
+
+
+func test_sfx_format_doc_lists_every_field() -> void:
+	var doc := FileAccess.get_file_as_string("res://addons/oasis_fx/docs/sfx_format.md")
+	for fields in [SfxSpec.EFFECT_FIELDS, SfxSpec.LAYER_FIELDS]:
+		for name in fields:
+			var spec: Dictionary = fields[name]
+			check(doc.contains("| `%s` |" % name), "docs/sfx_format.md has a table row for `%s`" % name)
+			check(doc.contains(spec.doc), "docs/sfx_format.md describes `%s` as in sfx_spec.gd" % name)
 
 
 func test_ai_guide_examples_match_example_presets() -> void:
@@ -37,8 +59,9 @@ func test_ai_guide_examples_match_example_presets() -> void:
 		var data: Variant = JSON.parse_string(m.get_string(1))
 		if data is Dictionary and data.has("id"):
 			blocks.append(data)
-	check(blocks.size() >= 4, "the guide has at least four complete examples (found %d)" % blocks.size())
+	check(blocks.size() >= 5, "the guide has complete vfx and sfx examples (found %d)" % blocks.size())
+	check(blocks.any(func(d): return d.get("asset_type") == "sfx"), "including an sfx example")
 	for data in blocks:
-		var path := "%s/%s%s" % [OasisFx.EXAMPLES_DIR, data.id, OasisFx.VFX_PRESET_SUFFIX]
+		var path := "%s/%s%s" % [OasisFx.EXAMPLES_DIR, data.id, OasisFx.PRESET_SUFFIXES.get(data.get("asset_type"), ".json")]
 		if check(FileAccess.file_exists(path), "guide example %s is a shipped preset" % data.id):
 			check(data == JSON.parse_string(FileAccess.get_file_as_string(path)), "guide example %s matches %s" % [data.id, path])

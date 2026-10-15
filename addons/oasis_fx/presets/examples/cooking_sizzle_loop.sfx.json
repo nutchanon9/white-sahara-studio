@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "asset_type": "sfx",
+  "id": "cooking_sizzle_loop",
+  "display_name": "Cooking Sizzle Loop",
+  "description": "Looping pan sizzle with occasional crackle for cooking stations; stop it when cooking ends.",
+  "tags": ["cooking", "ambient", "loop"],
+  "author": "OasisFx examples",
+  "volume_db": -6,
+  "layers": [
+    {
+      "id": "sizzle",
+      "source": "res://addons/oasis_fx/presets/examples/audio/sizzle_loop.wav",
+      "fade_in_ms": 400,
+      "loop": true,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    },
+    {
+      "id": "crackle",
+      "source": "res://addons/oasis_fx/presets/examples/audio/fire_crackle.wav",
+      "gain_db": -8,
+      "random_pitch_percent": 10,
+      "loop": true,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    }
+  ]
+}

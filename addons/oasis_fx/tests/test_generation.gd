@@ -192,13 +192,16 @@ func test_all_examples_generate_and_load() -> void:
 			continue
 		var preset := Validator.validate_file(result.report.source, Report.new())
 		var root := (load(result.output_path) as PackedScene).instantiate()
-		check_eq(root.get_child_count(), preset.emitters.size(), result.id + " emitter count")
-		for i in preset.emitters.size():
-			var e: Dictionary = preset.emitters[i]
-			var node := root.get_child(i) as GPUParticles2D
-			if check(node != null and String(node.name) == e.id, "%s emitter %d is %s" % [result.id, i, e.id]):
-				check_eq(node.amount, e.amount, "%s.%s amount" % [result.id, e.id])
-				check(node.visibility_rect.has_area(), "%s.%s visibility rect" % [result.id, e.id])
+		var items: Array = preset.layers if preset.asset_type == "sfx" else preset.emitters
+		check_eq(root.get_child_count(), items.size(), result.id + " node count")
+		for i in items.size():
+			var node := root.get_child(i)
+			check_eq(String(node.name), items[i].id, "%s node %d" % [result.id, i])
+			if preset.asset_type == "vfx" and check(node is GPUParticles2D, "%s.%s is GPUParticles2D" % [result.id, items[i].id]):
+				check_eq(node.amount, items[i].amount, "%s.%s amount" % [result.id, items[i].id])
+				check(node.visibility_rect.has_area(), "%s.%s visibility rect" % [result.id, items[i].id])
+			elif preset.asset_type == "sfx":
+				check(node is AudioStreamPlayer or node is AudioStreamPlayer2D, "%s.%s is an audio player" % [result.id, items[i].id])
 		root.free()
 
 

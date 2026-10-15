@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "asset_type": "sfx",
+  "id": "sword_slash_sfx",
+  "display_name": "Sword Slash SFX",
+  "description": "Swing whoosh (three variants) followed by a hit thump; pairs with the Sword Slash VFX.",
+  "tags": ["slash", "melee", "combat", "impact"],
+  "author": "OasisFx examples",
+  "random_pitch_percent": 4,
+  "positional": true,
+  "max_distance": 1600,
+  "layers": [
+    {
+      "id": "whoosh",
+      "source": "res://addons/oasis_fx/presets/examples/audio/whoosh_1.wav",
+      "variants": ["res://addons/oasis_fx/presets/examples/audio/whoosh_2.wav", "res://addons/oasis_fx/presets/examples/audio/whoosh_3.wav"],
+      "gain_db": -2,
+      "random_pitch_percent": 6,
+      "random_volume_db": 1.5,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    },
+    {
+      "id": "impact",
+      "source": "res://addons/oasis_fx/presets/examples/audio/impact.wav",
+      "start_ms": 140,
+      "gain_db": -3,
+      "pitch_scale": 1.15,
+      "random_volume_db": 1.5,
+      "fade_out_ms": 120,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    }
+  ]
+}

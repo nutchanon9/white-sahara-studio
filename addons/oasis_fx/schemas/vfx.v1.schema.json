@@ -25,7 +25,7 @@
       "enum": [
         "vfx"
       ],
-      "description": "Asset kind. Only \"vfx\" is supported in this version."
+      "description": "Asset kind: \"vfx\" for a particle effect (sound presets use \"sfx\", see sfx_format.md)."
     },
     "id": {
       "$ref": "#/$defs/id",

@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://examples/runtime_demo/runtime_demo.gd" id="1_2itws"]
-[ext_resource type="PackedScene" path="res://examples/runtime_demo/vfx/campfire_loop.tscn" id="2_8x121"]
+[ext_resource type="PackedScene" path="res://examples/runtime_demo/fx/campfire_loop.tscn" id="2_8x121"]
 
 [sub_resource type="Animation" id="Animation_t3psv"]
 resource_name = "attack"

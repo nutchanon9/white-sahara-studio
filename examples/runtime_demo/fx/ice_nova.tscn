@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://i68atwofdp1k"]
+[gd_scene format=3 uid="uid://crak27blc7g6"]
 
 [ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
 

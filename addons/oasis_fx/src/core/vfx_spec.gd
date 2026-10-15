@@ -7,13 +7,15 @@ extends RefCounted
 ## sync. Key order here is the canonical key order of a preset.
 ##
 ## Field keys:
-##   type      int | number | bool | string | id | enum | color | vec2 | rect | tags | res_path | emitters
+##   type      int | number | bool | string | id | enum | color | vec2 | rect | tags | res_path | res_path_list | bus | list
 ##   required  missing field is an error (otherwise `default` is used)
 ##   min/max   inclusive numeric range (for vec2/rect: per component)
 ##   values    allowed strings for enum
 ##   max_length / min_length  for strings
 ##   allow_empty  color/rect/res_path may be "" or [] meaning "not set"
-##   doc       one-line description (used by docs and future editor tooltips)
+##   extensions  allowed file extensions for res_path / res_path_list
+##   item, min_items, max_items  for list: item kind ("emitter") and size limits
+##   doc       one-line description (used by docs, the JSON Schema and app tooltips)
 
 const SUPPORTED_SCHEMA_VERSIONS := [1]
 const SUPPORTED_ASSET_TYPES := ["vfx"]
@@ -35,7 +37,7 @@ const EFFECT_FIELDS := {
 	"schema_version": {"type": "int", "required": true, "min": 1, "max": 1,
 		"doc": "Preset format version. Must be 1."},
 	"asset_type": {"type": "enum", "required": true, "values": ["vfx"],
-		"doc": "Asset kind. Only \"vfx\" is supported in this version."},
+		"doc": "Asset kind: \"vfx\" for a particle effect (sound presets use \"sfx\", see sfx_format.md)."},
 	"id": {"type": "id", "required": true,
 		"doc": "Stable identifier; also the output file name (<id>.tscn). Lowercase snake_case."},
 	"display_name": {"type": "string", "required": true, "min_length": 1, "max_length": 80,
@@ -58,7 +60,7 @@ const EFFECT_FIELDS := {
 		"doc": "Draw order of the effect root (Node2D.z_index)."},
 	"origin": {"type": "vec2", "default": [0.0, 0.0], "min": -4096.0, "max": 4096.0,
 		"doc": "Offset of all emitters from the spawn point in pixels [x, y]; e.g. [0, -40] to center on a character's chest."},
-	"emitters": {"type": "emitters", "required": true,
+	"emitters": {"type": "list", "item": "emitter", "min_items": 1, "max_items": MAX_EMITTERS, "required": true,
 		"doc": "Particle emitters, 1 to 8; drawn in order (later emitters on top)."},
 }
 
@@ -152,7 +154,7 @@ const EMITTER_FIELDS := {
 		"doc": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path)."},
 	"texture_size_px": {"type": "int", "default": 32, "min": 4, "max": 256,
 		"doc": "Size of the generated texture in pixels (streak: height; its width is a quarter)."},
-	"texture_path": {"type": "res_path", "default": "", "allow_empty": true,
+	"texture_path": {"type": "res_path", "default": "", "allow_empty": true, "extensions": TEXTURE_EXTENSIONS,
 		"doc": "res:// path to a Texture2D; required when texture is \"file\"."},
 	"blend_mode": {"type": "enum", "default": "mix", "values": ["mix", "add", "sub", "mul", "premult_alpha"],
 		"doc": "CanvasItemMaterial blend mode; \"add\" suits fire, sparks and glows."},

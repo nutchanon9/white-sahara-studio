@@ -55,6 +55,9 @@ func _run() -> void:
 		printerr("error: " + options.error)
 		_finish(false)
 		return
+	if not _ensure_imported():
+		_finish(false)
+		return
 
 	var dirs := PackedStringArray([options.dir])
 	if options.dir.is_empty():
@@ -96,6 +99,10 @@ func _run() -> void:
 			await _run_test(script, file.get_basename(), method, options.timeout)
 
 	TestCase.remove_tree(TestCase.TEMP_ROOT)
+	# Let the audio server release playbacks of players freed by the last
+	# tests before quitting (otherwise Godot may warn about leaked objects).
+	for i in 3:
+		await process_frame
 	errors_outside_tests.append_array(_take_errors())
 	if not errors_outside_tests.is_empty():
 		_report_failure("runner", "(outside tests)", errors_outside_tests)
@@ -123,6 +130,44 @@ func _run_test(script: GDScript, file_label: String, method: String, timeout: fl
 		print("PASS  %s :: %s" % [file_label, method])
 	else:
 		_report_failure(file_label, method, problems)
+
+
+## Tests load imported resources (e.g. example audio). On a fresh clone they
+## are not imported yet, so run Godot's importer once in a separate process.
+## Returns false (with the reason printed) when importing fails.
+func _ensure_imported() -> bool:
+	var missing := _missing_imports("res://")
+	if missing.is_empty():
+		return true
+	print("Importing project resources first (%d not imported yet, e.g. %s)..." % [missing.size(), missing[0]])
+	var output := []
+	var code := OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"), "--import"]), output, true)
+	missing = _missing_imports("res://")
+	if code != 0 or not missing.is_empty():
+		print("FAIL  runner :: (import)")
+		print("        - godot --import exited with %d; still not imported: %s" % [code, ", ".join(missing.slice(0, 5))])
+		_failed += 1
+		return false
+	return true
+
+
+## *.import files whose imported data does not exist yet.
+func _missing_imports(dir: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for file in DirAccess.get_files_at(dir):
+		if not file.ends_with(".import"):
+			continue
+		var config := ConfigFile.new()
+		if config.load(dir.path_join(file)) != OK:
+			continue
+		for dest in config.get_value("deps", "dest_files", []):
+			if not FileAccess.file_exists(dest):
+				out.append(dir.path_join(file).trim_suffix(".import"))
+				break
+	for sub in DirAccess.get_directories_at(dir):
+		if not sub.begins_with("."):
+			out.append_array(_missing_imports(dir.path_join(sub)))
+	return out
 
 
 # Returns the errors logged since the previous call. Every logged error is

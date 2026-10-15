@@ -23,10 +23,17 @@ const _BLEND_MODES := {
 ## differences in sin/cos never reach the saved file.
 const _ROUND_STEP := 0.000001
 
+## Texture size assumed for `texture: "file"` when computing the automatic
+## visibility_rect: the generator only references the file (no import needed),
+## so its real size is unknown. Set visibility_rect for large textures.
+const FILE_TEXTURE_SIZE := 64.0
+
 
 ## Returns the effect root, or null after recording errors in `report`.
-## The caller owns the returned node and must free it.
-static func build(preset: Dictionary, report: RefCounted) -> Node2D:
+## The caller owns the returned node and must free it. `texture_provider`
+## (res:// path -> Texture2D) supplies file textures; by default they are
+## path-only placeholders, which is what a saved scene needs.
+static func build(preset: Dictionary, report: RefCounted, texture_provider := Callable()) -> Node2D:
 	var runtime := load(OasisFx.RUNTIME_SCRIPT_PATH) as Script
 	if runtime == null:
 		report.error("", "the OasisFx runtime script is missing: %s" % OasisFx.RUNTIME_SCRIPT_PATH)
@@ -37,7 +44,7 @@ static func build(preset: Dictionary, report: RefCounted) -> Node2D:
 	var delays := {}
 	for i in preset.emitters.size():
 		var e: Dictionary = preset.emitters[i]
-		var emitter := _build_emitter(e, preset, "emitters[%d]" % i, report)
+		var emitter := _build_emitter(e, preset, "emitters[%d]" % i, report, texture_provider)
 		if emitter == null:
 			root.free()
 			return null
@@ -54,8 +61,8 @@ static func build(preset: Dictionary, report: RefCounted) -> Node2D:
 	return root
 
 
-static func _build_emitter(e: Dictionary, preset: Dictionary, path: String, report: RefCounted) -> GPUParticles2D:
-	var texture := _make_texture(e, path, report)
+static func _build_emitter(e: Dictionary, preset: Dictionary, path: String, report: RefCounted, texture_provider: Callable) -> GPUParticles2D:
+	var texture := _make_texture(e, path, report, texture_provider)
 	if texture == null:
 		return null
 
@@ -172,11 +179,12 @@ static func _make_scale_curve(e: Dictionary) -> CurveTexture:
 	return texture
 
 
-static func _make_texture(e: Dictionary, path: String, report: RefCounted) -> Texture2D:
+static func _make_texture(e: Dictionary, path: String, report: RefCounted, texture_provider: Callable) -> Texture2D:
 	if e.texture == "file":
-		var loaded: Resource = ResourceLoader.load(e.texture_path)
-		if not loaded is Texture2D:
-			report.error(path + ".texture_path", "could not load a Texture2D from %s (if it is an image, import the project first: godot --headless --import)" % e.texture_path)
+		var provider := texture_provider if texture_provider.is_valid() else Callable(placeholder_texture)
+		var loaded: Texture2D = provider.call(e.texture_path)
+		if loaded == null:
+			report.error(path + ".texture_path", "could not load a texture from %s" % e.texture_path)
 			return null
 		return loaded
 
@@ -232,7 +240,35 @@ static func _visibility_rect(e: Dictionary, texture: Texture2D) -> Rect2:
 			spawn += e.emission_radius
 		"rect":
 			spawn += Vector2(e.emission_rect_size[0], e.emission_rect_size[1]).length() * 0.5
-	var texture_size := float(maxi(texture.get_width(), texture.get_height()))
+	var texture_size := FILE_TEXTURE_SIZE if e.texture == "file" else float(maxi(texture.get_width(), texture.get_height()))
 	var particle_size: float = texture_size * e.scale_max * maxf(1.0, e.scale_end_ratio) * 0.5
 	var extent := clampf(ceilf(travel + spawn + particle_size + 8.0), 16.0, 8192.0)
 	return Rect2(-extent, -extent, extent * 2.0, extent * 2.0)
+
+
+## A texture object that only carries `path`, so a saved scene references the
+## file without it being imported or loaded. Reuses an already loaded
+## resource for that path when there is one.
+static func placeholder_texture(path: String) -> Texture2D:
+	if ResourceLoader.has_cached(path):
+		var cached := ResourceLoader.get_cached_ref(path) as Texture2D
+		if cached != null:
+			return cached
+	var texture := PlaceholderTexture2D.new()
+	texture.take_over_path(path)
+	return texture
+
+
+## Loads an image file from disk as a texture for previews; `roots` as in
+## ValidationReport.res_roots. Returns null when it cannot be read.
+static func load_texture_from_disk(path: String, roots: PackedStringArray) -> Texture2D:
+	var file := path
+	for root in (roots if not roots.is_empty() else PackedStringArray(["res://"])):
+		var candidate := path if root == "res://" else root.path_join(path.trim_prefix("res://"))
+		if FileAccess.file_exists(candidate):
+			file = candidate
+			break
+	if file.get_extension().to_lower() in ["tres", "res"]:
+		return ResourceLoader.load(file) as Texture2D
+	var image := Image.load_from_file(OasisFx.raw_file_path(file))
+	return ImageTexture.create_from_image(image) if image != null and not image.is_empty() else null

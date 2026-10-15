@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://ky44uyhxr7en"]
+
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/fire_crackle.wav" id="crackle_source"]
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd" id="oasis_sfx_runtime"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/impact.wav" id="thump_source"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/whoosh_3.wav" id="whoosh_source"]
+
+[node name="fire_burst_sfx" type="Node2D" unique_id=525592530]
+script = ExtResource("oasis_sfx_runtime")
+effect_id = "fire_burst_sfx"
+random_pitch_percent = 5.0
+layer_settings = {
+"crackle": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 250.0,
+"length_ms": 700.0,
+"loop": false,
+"random_pitch_percent": 0.0,
+"random_volume_db": 0.0,
+"start_ms": 80.0,
+"trim_start_ms": 0.0,
+"variants": []
+},
+"thump": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": false,
+"random_pitch_percent": 0.0,
+"random_volume_db": 0.0,
+"start_ms": 50.0,
+"trim_start_ms": 0.0,
+"variants": []
+},
+"whoosh": {
+"fade_in_ms": 30.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": false,
+"random_pitch_percent": 0.0,
+"random_volume_db": 0.0,
+"start_ms": 0.0,
+"trim_start_ms": 0.0,
+"variants": []
+}
+}
+
+[node name="whoosh" type="AudioStreamPlayer" parent="." unique_id=942304185]
+stream = ExtResource("whoosh_source")
+volume_db = -6.0
+pitch_scale = 0.7
+
+[node name="thump" type="AudioStreamPlayer" parent="." unique_id=2042336495]
+stream = ExtResource("thump_source")
+volume_db = -2.0
+pitch_scale = 0.85
+
+[node name="crackle" type="AudioStreamPlayer" parent="." unique_id=1346022742]
+stream = ExtResource("crackle_source")
+volume_db = -4.0

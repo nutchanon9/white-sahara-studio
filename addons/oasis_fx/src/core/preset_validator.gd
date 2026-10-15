@@ -1,15 +1,24 @@
 @tool
 extends RefCounted
-## Validates a parsed preset against vfx_spec.gd and returns a normalized copy
-## with defaults filled in. Never executes anything from the preset.
+## Validates a parsed preset against its field table (vfx_spec.gd or
+## sfx_spec.gd, chosen by asset_type) and returns a normalized copy with
+## defaults filled in. Never executes anything from the preset.
 
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
+const SfxSpec := preload("res://addons/oasis_fx/src/core/sfx_spec.gd")
 const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 
 ## JSON numbers are doubles; integers beyond this cannot be represented exactly.
 const _MAX_SAFE_INT := 9007199254740991.0
+
+const SUPPORTED_SCHEMA_VERSIONS := [1]
+const SUPPORTED_ASSET_TYPES := ["vfx", "sfx"]
+## Top-level field table per asset type.
+const _EFFECT_FIELDS := {"vfx": Spec.EFFECT_FIELDS, "sfx": SfxSpec.EFFECT_FIELDS}
+## Field table per list item kind.
+const _ITEM_FIELDS := {"emitter": Spec.EMITTER_FIELDS, "layer": SfxSpec.LAYER_FIELDS}
 
 
 ## Loads, parses and validates a preset file. Returns the normalized preset,
@@ -19,10 +28,17 @@ static func validate_file(path: String, report: RefCounted) -> Dictionary:
 	if data == null:
 		return {}
 	var preset := validate(data, report)
-	if not preset.is_empty() and path.ends_with(OasisFx.VFX_PRESET_SUFFIX):
-		var expected := path.get_file().trim_suffix(OasisFx.VFX_PRESET_SUFFIX)
+	if preset.is_empty():
+		return preset
+	var suffix: String = OasisFx.PRESET_SUFFIXES[preset.asset_type]
+	if path.ends_with(suffix):
+		var expected := path.get_file().trim_suffix(suffix)
 		if expected != preset.id:
 			report.warn("id", "id \"%s\" differs from the file name \"%s\"; keeping them equal avoids confusion" % [preset.id, path.get_file()])
+	else:
+		for other in OasisFx.PRESET_SUFFIXES.values():
+			if path.ends_with(other):
+				report.warn("asset_type", "a \"%s\" preset in a %s file; name it <id>%s" % [preset.asset_type, other, suffix])
 	return preset
 
 
@@ -34,9 +50,12 @@ static func validate(data: Variant, report: RefCounted) -> Dictionary:
 		return {}
 	if not _check_header(data, report):
 		return {}
-	var preset := _check_object(data, Spec.EFFECT_FIELDS, "", report)
+	var preset := _check_object(data, _EFFECT_FIELDS[data.asset_type], "", report)
 	if report.is_ok():
-		_check_effect_semantics(data, preset, report)
+		if data.asset_type == "sfx":
+			_check_sfx_semantics(data, preset, report)
+		else:
+			_check_effect_semantics(data, preset, report)
 	return preset if report.is_ok() else {}
 
 
@@ -44,19 +63,19 @@ static func validate(data: Variant, report: RefCounted) -> Dictionary:
 # rest of the document follows different rules and further errors are noise.
 static func _check_header(data: Dictionary, report: RefCounted) -> bool:
 	if not data.has("schema_version"):
-		report.error("schema_version", "is required (use %d)" % Spec.SUPPORTED_SCHEMA_VERSIONS.back())
+		report.error("schema_version", "is required (use %d)" % SUPPORTED_SCHEMA_VERSIONS.back())
 		return false
 	var version: Variant = data.schema_version
-	if not _is_whole_number(version) or not Spec.SUPPORTED_SCHEMA_VERSIONS.has(int(version)):
+	if not _is_whole_number(version) or not SUPPORTED_SCHEMA_VERSIONS.has(int(version)):
 		report.error("schema_version", "unsupported schema_version %s; OasisFx %s supports: %s" % [
-			JSON.stringify(version), OasisFx.VERSION, _join(Spec.SUPPORTED_SCHEMA_VERSIONS)])
+			JSON.stringify(version), OasisFx.VERSION, _join(SUPPORTED_SCHEMA_VERSIONS)])
 		return false
 	if not data.has("asset_type"):
-		report.error("asset_type", "is required (use \"vfx\")")
+		report.error("asset_type", "is required (\"vfx\" or \"sfx\")")
 		return false
-	if typeof(data.asset_type) != TYPE_STRING or not Spec.SUPPORTED_ASSET_TYPES.has(data.asset_type):
-		report.error("asset_type", "unsupported asset_type %s; supported: %s (sfx and animation are planned for later phases)" % [
-			JSON.stringify(data.asset_type), _join(Spec.SUPPORTED_ASSET_TYPES)])
+	if typeof(data.asset_type) != TYPE_STRING or not SUPPORTED_ASSET_TYPES.has(data.asset_type):
+		report.error("asset_type", "unsupported asset_type %s; supported: %s (animation is planned for a later phase)" % [
+			JSON.stringify(data.asset_type), _join(SUPPORTED_ASSET_TYPES)])
 		return false
 	return true
 
@@ -136,16 +155,32 @@ static func _check_value(value: Variant, spec: Dictionary, path: String, report:
 				if not spec.get("allow_empty", false):
 					report.error(path, "must not be empty")
 				return ""
-			var problem := PathUtils.check_resource_ref(value, Spec.TEXTURE_EXTENSIONS)
-			if not problem.is_empty():
-				report.error(path, problem)
+			return _check_res_path(value, spec, path, report)
+		"res_path_list":
+			if typeof(value) != TYPE_ARRAY:
+				report.error(path, "must be an array of res:// paths")
 				return null
-			if not FileAccess.file_exists(value):
-				report.error(path, "file does not exist: %s" % value)
+			if value.size() > spec.max_items:
+				report.error(path, "must contain at most %d paths (got %d)" % [spec.max_items, value.size()])
+				return null
+			var paths := []
+			for i in value.size():
+				var item_path := "%s[%d]" % [path, i]
+				if typeof(value[i]) != TYPE_STRING or value[i].is_empty():
+					report.error(item_path, "must be a res:// path (got %s)" % JSON.stringify(value[i]))
+					continue
+				if paths.has(value[i]):
+					report.error(item_path, "duplicate path %s" % value[i])
+					continue
+				paths.append(_check_res_path(value[i], spec, item_path, report))
+			return paths
+		"bus":
+			if typeof(value) != TYPE_STRING or not _matches(SfxSpec.BUS_PATTERN, value):
+				report.error(path, "must be an audio bus name of letters, digits, _, - or spaces (max 32 chars); got %s" % JSON.stringify(value))
 				return null
 			return value
-		"emitters":
-			return _check_emitters(value, path, report)
+		"list":
+			return _check_list(value, spec, path, report)
 	report.error(path, "internal error: unknown field type %s" % spec.type)
 	return null
 
@@ -198,15 +233,16 @@ static func _check_tags(value: Variant, path: String, report: RefCounted) -> Var
 	return value.duplicate()
 
 
-static func _check_emitters(value: Variant, path: String, report: RefCounted) -> Variant:
+static func _check_list(value: Variant, spec: Dictionary, path: String, report: RefCounted) -> Variant:
+	var item: String = spec.item
 	if typeof(value) != TYPE_ARRAY:
-		report.error(path, "must be an array of emitter objects")
+		report.error(path, "must be an array of %s objects" % item)
 		return null
-	if value.is_empty():
-		report.error(path, "must contain at least one emitter")
+	if value.size() < spec.min_items:
+		report.error(path, "must contain at least one %s" % item)
 		return null
-	if value.size() > Spec.MAX_EMITTERS:
-		report.error(path, "supports at most %d emitters (got %d)" % [Spec.MAX_EMITTERS, value.size()])
+	if value.size() > spec.max_items:
+		report.error(path, "supports at most %d %ss (got %d)" % [spec.max_items, item, value.size()])
 		return null
 	var out := []
 	for i in value.size():
@@ -214,8 +250,33 @@ static func _check_emitters(value: Variant, path: String, report: RefCounted) ->
 		if typeof(value[i]) != TYPE_DICTIONARY:
 			report.error(item_path, "must be an object")
 			continue
-		out.append(_check_object(value[i], Spec.EMITTER_FIELDS, item_path + ".", report))
+		out.append(_check_object(value[i], _ITEM_FIELDS[item], item_path + ".", report))
 	return out
+
+
+## Checks a res:// file reference: safe path, allowed extension, and that the
+## file exists (see ValidationReport.res_roots for where it is looked up).
+static func _check_res_path(value: String, spec: Dictionary, path: String, report: RefCounted) -> Variant:
+	var problem := PathUtils.check_resource_ref(value, spec.get("extensions", []))
+	if not problem.is_empty():
+		report.error(path, problem)
+		return null
+	if resolve_res_path(value, report.res_roots).is_empty():
+		var where := "" if report.res_roots.is_empty() else " (looked in %s)" % ", ".join(report.res_roots)
+		report.error(path, "file does not exist: %s%s" % [value, where])
+		return null
+	return value
+
+
+## The first existing file for `res_path` under `roots` ("res://" = this
+## project; empty roots = this project only), or "" when none exists.
+static func resolve_res_path(res_path: String, roots: PackedStringArray) -> String:
+	var candidates := roots if not roots.is_empty() else PackedStringArray(["res://"])
+	for root in candidates:
+		var file := res_path if root == "res://" else root.path_join(res_path.trim_prefix("res://"))
+		if FileAccess.file_exists(file):
+			return file
+	return ""
 
 
 static func _check_effect_semantics(raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
@@ -293,6 +354,30 @@ static func _check_shape(raw: Dictionary, emitter: Dictionary, path: String, rep
 			if emitter.emission_rect_size[0] <= 0.0 and emitter.emission_rect_size[1] <= 0.0:
 				report.warn(path + ".emission_rect_size", "is [0, 0], so the rectangle behaves like a point")
 
+
+static func _check_sfx_semantics(raw: Dictionary, preset: Dictionary, report: RefCounted) -> void:
+	var seen_ids := {}
+	var has_loop := false
+	for i in preset.layers.size():
+		var layer: Dictionary = preset.layers[i]
+		var path := "layers[%d]" % i
+		if seen_ids.has(layer.id):
+			report.error(path + ".id", "duplicate layer id \"%s\" (also used by layers[%d])" % [layer.id, seen_ids[layer.id]])
+		seen_ids[layer.id] = i
+		if layer.variants.has(layer.source):
+			report.error(path + ".variants", "must not repeat source %s" % layer.source)
+		if layer.length_ms > 0.0 and layer.fade_in_ms + layer.fade_out_ms > layer.length_ms:
+			report.error(path + ".fade_out_ms", "fade_in_ms + fade_out_ms (%s) must not exceed length_ms (%s)" % [_num(layer.fade_in_ms + layer.fade_out_ms), _num(layer.length_ms)])
+		if layer.loop:
+			has_loop = true
+			if layer.fade_out_ms > 0.0:
+				report.warn(path + ".fade_out_ms", "on a looping layer the fade-out repeats at the end of every loop")
+		if layer.source_license.is_empty():
+			report.warn(path + ".source_license", "is empty; record the license of %s (where it came from and whether credit is required)" % layer.source.get_file())
+	if not preset.positional:
+		for key in ["max_distance", "attenuation"]:
+			if raw.has(key):
+				report.warn(key, "is ignored when positional is false")
 
 static func _warn_ignored(raw: Dictionary, keys: Array, path: String, shape: String, report: RefCounted) -> void:
 	for key in keys:

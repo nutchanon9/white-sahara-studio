@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "asset_type": "sfx",
+  "id": "cooking_success_sfx",
+  "display_name": "Cooking Success SFX",
+  "description": "Bright two-note chime with sparkles when a dish is done; pairs with the Cooking Success VFX.",
+  "tags": ["cooking", "success", "ui"],
+  "author": "OasisFx examples",
+  "random_pitch_percent": 3,
+  "bus": "Master",
+  "layers": [
+    {
+      "id": "chime",
+      "source": "res://addons/oasis_fx/presets/examples/audio/chime.wav",
+      "gain_db": -3,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    },
+    {
+      "id": "sparkle",
+      "source": "res://addons/oasis_fx/presets/examples/audio/sparkle.wav",
+      "start_ms": 120,
+      "gain_db": -6,
+      "source_author": "OasisFx (synthesized)",
+      "source_license": "CC0"
+    }
+  ]
+}

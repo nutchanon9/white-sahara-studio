@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
-## Turns presets into saved .tscn files. Shared by the CLI and (Phase 1C) the
-## desktop app, so there is exactly one generation code path.
+## Turns presets (vfx and sfx) into saved .tscn files. Shared by the CLI and
+## the desktop app, so there is exactly one generation code path.
 ##
 ## Safety rules:
 ## - output only under a sanitized res:// or user:// directory
@@ -16,6 +16,7 @@ const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 const Builder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
+const SfxBuilder := preload("res://addons/oasis_fx/src/core/sfx_builder.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 const Manifest := preload("res://addons/oasis_fx/src/core/asset_manifest.gd")
 
@@ -61,7 +62,7 @@ static func generate_preset(preset: Dictionary, out_dir: String, options := {}, 
 	if dry_run:
 		return _result(report, "would_overwrite" if exists else "would_create", preset.id, output_path)
 
-	var root := Builder.build(preset, report)
+	var root := build(preset, report)
 	if root == null:
 		return _result(report, "failed", preset.id, output_path)
 	_stabilize_external_ids(root, output_path)
@@ -148,7 +149,14 @@ static func generate_many(paths: PackedStringArray, out_dir: String, options := 
 	return {"ok": ok, "results": results}
 
 
-## Every *.vfx.json under `dir` (recursively), sorted. Hidden folders are skipped.
+## Builds the node tree for any asset type (audio as path-only placeholders).
+static func build(preset: Dictionary, report: RefCounted) -> Node2D:
+	if preset.get("asset_type") == "sfx":
+		return SfxBuilder.build(preset, report)
+	return Builder.build(preset, report)
+
+
+## Every *.vfx.json and *.sfx.json under `dir` (recursively), sorted. Hidden folders are skipped.
 static func find_presets(dir: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	_collect_presets(dir.trim_suffix("/"), out)
@@ -158,7 +166,7 @@ static func find_presets(dir: String) -> PackedStringArray:
 
 static func _collect_presets(dir: String, out: PackedStringArray) -> void:
 	for file in DirAccess.get_files_at(dir):
-		if file.ends_with(OasisFx.VFX_PRESET_SUFFIX):
+		if file.ends_with(OasisFx.VFX_PRESET_SUFFIX) or file.ends_with(OasisFx.SFX_PRESET_SUFFIX):
 			out.append(dir + "/" + file)
 	for sub in DirAccess.get_directories_at(dir):
 		if not sub.begins_with("."):
@@ -171,11 +179,23 @@ static func scene_path_for(dir: String, id: String) -> String:
 
 ## Files a generated scene needs at runtime besides itself.
 static func dependencies(preset: Dictionary) -> PackedStringArray:
+	if preset.get("asset_type") == "sfx":
+		var audio := PackedStringArray([OasisFx.SFX_RUNTIME_SCRIPT_PATH])
+		for layer in preset.layers:
+			for path in [layer.source] + layer.variants:
+				if not audio.has(path):
+					audio.append(path)
+		return audio
 	var deps := PackedStringArray([OasisFx.RUNTIME_SCRIPT_PATH])
 	for e in preset.emitters:
 		if e.texture == "file" and not deps.has(e.texture_path):
 			deps.append(e.texture_path)
 	return deps
+
+
+## Runtime script attached to the root of a generated scene.
+static func runtime_script_for(preset: Dictionary) -> String:
+	return OasisFx.SFX_RUNTIME_SCRIPT_PATH if preset.get("asset_type") == "sfx" else OasisFx.RUNTIME_SCRIPT_PATH
 
 
 ## Deterministic ResourceUID for an output path, so regenerating a scene keeps
@@ -191,11 +211,23 @@ static func stable_uid(output_path: String) -> int:
 static func _stabilize_external_ids(root: Node, output_path: String) -> void:
 	var script: Resource = root.get_script()
 	if script != null:
-		script.set_id_for_path(output_path, "oasis_fx_runtime")
+		script.set_id_for_path(output_path, "oasis_sfx_runtime" if script.resource_path == OasisFx.SFX_RUNTIME_SCRIPT_PATH else "oasis_fx_runtime")
 	for child in root.get_children():
-		if child is GPUParticles2D and child.texture != null and not child.texture.resource_path.is_empty() \
-				and not child.texture.resource_path.contains("::"):
+		if child is GPUParticles2D and _is_external(child.texture):
 			child.texture.set_id_for_path(output_path, String(child.name) + "_texture_file")
+		elif (child is AudioStreamPlayer or child is AudioStreamPlayer2D) and _is_external(child.stream):
+			child.stream.set_id_for_path(output_path, String(child.name) + "_source")
+	var settings: Variant = root.get("layer_settings")
+	if settings is Dictionary:
+		for layer in settings:
+			var variants: Array = settings[layer].get("variants", [])
+			for i in variants.size():
+				if _is_external(variants[i]):
+					variants[i].set_id_for_path(output_path, "%s_variant_%d" % [layer, i + 1])
+
+
+static func _is_external(resource: Resource) -> bool:
+	return resource != null and not resource.resource_path.is_empty() and not resource.resource_path.contains("::")
 
 
 # Godot 4.6+ stores a random unique_id per node in .tscn files. Replace them
@@ -226,13 +258,14 @@ static func _verify_loads(output_path: String, preset: Dictionary, report: RefCo
 	var instance := scene.instantiate()
 	var names := []
 	for child in instance.get_children():
-		if child is GPUParticles2D:
+		if child is GPUParticles2D or child is AudioStreamPlayer or child is AudioStreamPlayer2D:
 			names.append(String(child.name))
-	var has_runtime: bool = instance.get_script() != null and instance.get_script().resource_path == OasisFx.RUNTIME_SCRIPT_PATH
+	var has_runtime: bool = instance.get_script() != null and instance.get_script().resource_path == runtime_script_for(preset)
 	instance.free()
-	var expected: Array = preset.emitters.map(func(e): return e.id)
+	var items: Array = preset.layers if preset.get("asset_type") == "sfx" else preset.emitters
+	var expected: Array = items.map(func(e): return e.id)
 	if names != expected:
-		report.error("", "the generated scene has emitters %s, expected %s" % [names, expected])
+		report.error("", "the generated scene has nodes %s, expected %s" % [names, expected])
 	if not has_runtime:
 		report.error("", "the generated scene is missing the OasisFx runtime script")
 

@@ -1,17 +1,17 @@
 extends "res://addons/oasis_fx/tests/oasis_test_case.gd"
 ## Repository-level regression tests for examples/runtime_demo.
 ##
-## examples/runtime_demo/vfx/*.tscn are committed generator output. They double
+## examples/runtime_demo/fx/*.tscn (effects and sounds) are committed generator output. They double
 ## as golden files: regenerating the example presets must reproduce them byte
 ## for byte (apart from the uid, which Godot only writes for res:// files).
 ## When a generator change is intended, refresh them with:
 ##   godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd -- \
-##     generate-all addons/oasis_fx/presets/examples --out res://examples/runtime_demo/vfx --force
+##     generate-all addons/oasis_fx/presets/examples --out res://examples/runtime_demo/fx --force
 
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 
-const VFX_DIR := "res://examples/runtime_demo/vfx"
+const VFX_DIR := "res://examples/runtime_demo/fx"
 const DEMO := "res://examples/runtime_demo/runtime_demo.tscn"
 
 
@@ -59,6 +59,8 @@ func test_runtime_demo_triggers_effects_from_animation_events() -> void:
 	await tree.create_timer(0.3).timeout
 	var ids := effects.get_children().map(func(c): return c.effect_id)
 	check(ids.has("sword_slash"), "attack animation hit frame spawned the slash: %s" % [ids])
+	check(ids.has("sword_slash_sfx"), "and its sound: %s" % [ids])
+	check(ids.has("fire_burst_sfx"), "spawn_effect plays the matching sound: %s" % [ids])
 	var slash: Node = effects.get_children().filter(func(c): return c.effect_id == "sword_slash")[0]
 	# The hit frame is the swing's 40 degree key: hand = pivot + 70 px along the blade.
 	var pivot: Node2D = demo.get_node("Hero/SwordPivot")
@@ -66,12 +68,17 @@ func test_runtime_demo_triggers_effects_from_animation_events() -> void:
 	check(slash.global_position.distance_to(expected) < 12.0, "slash spawned at the hand on the hit frame (%s, expected about %s)" % [slash.global_position, expected])
 
 	demo.start_cooking()
+	await tree.process_frame
+	check(is_instance_valid(demo.sizzle) and demo.sizzle.is_playing() and demo.sizzle.is_looping(), "sizzle loops while cooking")
+	var sizzle: Node = demo.sizzle
 	await tree.create_timer(1.35).timeout
 	ids = effects.get_children().map(func(c): return c.effect_id)
 	check(ids.has("cooking_success"), "cook animation end spawned the sparkle: %s" % [ids])
+	check(ids.has("cooking_success_sfx"), "and its chime: %s" % [ids])
+	check(not is_instance_valid(sizzle) or sizzle.is_queued_for_deletion(), "sizzle stopped when cooking finished")
 
 	await tree.create_timer(2.0).timeout
-	check_eq(effects.get_child_count(), 0, "one-shot effects freed themselves")
+	check_eq(effects.get_child_count(), 0, "one-shot effects and sounds freed themselves")
 	check(is_instance_valid(campfire) and campfire.is_playing(), "the looping campfire is still running")
 	demo.queue_free()
 	await tree.process_frame

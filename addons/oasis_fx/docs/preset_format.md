@@ -16,6 +16,11 @@ project.
 raises the emitter limit from 1 to 8. Every preset that was valid for OasisFx 0.1 is still
 valid and means the same thing. A preset that uses the new fields needs OasisFx 0.2+.
 
+OasisFx 0.4 (Phase 2) adds `sfx` presets and leaves the `vfx` format unchanged. One output
+detail changed: with `texture: "file"` the image is no longer loaded while generating, so
+the automatic `visibility_rect` assumes a 64 px image (set `visibility_rect` explicitly for
+large images). Presets with generated textures produce the same scenes as before.
+
 ## Units and conventions
 
 | Topic | Convention |
@@ -36,7 +41,7 @@ valid and means the same thing. A preset that uses the new fields needs OasisFx 
 | Field | Type | Range | Default | Meaning |
 |---|---|---|---|---|
 | `schema_version` | int | 1 … 1 | **required** | Preset format version. Must be 1. |
-| `asset_type` | enum: `vfx` |  | **required** | Asset kind. Only "vfx" is supported in this version. |
+| `asset_type` | enum: `vfx` |  | **required** | Asset kind: "vfx" for a particle effect (sound presets use "sfx", see sfx_format.md). |
 | `id` | id |  | **required** | Stable identifier; also the output file name (`<id>.tscn`). Lowercase snake_case. |
 | `display_name` | string |  | **required** | Human-readable name. |
 | `description` | string |  | `""` | What the effect is for. |
@@ -48,7 +53,7 @@ valid and means the same thing. A preset that uses the new fields needs OasisFx 
 | `playback_speed` | number | 0.1 … 4.0 | `1.0` | Time multiplier applied to every emitter (GPUParticles2D.speed_scale). |
 | `z_index` | int | -1000 … 1000 | `0` | Draw order of the effect root (Node2D.z_index). |
 | `origin` | vec2 | -4096.0 … 4096.0 | `[0.0, 0.0]` | Offset of all emitters from the spawn point in pixels [x, y]; e.g. [0, -40] to center on a character's chest. |
-| `emitters` | emitters |  | **required** | Particle emitters, 1 to 8; drawn in order (later emitters on top). |
+| `emitters` | list of emitter |  | **required** | Particle emitters, 1 to 8; drawn in order (later emitters on top). |
 
 ## Emitter fields (`emitters[i]`)
 
@@ -98,7 +103,7 @@ valid and means the same thing. A preset that uses the new fields needs OasisFx 
 | `hue_variation` | number | 0.0 … 1.0 | `0.0` | Random hue shift per particle, 0 = none, 1 = full color wheel. |
 | `texture` | enum: `soft_circle`, `hard_circle`, `ring`, `streak`, `square`, `file` |  | `"soft_circle"` | Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path). |
 | `texture_size_px` | int | 4 … 256 | `32` | Size of the generated texture in pixels (streak: height; its width is a quarter). |
-| `texture_path` | res_path |  | `""` | res:// path to a Texture2D; required when texture is "file". |
+| `texture_path` | res_path (png/webp/jpg/jpeg/svg/tres/res) |  | `""` | res:// path to a Texture2D; required when texture is "file". |
 | `blend_mode` | enum: `mix`, `add`, `sub`, `mul`, `premult_alpha` |  | `"mix"` | CanvasItemMaterial blend mode; "add" suits fire, sparks and glows. |
 | `local_coords` | bool |  | `false` | true = particles move with the emitter after spawning. |
 | `z_index` | int | -1000 … 1000 | `0` | Draw order of this emitter relative to the effect root. |
@@ -108,8 +113,9 @@ valid and means the same thing. A preset that uses the new fields needs OasisFx 
 
 Errors:
 
-1. `schema_version` must be `1` and `asset_type` must be `"vfx"`; otherwise validation
-   stops with a single, explicit error.
+1. `schema_version` must be `1` and `asset_type` must be `"vfx"` (or `"sfx"` for a sound,
+   see [sfx_format.md](sfx_format.md)); otherwise validation stops with a single, explicit
+   error.
 2. Unknown fields are errors at every level (they are never silently ignored).
 3. `emitters` holds 1 to 8 emitters with unique `id`s; the sum of `amount` must be ≤ 2000.
 4. `*_min <= *_max` for `initial_velocity`, `damping`, `radial_accel`, `tangential_accel`,
@@ -117,7 +123,9 @@ Errors:
 5. `delay_seconds < duration_seconds`.
 6. `emission_shape: "ring"` needs `emission_inner_radius <= emission_radius`.
 7. `texture: "file"` requires `texture_path`; any other texture forbids it. The file must
-   exist and load as a `Texture2D` at generation time (import images first).
+   exist (the desktop app also looks in the chosen game project). The generated scene only
+   references it by path, so it does not need to be imported when generating; the game
+   loads it as a `Texture2D` (import it there as usual).
 8. In a batch (`validate-all`, `generate-all`) ids must be unique across files, because each
    id becomes `<id>.tscn`.
 
@@ -172,7 +180,8 @@ spread over `(1 − explosiveness) × lifetime` and the last particle lives one 
 | `preprocess_seconds` | `GPUParticles2D.preprocess` (continuous emitters only) |
 | procedural textures | `GradientTexture2D` embedded in the scene (radial fill; `streak` is a ¼-wide ellipse, `square` a solid fill) |
 | `blend_mode` ≠ mix | `CanvasItemMaterial.blend_mode` |
-| `visibility_rect: []` | computed from speed × lifetime, accelerations, spawn area, offset and particle size |
+| `visibility_rect: []` | computed from speed × lifetime, accelerations, spawn area, offset and particle size (an image file counts as 64 px; set `visibility_rect` for larger images) |
+| `texture: "file"` | external resource reference to `texture_path` (not embedded) |
 
 ## Versioning
 

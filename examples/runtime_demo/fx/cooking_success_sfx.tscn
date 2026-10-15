@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://ghndktg7lmpa"]
+
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/chime.wav" id="chime_source"]
+[ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd" id="oasis_sfx_runtime"]
+[ext_resource type="AudioStream" path="res://addons/oasis_fx/presets/examples/audio/sparkle.wav" id="sparkle_source"]
+
+[node name="cooking_success_sfx" type="Node2D" unique_id=1377598047]
+script = ExtResource("oasis_sfx_runtime")
+effect_id = "cooking_success_sfx"
+random_pitch_percent = 3.0
+layer_settings = {
+"chime": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": false,
+"random_pitch_percent": 0.0,
+"random_volume_db": 0.0,
+"start_ms": 0.0,
+"trim_start_ms": 0.0,
+"variants": []
+},
+"sparkle": {
+"fade_in_ms": 0.0,
+"fade_out_ms": 0.0,
+"length_ms": 0.0,
+"loop": false,
+"random_pitch_percent": 0.0,
+"random_volume_db": 0.0,
+"start_ms": 120.0,
+"trim_start_ms": 0.0,
+"variants": []
+}
+}
+
+[node name="chime" type="AudioStreamPlayer" parent="." unique_id=1036601748]
+stream = ExtResource("chime_source")
+volume_db = -3.0
+
+[node name="sparkle" type="AudioStreamPlayer" parent="." unique_id=922825056]
+stream = ExtResource("sparkle_source")
+volume_db = -6.0
