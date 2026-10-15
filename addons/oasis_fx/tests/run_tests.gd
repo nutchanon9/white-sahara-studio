@@ -6,7 +6,8 @@ extends SceneTree
 ##
 ## Options after `--`:
 ##   <filter>          only run test_*.gd files whose name contains <filter>
-##   --dir <dir>       folder to discover test_*.gd files in (default: this folder)
+##   --dir <dir>       folder to discover test_*.gd files in (default: this folder,
+##                     plus res://tests when the host project has one)
 ##   --timeout <sec>   per-test time limit (default 120)
 ##
 ## A test fails when it records a failed check, when any script or engine
@@ -19,40 +20,11 @@ extends SceneTree
 
 const RUNNER_PATH := "res://addons/oasis_fx/tests/run_tests.gd"
 const DEFAULT_TESTS_DIR := "res://addons/oasis_fx/tests"
+## Host-project tests (this repository's examples), run by default when present.
+const PROJECT_TESTS_DIR := "res://tests"
 const DEFAULT_TIMEOUT_SECONDS := 120.0
 const TestCase := preload("res://addons/oasis_fx/tests/oasis_test_case.gd")
-
-
-## Records errors (not warnings or plain prints) reported to the engine.
-## _log_error can be called from any thread, hence the mutex.
-class ErrorCapture extends Logger:
-	var _mutex := Mutex.new()
-	var _errors: PackedStringArray = []
-	## Set when an error comes from the runner script itself.
-	var runner_failed := false
-
-	func _log_error(function: String, file: String, line: int, code: String, rationale: String,
-			_editor_notify: bool, error_type: int, _script_backtraces: Array[ScriptBacktrace]) -> void:
-		if error_type == ERROR_TYPE_WARNING:
-			return
-		var text := rationale if not rationale.is_empty() else code
-		_mutex.lock()
-		_errors.append("%s (%s:%d in %s)" % [text, file, line, function])
-		if file == RUNNER_PATH:
-			runner_failed = true
-		_mutex.unlock()
-
-	func count() -> int:
-		_mutex.lock()
-		var n := _errors.size()
-		_mutex.unlock()
-		return n
-
-	func since(index: int) -> PackedStringArray:
-		_mutex.lock()
-		var out := _errors.slice(index)
-		_mutex.unlock()
-		return out
+const ErrorCapture := preload("res://addons/oasis_fx/src/core/error_capture.gd")
 
 
 var _capture := ErrorCapture.new()
@@ -63,6 +35,7 @@ var _failed := 0
 
 
 func _initialize() -> void:
+	_capture.watched_file = RUNNER_PATH
 	OS.add_logger(_capture)
 	_run.call_deferred()
 
@@ -70,7 +43,7 @@ func _initialize() -> void:
 # A runtime error inside the runner would abort _run() and leave the process
 # running forever; stop with a failure instead.
 func _process(_delta: float) -> bool:
-	if _capture.runner_failed and not _finished:
+	if _capture.watched_file_failed and not _finished:
 		_report_failure("runner", "(internal error)", Array(_capture.since(_errors_seen)))
 		_finish(false)
 	return false
@@ -83,16 +56,25 @@ func _run() -> void:
 		_finish(false)
 		return
 
-	var files := _test_files(options.dir, options.filter)
+	var dirs := PackedStringArray([options.dir])
+	if options.dir.is_empty():
+		dirs = PackedStringArray([DEFAULT_TESTS_DIR])
+		if DirAccess.dir_exists_absolute(PROJECT_TESTS_DIR):
+			dirs.append(PROJECT_TESTS_DIR)
+	var files := PackedStringArray()
+	for dir in dirs:
+		for file in _test_files(dir, options.filter):
+			files.append(dir.path_join(file))
 	if files.is_empty():
-		print("FAIL  no test files found in %s (filter: \"%s\")" % [options.dir, options.filter])
+		print("FAIL  no test files found in %s (filter: \"%s\")" % [", ".join(dirs), options.filter])
 		_finish(false)
 		return
 
 	var errors_outside_tests := PackedStringArray()
-	for file in files:
+	for path in files:
+		var file := path.get_file()
 		errors_outside_tests.append_array(_take_errors())
-		var script := load(options.dir.path_join(file)) as GDScript
+		var script := load(path) as GDScript
 		if script == null or not script.can_instantiate():
 			_report_failure(file.get_basename(), "(load)", ["script failed to load or parse"] + Array(_take_errors()))
 			continue
@@ -181,7 +163,7 @@ func _finish(ok: bool) -> void:
 
 
 func _parse_options(args: PackedStringArray) -> Dictionary:
-	var options := {"dir": DEFAULT_TESTS_DIR, "filter": "", "timeout": DEFAULT_TIMEOUT_SECONDS, "error": ""}
+	var options := {"dir": "", "filter": "", "timeout": DEFAULT_TIMEOUT_SECONDS, "error": ""}
 	var i := 0
 	while i < args.size():
 		var arg := args[i]

@@ -18,9 +18,8 @@ extends RefCounted
 const SUPPORTED_SCHEMA_VERSIONS := [1]
 const SUPPORTED_ASSET_TYPES := ["vfx"]
 
-## Phase 1A generates a single emitter per effect. Multiple emitters are
-## planned for Phase 1B; the array shape is already final.
-const MAX_EMITTERS := 1
+## Maximum emitters per effect.
+const MAX_EMITTERS := 8
 
 ## Hard cap on the sum of `amount` over all emitters.
 const MAX_TOTAL_PARTICLES := 2000
@@ -57,8 +56,10 @@ const EFFECT_FIELDS := {
 		"doc": "Time multiplier applied to every emitter (GPUParticles2D.speed_scale)."},
 	"z_index": {"type": "int", "default": 0, "min": -1000, "max": 1000,
 		"doc": "Draw order of the effect root (Node2D.z_index)."},
+	"origin": {"type": "vec2", "default": [0.0, 0.0], "min": -4096.0, "max": 4096.0,
+		"doc": "Offset of all emitters from the spawn point in pixels [x, y]; e.g. [0, -40] to center on a character's chest."},
 	"emitters": {"type": "emitters", "required": true,
-		"doc": "Particle emitters. Phase 1A supports exactly one."},
+		"doc": "Particle emitters, 1 to 8; drawn in order (later emitters on top)."},
 }
 
 const EMITTER_FIELDS := {
@@ -68,6 +69,10 @@ const EMITTER_FIELDS := {
 		"doc": "Emitter kind. Only \"particles_2d\" (GPUParticles2D) is supported."},
 	"position": {"type": "vec2", "default": [0.0, 0.0], "min": -4096.0, "max": 4096.0,
 		"doc": "Offset from the effect origin in pixels [x, y]; +y is down."},
+	"rotation_degrees": {"type": "number", "default": 0.0, "min": -360.0, "max": 360.0,
+		"doc": "Rotates the whole emitter (direction, emission shape and offset) in degrees; positive turns clockwise on screen."},
+	"delay_seconds": {"type": "number", "default": 0.0, "min": 0.0, "max": 30.0,
+		"doc": "Time after the effect starts before this emitter starts; must be < duration_seconds."},
 	"amount": {"type": "int", "required": true, "min": 1, "max": 1000,
 		"doc": "Particles per emission cycle."},
 	"one_shot": {"type": "bool", "required": true,
@@ -80,12 +85,18 @@ const EMITTER_FIELDS := {
 		"doc": "How long each particle lives, in seconds."},
 	"lifetime_randomness": {"type": "number", "default": 0.0, "min": 0.0, "max": 1.0,
 		"doc": "Random reduction of each particle's lifetime (0..1)."},
-	"emission_shape": {"type": "enum", "default": "point", "values": ["point", "circle", "rect"],
-		"doc": "Where particles spawn: a point, a filled circle, or a filled rectangle."},
+	"preprocess_seconds": {"type": "number", "default": 0.0, "min": 0.0, "max": 10.0,
+		"doc": "Continuous emitters only: simulate this long before the first frame so a loop starts \"already running\"."},
+	"emission_shape": {"type": "enum", "default": "point", "values": ["point", "circle", "circle_outline", "ring", "rect"],
+		"doc": "Where particles spawn: point, filled circle, circle outline, ring (between inner and outer radius) or filled rectangle."},
 	"emission_radius": {"type": "number", "default": 0.0, "min": 0.0, "max": 4096.0,
-		"doc": "Circle radius in pixels (emission_shape \"circle\")."},
+		"doc": "Radius in pixels (circle, circle_outline, ring)."},
+	"emission_inner_radius": {"type": "number", "default": 0.0, "min": 0.0, "max": 4096.0,
+		"doc": "Inner radius in pixels (ring only); must be <= emission_radius."},
 	"emission_rect_size": {"type": "vec2", "default": [0.0, 0.0], "min": 0.0, "max": 8192.0,
 		"doc": "Rectangle size in pixels [width, height] (emission_shape \"rect\")."},
+	"emission_offset": {"type": "vec2", "default": [0.0, 0.0], "min": -4096.0, "max": 4096.0,
+		"doc": "Moves the spawn area away from the emitter center [x, y]; the center stays the pivot for orbit_velocity."},
 	"direction_degrees": {"type": "number", "required": true, "min": -360.0, "max": 360.0,
 		"doc": "Emission direction in degrees: 0 = right, 90 = down, -90 = up."},
 	"spread_degrees": {"type": "number", "required": true, "min": 0.0, "max": 180.0,
@@ -100,6 +111,28 @@ const EMITTER_FIELDS := {
 		"doc": "Minimum speed loss in pixels/second^2."},
 	"damping_max": {"type": "number", "default": 0.0, "min": 0.0, "max": 1000.0,
 		"doc": "Maximum speed loss in pixels/second^2."},
+	"radial_accel_min": {"type": "number", "default": 0.0, "min": -5000.0, "max": 5000.0,
+		"doc": "Minimum acceleration away from the emitter center in pixels/second^2 (negative pulls inward)."},
+	"radial_accel_max": {"type": "number", "default": 0.0, "min": -5000.0, "max": 5000.0,
+		"doc": "Maximum acceleration away from the emitter center in pixels/second^2."},
+	"tangential_accel_min": {"type": "number", "default": 0.0, "min": -5000.0, "max": 5000.0,
+		"doc": "Minimum sideways (swirl) acceleration in pixels/second^2."},
+	"tangential_accel_max": {"type": "number", "default": 0.0, "min": -5000.0, "max": 5000.0,
+		"doc": "Maximum sideways (swirl) acceleration in pixels/second^2."},
+	"orbit_velocity_min": {"type": "number", "default": 0.0, "min": -10.0, "max": 10.0,
+		"doc": "Minimum orbit speed around the emitter center in turns/second (positive turns counter-clockwise on screen)."},
+	"orbit_velocity_max": {"type": "number", "default": 0.0, "min": -10.0, "max": 10.0,
+		"doc": "Maximum orbit speed around the emitter center in turns/second."},
+	"angle_min": {"type": "number", "default": 0.0, "min": -720.0, "max": 720.0,
+		"doc": "Minimum initial particle rotation in degrees."},
+	"angle_max": {"type": "number", "default": 0.0, "min": -720.0, "max": 720.0,
+		"doc": "Maximum initial particle rotation in degrees."},
+	"angular_velocity_min": {"type": "number", "default": 0.0, "min": -7200.0, "max": 7200.0,
+		"doc": "Minimum particle spin in degrees/second."},
+	"angular_velocity_max": {"type": "number", "default": 0.0, "min": -7200.0, "max": 7200.0,
+		"doc": "Maximum particle spin in degrees/second."},
+	"align_to_velocity": {"type": "bool", "default": false,
+		"doc": "Rotate each particle so its texture's vertical axis follows its motion (use with \"streak\")."},
 	"scale_min": {"type": "number", "required": true, "min": 0.01, "max": 20.0,
 		"doc": "Minimum particle scale, relative to the texture size."},
 	"scale_max": {"type": "number", "required": true, "min": 0.01, "max": 20.0,
@@ -112,10 +145,13 @@ const EMITTER_FIELDS := {
 		"doc": "Optional color at half-life; \"\" = no middle stop."},
 	"color_end": {"type": "color", "required": true,
 		"doc": "Color at death, #RRGGBB or #RRGGBBAA (alpha 00 fades out)."},
-	"texture": {"type": "enum", "default": "soft_circle", "values": ["soft_circle", "hard_circle", "file"],
-		"doc": "Particle texture: generated soft/hard circle, or an image file (texture_path)."},
+	"hue_variation": {"type": "number", "default": 0.0, "min": 0.0, "max": 1.0,
+		"doc": "Random hue shift per particle, 0 = none, 1 = full color wheel."},
+	"texture": {"type": "enum", "default": "soft_circle",
+		"values": ["soft_circle", "hard_circle", "ring", "streak", "square", "file"],
+		"doc": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path)."},
 	"texture_size_px": {"type": "int", "default": 32, "min": 4, "max": 256,
-		"doc": "Size of the generated circle texture in pixels."},
+		"doc": "Size of the generated texture in pixels (streak: height; its width is a quarter)."},
 	"texture_path": {"type": "res_path", "default": "", "allow_empty": true,
 		"doc": "res:// path to a Texture2D; required when texture is \"file\"."},
 	"blend_mode": {"type": "enum", "default": "mix", "values": ["mix", "add", "sub", "mul", "premult_alpha"],
@@ -132,5 +168,13 @@ const EMITTER_FIELDS := {
 const EMITTER_MIN_MAX_PAIRS := [
 	["initial_velocity_min", "initial_velocity_max"],
 	["damping_min", "damping_max"],
+	["radial_accel_min", "radial_accel_max"],
+	["tangential_accel_min", "tangential_accel_max"],
+	["orbit_velocity_min", "orbit_velocity_max"],
+	["angle_min", "angle_max"],
+	["angular_velocity_min", "angular_velocity_max"],
 	["scale_min", "scale_max"],
 ]
+
+## Generated textures (everything except "file").
+const PROCEDURAL_TEXTURES := ["soft_circle", "hard_circle", "ring", "streak", "square"]

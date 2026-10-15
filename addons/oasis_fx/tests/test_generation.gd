@@ -1,10 +1,13 @@
 extends "res://addons/oasis_fx/tests/oasis_test_case.gd"
-## Scene generation: the Fire Burst preset becomes a loadable .tscn made of
-## built-in nodes, output is deterministic and never overwrites by accident.
+## Scene generation: presets become loadable .tscn files made of built-in
+## nodes plus the OasisFx runtime script; output is deterministic and never
+## overwrites by accident.
 
 const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
+const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const Builder := preload("res://addons/oasis_fx/src/core/vfx_builder.gd")
 
 const FIRE_BURST := "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json"
 
@@ -24,8 +27,13 @@ func test_generate_fire_burst_creates_loadable_scene() -> void:
 	var root := scene.instantiate()
 	check(root is Node2D, "root is Node2D")
 	check_eq(String(root.name), "fire_burst", "root name")
-	check_eq(root.get_meta("oasis_fx", {}).get("id"), "fire_burst", "metadata id")
-	check_eq(root.get_child_count(), 1, "one emitter")
+	check(root.get_script() != null and root.get_script().resource_path == OasisFx.RUNTIME_SCRIPT_PATH, "runtime script attached")
+	check_eq(root.get("effect_id"), "fire_burst", "effect_id")
+	check_eq(root.get("duration_seconds"), 0.8, "duration_seconds")
+	check_eq(root.get("loop"), false, "loop")
+	check_eq(root.get("emitter_delays"), {"smoke": 0.1}, "emitter delays")
+	var names := root.get_children().map(func(c): return String(c.name))
+	check_eq(names, ["smoke", "flame", "embers"], "one GPUParticles2D per emitter, in preset order")
 	var flame := root.get_node_or_null("flame") as GPUParticles2D
 	if check(flame != null, "flame is GPUParticles2D"):
 		_check_flame(flame)
@@ -34,11 +42,12 @@ func test_generate_fire_burst_creates_loadable_scene() -> void:
 
 func _check_flame(flame: GPUParticles2D) -> void:
 	var preset := Validator.validate_file(FIRE_BURST, Report.new())
-	var e: Dictionary = preset.emitters[0]
+	var e: Dictionary = preset.emitters[1]
+	check_eq(e.id, "flame", "preset emitter order")
 	check_eq(flame.amount, e.amount, "amount")
 	check_eq(flame.lifetime, e.lifetime_seconds, "lifetime")
 	check_eq(flame.one_shot, true, "one_shot")
-	check_eq(flame.emitting, true, "emitting on instantiate")
+	check_eq(flame.emitting, false, "emitters wait for the runtime script")
 	check_eq(flame.explosiveness, e.explosiveness, "explosiveness")
 	check(flame.texture is GradientTexture2D, "procedural texture")
 	check_eq(flame.texture.get_width(), e.texture_size_px, "texture size")
@@ -120,7 +129,8 @@ func test_generation_is_deterministic() -> void:
 	check(not text_a.is_empty(), "scene written")
 	check(text_a == text_b, "regenerating gives byte-identical output")
 	check(text_a.contains("id=\"flame_process\""), "readable, stable sub-resource ids")
-	check(not text_a.contains("ext_resource"), "no external resources needed for procedural textures")
+	check(text_a.contains("[ext_resource type=\"Script\" path=\"%s\" id=\"oasis_fx_runtime\"]" % OasisFx.RUNTIME_SCRIPT_PATH), "runtime script is the only external resource, with a fixed id")
+	check_eq(text_a.count("[ext_resource"), 1, "procedural textures are embedded")
 
 
 func test_project_output_gets_stable_uid() -> void:
@@ -170,3 +180,80 @@ func test_file_texture_becomes_external_resource() -> void:
 		return
 	var text := FileAccess.get_file_as_string(result.output_path)
 	check(text.contains("path=\"res://addons/oasis_fx/tests/fixtures/test_texture.tres\""), "texture referenced, not copied")
+
+
+func test_all_examples_generate_and_load() -> void:
+	var out := temp_dir("gen_examples")
+	var batch := Generator.generate_many(Generator.find_presets(OasisFx.EXAMPLES_DIR), out)
+	check(batch.ok, "batch generation succeeded")
+	check(batch.results.size() >= 4, "at least the four starter presets")
+	for result in batch.results:
+		if not check(result.ok, "%s: %s" % [result.id, " | ".join(result.report.format_lines())]):
+			continue
+		var preset := Validator.validate_file(result.report.source, Report.new())
+		var root := (load(result.output_path) as PackedScene).instantiate()
+		check_eq(root.get_child_count(), preset.emitters.size(), result.id + " emitter count")
+		for i in preset.emitters.size():
+			var e: Dictionary = preset.emitters[i]
+			var node := root.get_child(i) as GPUParticles2D
+			if check(node != null and String(node.name) == e.id, "%s emitter %d is %s" % [result.id, i, e.id]):
+				check_eq(node.amount, e.amount, "%s.%s amount" % [result.id, e.id])
+				check(node.visibility_rect.has_area(), "%s.%s visibility rect" % [result.id, e.id])
+		root.free()
+
+
+func test_extended_fields_map_to_godot() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIRE_BURST))
+	data.origin = [5, -20]
+	data.emitters = [{
+		"id": "spark", "kind": "particles_2d", "amount": 10, "one_shot": false,
+		"lifetime_seconds": 1.0, "preprocess_seconds": 0.5, "position": [10, 0], "rotation_degrees": 45,
+		"direction_degrees": 0, "spread_degrees": 10, "initial_velocity_min": 10, "initial_velocity_max": 20,
+		"emission_shape": "ring", "emission_radius": 40, "emission_inner_radius": 30, "emission_offset": [0, -8],
+		"radial_accel_min": -5, "radial_accel_max": 5, "tangential_accel_min": 1, "tangential_accel_max": 2,
+		"orbit_velocity_min": 0.5, "orbit_velocity_max": 1, "angle_min": -10, "angle_max": 10,
+		"angular_velocity_min": -90, "angular_velocity_max": 90, "hue_variation": 0.25,
+		"scale_min": 1, "scale_max": 1, "color_start": "#FFFFFF", "color_end": "#FFFFFF00",
+		"texture": "streak", "texture_size_px": 32, "align_to_velocity": false,
+	}]
+	data.loop = true
+	var report := Report.new()
+	var preset := Validator.validate(data, report)
+	check(report.is_ok(), "valid: " + " | ".join(report.format_lines()))
+	var root := Builder.build(preset, report)
+	var p := root.get_child(0) as GPUParticles2D
+	var m := p.process_material as ParticleProcessMaterial
+	check_eq(p.position, Vector2(15, -20), "origin + position")
+	check_eq(p.rotation_degrees, 45.0, "rotation")
+	check_eq(p.preprocess, 0.5, "preprocess on continuous emitter")
+	check_eq(m.emission_ring_radius, 40.0, "ring radius")
+	check_eq(m.emission_ring_inner_radius, 30.0, "ring inner radius")
+	check_eq(m.emission_shape_offset, Vector3(0, -8, 0), "emission offset")
+	check_eq(m.radial_accel_min, -5.0, "radial accel")
+	check_eq(m.tangential_accel_max, 2.0, "tangential accel")
+	check_eq(m.orbit_velocity_max, 1.0, "orbit velocity")
+	check_eq(m.angle_min, -10.0, "angle")
+	check_eq(m.angular_velocity_max, 90.0, "angular velocity")
+	check_eq(m.hue_variation_min, -0.25, "hue variation min")
+	check_eq(m.hue_variation_max, 0.25, "hue variation max")
+	check_eq(p.texture.get_width(), 8, "streak texture is a quarter as wide")
+	check_eq(p.texture.get_height(), 32, "streak texture height")
+	root.free()
+
+
+func test_shapes_map_to_flat_rings() -> void:
+	var cases := {"circle": 0.0, "circle_outline": 25.0, "ring": 10.0}
+	for shape in cases:
+		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIRE_BURST))
+		data.emitters = [data.emitters[1]]
+		data.emitters[0].emission_shape = shape
+		data.emitters[0].emission_radius = 25
+		if shape == "ring":
+			data.emitters[0].emission_inner_radius = 10
+		var report := Report.new()
+		var root := Builder.build(Validator.validate(data, report), report)
+		var m := (root.get_child(0) as GPUParticles2D).process_material as ParticleProcessMaterial
+		check_eq(m.emission_shape, ParticleProcessMaterial.EMISSION_SHAPE_RING, shape + " uses EMISSION_SHAPE_RING")
+		check_eq(m.emission_ring_inner_radius, cases[shape], shape + " inner radius")
+		check_eq(m.emission_ring_axis, Vector3(0, 0, 1), shape + " lies in the 2D plane")
+		root.free()

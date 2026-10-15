@@ -206,8 +206,7 @@ static func _check_emitters(value: Variant, path: String, report: RefCounted) ->
 		report.error(path, "must contain at least one emitter")
 		return null
 	if value.size() > Spec.MAX_EMITTERS:
-		report.error(path, "supports at most %d emitter(s) in OasisFx %s (got %d); multiple emitters are planned for Phase 1B" % [
-			Spec.MAX_EMITTERS, OasisFx.VERSION, value.size()])
+		report.error(path, "supports at most %d emitters (got %d)" % [Spec.MAX_EMITTERS, value.size()])
 		return null
 	var out := []
 	for i in value.size():
@@ -239,33 +238,60 @@ static func _check_effect_semantics(raw: Dictionary, preset: Dictionary, report:
 static func _check_emitter_semantics(raw: Dictionary, emitter: Dictionary, preset: Dictionary, path: String, report: RefCounted) -> void:
 	for pair in Spec.EMITTER_MIN_MAX_PAIRS:
 		if emitter[pair[0]] > emitter[pair[1]]:
-			report.error("%s.%s" % [path, pair[0]], "must be <= %s (%s > %s)" % [pair[1], emitter[pair[0]], emitter[pair[1]]])
+			report.error("%s.%s" % [path, pair[0]], "must be <= %s (%s > %s)" % [pair[1], _num(emitter[pair[0]]), _num(emitter[pair[1]])])
+
+	if emitter.delay_seconds >= preset.duration_seconds:
+		report.error(path + ".delay_seconds", "must be less than duration_seconds (%s >= %s)" % [_num(emitter.delay_seconds), _num(preset.duration_seconds)])
 
 	if emitter.texture == "file":
 		if emitter.texture_path.is_empty():
 			report.error(path + ".texture_path", "is required when texture is \"file\"")
-	else:
-		if not emitter.texture_path.is_empty():
-			report.error(path + ".texture_path", "is only allowed when texture is \"file\" (texture is \"%s\")" % emitter.texture)
-	if emitter.texture == "file" and raw.has("texture_size_px"):
-		report.warn(path + ".texture_size_px", "is ignored when texture is \"file\"")
+		if raw.has("texture_size_px"):
+			report.warn(path + ".texture_size_px", "is ignored when texture is \"file\"")
+	elif not emitter.texture_path.is_empty():
+		report.error(path + ".texture_path", "is only allowed when texture is \"file\" (texture is \"%s\")" % emitter.texture)
 
-	match emitter.emission_shape:
-		"point":
-			_warn_ignored(raw, ["emission_radius", "emission_rect_size"], path, "point", report)
-		"circle":
-			_warn_ignored(raw, ["emission_rect_size"], path, "circle", report)
-			if emitter.emission_radius <= 0.0:
-				report.warn(path + ".emission_radius", "is 0, so the circle behaves like a point")
-		"rect":
-			_warn_ignored(raw, ["emission_radius"], path, "rect", report)
-			if emitter.emission_rect_size[0] <= 0.0 and emitter.emission_rect_size[1] <= 0.0:
-				report.warn(path + ".emission_rect_size", "is [0, 0], so the rectangle behaves like a point")
+	_check_shape(raw, emitter, path, report)
+
+	if emitter.one_shot and raw.has("preprocess_seconds") and emitter.preprocess_seconds > 0.0:
+		report.warn(path + ".preprocess_seconds", "is ignored for one_shot emitters")
+	if emitter.align_to_velocity and (emitter.angle_min != 0.0 or emitter.angle_max != 0.0 or emitter.angular_velocity_min != 0.0 or emitter.angular_velocity_max != 0.0):
+		report.warn(path + ".align_to_velocity", "overrides angle_* and angular_velocity_*, which are ignored")
+	if emitter.texture == "streak" and not emitter.align_to_velocity:
+		report.warn(path + ".texture", "\"streak\" usually needs align_to_velocity: true so streaks point along their motion")
+	var has_orbit: bool = emitter.orbit_velocity_min != 0.0 or emitter.orbit_velocity_max != 0.0
+	if has_orbit and emitter.emission_shape == "point" and emitter.emission_offset == [0.0, 0.0] and emitter.initial_velocity_max == 0.0:
+		report.warn(path + ".orbit_velocity_min", "particles spawn and stay at the orbit center, so orbiting has no visible effect; set emission_offset or a ring/circle shape")
 
 	if preset.loop and emitter.one_shot:
-		report.warn(path + ".one_shot", "a one_shot emitter in a looping effect emits only once; set one_shot to false for a continuous loop")
-	if not preset.loop and not emitter.one_shot:
-		report.warn(path + ".one_shot", "a continuous emitter in a non-looping effect never stops on its own in Phase 1A; set loop to true or one_shot to true")
+		var cycle: float = emitter.delay_seconds + emitter.lifetime_seconds * (2.0 - emitter.explosiveness)
+		if cycle > preset.duration_seconds:
+			report.warn(path + ".lifetime_seconds", "this one_shot burst lasts about %ss, longer than the %ss loop; some cycles will be skipped" % [_num(snappedf(cycle, 0.01)), _num(preset.duration_seconds)])
+
+
+static func _check_shape(raw: Dictionary, emitter: Dictionary, path: String, report: RefCounted) -> void:
+	var used := {
+		"point": [],
+		"circle": ["emission_radius"],
+		"circle_outline": ["emission_radius"],
+		"ring": ["emission_radius", "emission_inner_radius"],
+		"rect": ["emission_rect_size"],
+	}
+	var shape: String = emitter.emission_shape
+	var ignored := []
+	for key in ["emission_radius", "emission_inner_radius", "emission_rect_size"]:
+		if not used[shape].has(key):
+			ignored.append(key)
+	_warn_ignored(raw, ignored, path, shape, report)
+	match shape:
+		"circle", "circle_outline", "ring":
+			if emitter.emission_radius <= 0.0:
+				report.warn(path + ".emission_radius", "is 0, so the %s behaves like a point" % shape)
+			if shape == "ring" and emitter.emission_inner_radius > emitter.emission_radius:
+				report.error(path + ".emission_inner_radius", "must be <= emission_radius (%s > %s)" % [_num(emitter.emission_inner_radius), _num(emitter.emission_radius)])
+		"rect":
+			if emitter.emission_rect_size[0] <= 0.0 and emitter.emission_rect_size[1] <= 0.0:
+				report.warn(path + ".emission_rect_size", "is [0, 0], so the rectangle behaves like a point")
 
 
 static func _warn_ignored(raw: Dictionary, keys: Array, path: String, shape: String, report: RefCounted) -> void:

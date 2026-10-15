@@ -84,3 +84,63 @@ func test_usage_errors_exit_two() -> void:
 	check_eq(_cli(["generate", FIRE_BURST, "--out"]).code, 2, "--out without value")
 	check_eq(_cli(["help"]).code, 0, "help")
 	check_eq(_cli(["version"]).code, 0, "version")
+
+
+func test_validate_all_and_generate_all() -> void:
+	var r := _cli(["validate-all", "addons/oasis_fx/presets/examples"])
+	check_eq(r.code, 0, "validate-all exit code; output:\n" + r.output)
+	check(r.output.contains("0 invalid"), "summary line")
+	var dir := temp_dir("cli_generate_all")
+	r = _cli(["generate-all", "addons/oasis_fx/presets/examples", "--out", dir, "--json"])
+	check_eq(r.code, 0, "generate-all exit code; output:\n" + r.output)
+	var data: Variant = _json_line(r.output)
+	if check(data is Dictionary, "JSON result"):
+		check_eq(data.command, "generate-all", "command")
+		check(data.results.size() >= 4, "one result per preset")
+		for entry in data.results:
+			check_eq(entry.action, "created", "%s action" % entry.id)
+			check(FileAccess.file_exists(entry.output_path), "%s written" % entry.id)
+	check(FileAccess.file_exists(dir + "/oasis_fx_manifest.json"), "manifest written")
+	r = _cli(["generate-all", "addons/oasis_fx/presets/examples", "--out", dir])
+	check_eq(r.code, 1, "second run without --force fails")
+	check(r.output.contains("nothing was written"), "explains that nothing was written")
+
+
+func test_batch_errors() -> void:
+	var dir := temp_dir("cli_batch_errors")
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://" + FIRE_BURST))
+	write_text(dir + "/one.vfx.json", JSON.stringify(data))
+	write_text(dir + "/two.vfx.json", JSON.stringify(data))
+	var r := _cli(["validate-all", dir])
+	check_eq(r.code, 1, "duplicate ids fail; output:\n" + r.output)
+	check(r.output.contains("duplicate id \"fire_burst\""), "duplicate id named")
+	var empty := temp_dir("cli_batch_empty")
+	r = _cli(["validate-all", empty])
+	check_eq(r.code, 1, "empty folder fails")
+	check(r.output.contains("no *.vfx.json files"), "explains empty folder")
+	r = _cli(["generate-all", "res://does/not/exist"])
+	check_eq(r.code, 1, "missing folder fails")
+	check_eq(_cli(["validate-all"]).code, 2, "validate-all without directory is a usage error")
+	check_eq(_cli(["validate-all", dir, "--force"]).code, 2, "generate-only flag on validate-all")
+
+
+func test_schema_command_matches_file() -> void:
+	var r := _cli(["schema"])
+	check_eq(r.code, 0, "schema exit code")
+	var printed: Variant = JSON.parse_string(r.output.substr(r.output.find("{")))
+	var committed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://addons/oasis_fx/schemas/vfx.v1.schema.json"))
+	check(printed is Dictionary and printed == committed, "printed schema equals the committed file")
+
+
+func test_internal_script_error_fails_the_cli() -> void:
+	# A crashing command must not exit 0: run a copy of the CLI whose _run()
+	# hits a runtime error, through the CLI's real _initialize().
+	var dir := temp_dir("cli_crash")
+	var crash := dir + "/crashing_cli.gd"
+	write_text(crash, "extends \"%s\"\n\nfunc _run(_args: PackedStringArray) -> int:\n\tvar d: Dictionary = {}\n\treturn d[\"missing\"]\n" % CLI)
+	var argv := ["--headless", "--path", ProjectSettings.globalize_path("res://"), "--script", crash, "--", "version"]
+	var output := []
+	var code := OS.execute(OS.get_executable_path(), PackedStringArray(argv), output, true)
+	var text := "\n".join(PackedStringArray(output))
+	check_eq(code, 1, "exit code; output:\n" + text)
+	check(text.contains("FAIL  internal error"), "reports an internal error")

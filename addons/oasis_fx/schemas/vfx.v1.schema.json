@@ -2,94 +2,526 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/nutchanon9/white-sahara-studio/addons/oasis_fx/schemas/vfx.v1.schema.json",
   "title": "OasisFx VFX preset v1",
-  "description": "Data-only description of a 2D particle effect that OasisFx turns into a Godot 4 scene. Mirrors addons/oasis_fx/src/core/vfx_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules listed in docs/preset_format.md.",
+  "description": "Data-only description of a 2D particle effect that OasisFx turns into a Godot 4 scene. Generated from addons/oasis_fx/src/core/vfx_spec.gd; the GDScript validator is authoritative and also enforces the cross-field rules in docs/preset_format.md.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "asset_type", "id", "display_name", "duration_seconds", "loop", "emitters"],
+  "required": [
+    "schema_version",
+    "asset_type",
+    "id",
+    "display_name",
+    "duration_seconds",
+    "loop",
+    "emitters"
+  ],
   "properties": {
-    "schema_version": {"type": "integer", "minimum": 1, "maximum": 1, "description": "Preset format version. Must be 1."},
-    "asset_type": {"enum": ["vfx"], "description": "Asset kind. Only \"vfx\" is supported in this version."},
-    "id": {"$ref": "#/$defs/id", "description": "Stable identifier; also the output file name (<id>.tscn)."},
-    "display_name": {"type": "string", "minLength": 1, "maxLength": 80},
-    "description": {"type": "string", "maxLength": 500, "default": ""},
-    "tags": {
-      "type": "array", "maxItems": 16, "uniqueItems": true, "default": [],
-      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"}
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Preset format version. Must be 1."
     },
-    "author": {"type": "string", "maxLength": 120, "default": ""},
-    "notes": {"type": "string", "maxLength": 2000, "default": ""},
-    "duration_seconds": {"type": "number", "minimum": 0.05, "maximum": 30},
-    "loop": {"type": "boolean"},
-    "playback_speed": {"type": "number", "minimum": 0.1, "maximum": 4, "default": 1},
-    "z_index": {"type": "integer", "minimum": -1000, "maximum": 1000, "default": 0},
+    "asset_type": {
+      "enum": [
+        "vfx"
+      ],
+      "description": "Asset kind. Only \"vfx\" is supported in this version."
+    },
+    "id": {
+      "$ref": "#/$defs/id",
+      "description": "Stable identifier; also the output file name (<id>.tscn). Lowercase snake_case."
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "description": "Human-readable name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "What the effect is for.",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+      },
+      "description": "Up to 16 lowercase search tags.",
+      "default": []
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Who made the preset (person or AI tool).",
+      "default": ""
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Free-form authoring notes.",
+      "default": ""
+    },
+    "duration_seconds": {
+      "type": "number",
+      "minimum": 0.05,
+      "maximum": 30.0,
+      "description": "Length of one effect cycle in seconds."
+    },
+    "loop": {
+      "type": "boolean",
+      "description": "true = repeats forever; false = plays once."
+    },
+    "playback_speed": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 4.0,
+      "description": "Time multiplier applied to every emitter (GPUParticles2D.speed_scale).",
+      "default": 1.0
+    },
+    "z_index": {
+      "type": "integer",
+      "minimum": -1000,
+      "maximum": 1000,
+      "description": "Draw order of the effect root (Node2D.z_index).",
+      "default": 0
+    },
+    "origin": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number",
+        "minimum": -4096.0,
+        "maximum": 4096.0
+      },
+      "description": "Offset of all emitters from the spawn point in pixels [x, y]; e.g. [0, -40] to center on a character's chest.",
+      "default": [
+        0.0,
+        0.0
+      ]
+    },
     "emitters": {
-      "type": "array", "minItems": 1, "maxItems": 1,
-      "description": "Particle emitters. OasisFx 0.1 (Phase 1A) supports exactly one.",
-      "items": {"$ref": "#/$defs/emitter"}
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/emitter"
+      },
+      "description": "Particle emitters, 1 to 8; drawn in order (later emitters on top)."
     }
   },
   "$defs": {
-    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
-    "color": {"type": "string", "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
+    },
     "emitter": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id", "kind", "amount", "one_shot", "lifetime_seconds", "direction_degrees", "spread_degrees",
-        "initial_velocity_min", "initial_velocity_max", "scale_min", "scale_max", "color_start", "color_end"
+        "id",
+        "kind",
+        "amount",
+        "one_shot",
+        "lifetime_seconds",
+        "direction_degrees",
+        "spread_degrees",
+        "initial_velocity_min",
+        "initial_velocity_max",
+        "scale_min",
+        "scale_max",
+        "color_start",
+        "color_end"
       ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {"enum": ["particles_2d"]},
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Emitter identifier, unique within the effect; becomes the node name."
+        },
+        "kind": {
+          "enum": [
+            "particles_2d"
+          ],
+          "description": "Emitter kind. Only \"particles_2d\" (GPUParticles2D) is supported."
+        },
         "position": {
-          "type": "array", "minItems": 2, "maxItems": 2, "default": [0, 0],
-          "items": {"type": "number", "minimum": -4096, "maximum": 4096}
-        },
-        "amount": {"type": "integer", "minimum": 1, "maximum": 1000},
-        "one_shot": {"type": "boolean"},
-        "explosiveness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
-        "randomness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
-        "lifetime_seconds": {"type": "number", "minimum": 0.01, "maximum": 10},
-        "lifetime_randomness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
-        "emission_shape": {"enum": ["point", "circle", "rect"], "default": "point"},
-        "emission_radius": {"type": "number", "minimum": 0, "maximum": 4096, "default": 0},
-        "emission_rect_size": {
-          "type": "array", "minItems": 2, "maxItems": 2, "default": [0, 0],
-          "items": {"type": "number", "minimum": 0, "maximum": 8192}
-        },
-        "direction_degrees": {"type": "number", "minimum": -360, "maximum": 360, "description": "0 = right, 90 = down, -90 = up."},
-        "spread_degrees": {"type": "number", "minimum": 0, "maximum": 180},
-        "initial_velocity_min": {"type": "number", "minimum": 0, "maximum": 5000},
-        "initial_velocity_max": {"type": "number", "minimum": 0, "maximum": 5000},
-        "gravity": {
-          "type": "array", "minItems": 2, "maxItems": 2, "default": [0, 0],
-          "items": {"type": "number", "minimum": -5000, "maximum": 5000}
-        },
-        "damping_min": {"type": "number", "minimum": 0, "maximum": 1000, "default": 0},
-        "damping_max": {"type": "number", "minimum": 0, "maximum": 1000, "default": 0},
-        "scale_min": {"type": "number", "minimum": 0.01, "maximum": 20},
-        "scale_max": {"type": "number", "minimum": 0.01, "maximum": 20},
-        "scale_end_ratio": {"type": "number", "minimum": 0, "maximum": 10, "default": 1},
-        "color_start": {"$ref": "#/$defs/color"},
-        "color_mid": {"anyOf": [{"$ref": "#/$defs/color"}, {"const": ""}], "default": ""},
-        "color_end": {"$ref": "#/$defs/color"},
-        "texture": {"enum": ["soft_circle", "hard_circle", "file"], "default": "soft_circle"},
-        "texture_size_px": {"type": "integer", "minimum": 4, "maximum": 256, "default": 32},
-        "texture_path": {
-          "type": "string", "default": "", "maxLength": 256,
-          "pattern": "^$|^res://.*\\.(png|webp|jpg|jpeg|svg|tres|res)$",
-          "description": "res:// path to a Texture2D; required when texture is \"file\". No \"..\" segments."
-        },
-        "blend_mode": {"enum": ["mix", "add", "sub", "mul", "premult_alpha"], "default": "mix"},
-        "local_coords": {"type": "boolean", "default": false},
-        "z_index": {"type": "integer", "minimum": -1000, "maximum": 1000, "default": 0},
-        "visibility_rect": {
-          "type": "array", "default": [],
-          "description": "[x, y, w, h] in pixels; [] = computed automatically.",
-          "anyOf": [
-            {"maxItems": 0},
-            {"minItems": 4, "maxItems": 4, "items": {"type": "number", "minimum": -16384, "maximum": 16384}}
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -4096.0,
+            "maximum": 4096.0
+          },
+          "description": "Offset from the effect origin in pixels [x, y]; +y is down.",
+          "default": [
+            0.0,
+            0.0
           ]
+        },
+        "rotation_degrees": {
+          "type": "number",
+          "minimum": -360.0,
+          "maximum": 360.0,
+          "description": "Rotates the whole emitter (direction, emission shape and offset) in degrees; positive turns clockwise on screen.",
+          "default": 0.0
+        },
+        "delay_seconds": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 30.0,
+          "description": "Time after the effect starts before this emitter starts; must be < duration_seconds.",
+          "default": 0.0
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Particles per emission cycle."
+        },
+        "one_shot": {
+          "type": "boolean",
+          "description": "true = emit a single cycle; false = emit continuously."
+        },
+        "explosiveness": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "0 = spread emission over the lifetime, 1 = emit all particles at once.",
+          "default": 0.0
+        },
+        "randomness": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Emission timing randomness.",
+          "default": 0.0
+        },
+        "lifetime_seconds": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 10.0,
+          "description": "How long each particle lives, in seconds."
+        },
+        "lifetime_randomness": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Random reduction of each particle's lifetime (0..1).",
+          "default": 0.0
+        },
+        "preprocess_seconds": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10.0,
+          "description": "Continuous emitters only: simulate this long before the first frame so a loop starts \"already running\".",
+          "default": 0.0
+        },
+        "emission_shape": {
+          "enum": [
+            "point",
+            "circle",
+            "circle_outline",
+            "ring",
+            "rect"
+          ],
+          "description": "Where particles spawn: point, filled circle, circle outline, ring (between inner and outer radius) or filled rectangle.",
+          "default": "point"
+        },
+        "emission_radius": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 4096.0,
+          "description": "Radius in pixels (circle, circle_outline, ring).",
+          "default": 0.0
+        },
+        "emission_inner_radius": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 4096.0,
+          "description": "Inner radius in pixels (ring only); must be <= emission_radius.",
+          "default": 0.0
+        },
+        "emission_rect_size": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 8192.0
+          },
+          "description": "Rectangle size in pixels [width, height] (emission_shape \"rect\").",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "emission_offset": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -4096.0,
+            "maximum": 4096.0
+          },
+          "description": "Moves the spawn area away from the emitter center [x, y]; the center stays the pivot for orbit_velocity.",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "direction_degrees": {
+          "type": "number",
+          "minimum": -360.0,
+          "maximum": 360.0,
+          "description": "Emission direction in degrees: 0 = right, 90 = down, -90 = up."
+        },
+        "spread_degrees": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 180.0,
+          "description": "Half-angle of the emission cone in degrees; 180 = all directions."
+        },
+        "initial_velocity_min": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 5000.0,
+          "description": "Minimum start speed in pixels/second."
+        },
+        "initial_velocity_max": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 5000.0,
+          "description": "Maximum start speed in pixels/second."
+        },
+        "gravity": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": -5000.0,
+            "maximum": 5000.0
+          },
+          "description": "Constant acceleration in pixels/second^2 [x, y]; +y is down.",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "damping_min": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1000.0,
+          "description": "Minimum speed loss in pixels/second^2.",
+          "default": 0.0
+        },
+        "damping_max": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1000.0,
+          "description": "Maximum speed loss in pixels/second^2.",
+          "default": 0.0
+        },
+        "radial_accel_min": {
+          "type": "number",
+          "minimum": -5000.0,
+          "maximum": 5000.0,
+          "description": "Minimum acceleration away from the emitter center in pixels/second^2 (negative pulls inward).",
+          "default": 0.0
+        },
+        "radial_accel_max": {
+          "type": "number",
+          "minimum": -5000.0,
+          "maximum": 5000.0,
+          "description": "Maximum acceleration away from the emitter center in pixels/second^2.",
+          "default": 0.0
+        },
+        "tangential_accel_min": {
+          "type": "number",
+          "minimum": -5000.0,
+          "maximum": 5000.0,
+          "description": "Minimum sideways (swirl) acceleration in pixels/second^2.",
+          "default": 0.0
+        },
+        "tangential_accel_max": {
+          "type": "number",
+          "minimum": -5000.0,
+          "maximum": 5000.0,
+          "description": "Maximum sideways (swirl) acceleration in pixels/second^2.",
+          "default": 0.0
+        },
+        "orbit_velocity_min": {
+          "type": "number",
+          "minimum": -10.0,
+          "maximum": 10.0,
+          "description": "Minimum orbit speed around the emitter center in turns/second (positive turns counter-clockwise on screen).",
+          "default": 0.0
+        },
+        "orbit_velocity_max": {
+          "type": "number",
+          "minimum": -10.0,
+          "maximum": 10.0,
+          "description": "Maximum orbit speed around the emitter center in turns/second.",
+          "default": 0.0
+        },
+        "angle_min": {
+          "type": "number",
+          "minimum": -720.0,
+          "maximum": 720.0,
+          "description": "Minimum initial particle rotation in degrees.",
+          "default": 0.0
+        },
+        "angle_max": {
+          "type": "number",
+          "minimum": -720.0,
+          "maximum": 720.0,
+          "description": "Maximum initial particle rotation in degrees.",
+          "default": 0.0
+        },
+        "angular_velocity_min": {
+          "type": "number",
+          "minimum": -7200.0,
+          "maximum": 7200.0,
+          "description": "Minimum particle spin in degrees/second.",
+          "default": 0.0
+        },
+        "angular_velocity_max": {
+          "type": "number",
+          "minimum": -7200.0,
+          "maximum": 7200.0,
+          "description": "Maximum particle spin in degrees/second.",
+          "default": 0.0
+        },
+        "align_to_velocity": {
+          "type": "boolean",
+          "description": "Rotate each particle so its texture's vertical axis follows its motion (use with \"streak\").",
+          "default": false
+        },
+        "scale_min": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 20.0,
+          "description": "Minimum particle scale, relative to the texture size."
+        },
+        "scale_max": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 20.0,
+          "description": "Maximum particle scale, relative to the texture size."
+        },
+        "scale_end_ratio": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10.0,
+          "description": "Scale multiplier reached at the end of a particle's life (linear from 1).",
+          "default": 1.0
+        },
+        "color_start": {
+          "$ref": "#/$defs/color",
+          "description": "Color at birth, #RRGGBB or #RRGGBBAA."
+        },
+        "color_mid": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/color"
+            },
+            {
+              "const": ""
+            }
+          ],
+          "description": "Optional color at half-life; \"\" = no middle stop.",
+          "default": ""
+        },
+        "color_end": {
+          "$ref": "#/$defs/color",
+          "description": "Color at death, #RRGGBB or #RRGGBBAA (alpha 00 fades out)."
+        },
+        "hue_variation": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Random hue shift per particle, 0 = none, 1 = full color wheel.",
+          "default": 0.0
+        },
+        "texture": {
+          "enum": [
+            "soft_circle",
+            "hard_circle",
+            "ring",
+            "streak",
+            "square",
+            "file"
+          ],
+          "description": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path).",
+          "default": "soft_circle"
+        },
+        "texture_size_px": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 256,
+          "description": "Size of the generated texture in pixels (streak: height; its width is a quarter).",
+          "default": 32
+        },
+        "texture_path": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^$|^res://.*\\.(png|webp|jpg|jpeg|svg|tres|res)$",
+          "description": "res:// path to a Texture2D; required when texture is \"file\".",
+          "default": ""
+        },
+        "blend_mode": {
+          "enum": [
+            "mix",
+            "add",
+            "sub",
+            "mul",
+            "premult_alpha"
+          ],
+          "description": "CanvasItemMaterial blend mode; \"add\" suits fire, sparks and glows.",
+          "default": "mix"
+        },
+        "local_coords": {
+          "type": "boolean",
+          "description": "true = particles move with the emitter after spawning.",
+          "default": false
+        },
+        "z_index": {
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000,
+          "description": "Draw order of this emitter relative to the effect root.",
+          "default": 0
+        },
+        "visibility_rect": {
+          "type": "array",
+          "anyOf": [
+            {
+              "maxItems": 0
+            },
+            {
+              "minItems": 4,
+              "maxItems": 4,
+              "items": {
+                "type": "number",
+                "minimum": -16384.0,
+                "maximum": 16384.0
+              }
+            }
+          ],
+          "description": "Culling rectangle [x, y, w, h] in pixels; [] = computed automatically.",
+          "default": []
         }
       }
     }

@@ -6,13 +6,15 @@ extends RefCounted
 ## the headless CLI works on a fresh clone, before the editor has built its
 ## global class cache.
 
-const VERSION := "0.1.0"
+const VERSION := "0.2.0"
 const ADDON_ROOT := "res://addons/oasis_fx"
 const EXAMPLES_DIR := "res://addons/oasis_fx/presets/examples"
 const SCHEMA_PATH := "res://addons/oasis_fx/schemas/vfx.v1.schema.json"
 const DEFAULT_OUTPUT_DIR := "res://generated/oasis_fx"
 const VFX_PRESET_SUFFIX := ".vfx.json"
 const SCENE_EXTENSION := ".tscn"
+const MANIFEST_FILE := "oasis_fx_manifest.json"
+const RUNTIME_SCRIPT_PATH := "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
 
 ## Presets larger than this are rejected before parsing (bytes).
 const MAX_PRESET_FILE_BYTES := 256 * 1024

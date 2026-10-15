@@ -6,8 +6,12 @@ extends SceneTree
 ##
 ## Commands:
 ##   validate <preset.vfx.json>                 check a preset
+##   validate-all <dir>                         check every *.vfx.json under dir
 ##   generate <preset.vfx.json> [--out DIR]     write DIR/<id>.tscn
 ##            [--force] [--dry-run]
+##   generate-all <dir> [--out DIR]             generate every preset (all or nothing)
+##            [--force] [--dry-run]
+##   schema [--write]                           print (or rewrite) the JSON Schema
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
 ##
@@ -18,6 +22,8 @@ const Report := preload("res://addons/oasis_fx/src/core/validation_report.gd")
 const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
+const ErrorCapture := preload("res://addons/oasis_fx/src/core/error_capture.gd")
+const Schema := preload("res://addons/oasis_fx/src/core/vfx_schema.gd")
 
 const EXIT_OK := 0
 const EXIT_FAILED := 1
@@ -30,7 +36,10 @@ Usage:
 
 Commands:
   validate <preset>      Validate a .vfx.json preset.
+  validate-all <dir>     Validate every *.vfx.json under <dir> (recursive) and check ids are unique.
   generate <preset>      Validate and write <out>/<id>.tscn.
+  generate-all <dir>     Generate every preset under <dir>. Writes nothing unless all are valid.
+  schema [--write]       Print the preset JSON Schema, or rewrite schemas/vfx.v1.schema.json.
   version                Print the OasisFx version.
   help                   Show this help.
 
@@ -44,10 +53,31 @@ Paths without res:// are relative to the project root.
 Exit codes: 0 = success, 1 = validation or generation failed, 2 = usage error."""
 
 var _json := false
+var _capture := ErrorCapture.new()
 
 
 func _initialize() -> void:
-	quit(_run(OS.get_cmdline_user_args()))
+	OS.add_logger(_capture)
+	var code: Variant = _run(OS.get_cmdline_user_args())
+	OS.remove_logger(_capture)
+	quit(_exit_code(code, _capture.since(0)))
+
+
+## A script error aborts only the current function, so _run() can return null
+## (or a success code) after something went wrong. Any logged error turns a
+## success into EXIT_FAILED.
+func _exit_code(code: Variant, errors: PackedStringArray) -> int:
+	if typeof(code) == TYPE_INT and code != EXIT_OK:
+		return code
+	if typeof(code) == TYPE_INT and errors.is_empty():
+		return EXIT_OK
+	if _json:
+		print(JSON.stringify({"command": "", "ok": false, "internal_error": true, "errors": Array(errors)}))
+	else:
+		print("FAIL  internal error (%d error(s) logged)" % errors.size())
+		for e in errors:
+			print("  error: " + e)
+	return EXIT_FAILED
 
 
 func _run(args: PackedStringArray) -> int:
@@ -73,11 +103,24 @@ func _run(args: PackedStringArray) -> int:
 			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
 				return _usage_error("--out, --force and --dry-run only apply to generate")
 			return _validate(rest[0])
-		"generate":
+		"schema":
+			if not rest.is_empty() or parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
+				return _usage_error("schema takes no arguments except --write")
+			return _schema(parsed.flags.has("write"))
+		"validate-all":
 			if rest.size() != 1:
-				return _usage_error("generate expects exactly one preset path")
+				return _usage_error("validate-all expects exactly one directory")
+			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
+				return _usage_error("--out, --force and --dry-run only apply to generate and generate-all")
+			return _validate_all(rest[0])
+		"generate", "generate-all":
+			if rest.size() != 1:
+				return _usage_error("%s expects exactly one %s" % [command, "preset path" if command == "generate" else "directory"])
 			var out: String = parsed.flags.get("out", _default_output_dir())
-			return _generate(rest[0], out, parsed.flags.has("force"), parsed.flags.has("dry_run"))
+			var options := {"force": parsed.flags.has("force"), "dry_run": parsed.flags.has("dry_run")}
+			if command == "generate":
+				return _generate(rest[0], out, options)
+			return _generate_all(rest[0], out, options)
 	return _usage_error("unknown command \"%s\"" % command)
 
 
@@ -87,7 +130,7 @@ func _validate(arg: String) -> int:
 	var preset := Validator.validate_file(path, report)
 	var summary := ""
 	if report.is_ok():
-		summary = "%s (%d emitter(s), %d particles)" % [preset.id, preset.emitters.size(), _total_particles(preset)]
+		summary = _summary(preset)
 	var data := {"command": "validate", "ok": report.is_ok(), "results": [report.to_dict()]}
 	var lines := PackedStringArray()
 	lines.append(("OK    %s  %s" % [path, summary]) if report.is_ok() else ("FAIL  %s" % path))
@@ -96,22 +139,108 @@ func _validate(arg: String) -> int:
 	return EXIT_OK if report.is_ok() else EXIT_FAILED
 
 
-func _generate(arg: String, out_dir: String, force: bool, dry_run: bool) -> int:
-	var path := PathUtils.resolve_input_path(arg)
-	var result := Generator.generate_file(path, out_dir, {"force": force, "dry_run": dry_run})
-	var report: RefCounted = result.report
-	var entry: Dictionary = report.to_dict()
-	entry["action"] = result.action
-	entry["output_path"] = result.output_path
-	var data := {"command": "generate", "ok": result.ok, "dry_run": dry_run, "results": [entry]}
+func _schema(write: bool) -> int:
+	var text := Schema.to_text()
+	if not write:
+		print(text.strip_edges())
+		return EXIT_OK
+	var file := FileAccess.open(OasisFx.SCHEMA_PATH, FileAccess.WRITE)
+	if file == null:
+		return _fail_message("schema", "cannot write %s: %s" % [OasisFx.SCHEMA_PATH, error_string(FileAccess.get_open_error())])
+	file.store_string(text)
+	file.close()
+	_emit({"command": "schema", "ok": true, "output_path": OasisFx.SCHEMA_PATH}, "OK    wrote " + OasisFx.SCHEMA_PATH)
+	return EXIT_OK
+
+
+func _validate_all(arg: String) -> int:
+	var dir := PathUtils.resolve_input_path(arg).trim_suffix("/")
+	if not DirAccess.dir_exists_absolute(dir):
+		return _fail_message("validate-all", "directory not found: %s" % dir)
+	var paths := Generator.find_presets(dir)
+	if paths.is_empty():
+		return _fail_message("validate-all", "no *%s files found under %s" % [OasisFx.VFX_PRESET_SUFFIX, dir])
+	var validation := Generator.validate_many(paths)
+	var entries := []
 	var lines := PackedStringArray()
-	if result.ok:
+	var valid := 0
+	for item in validation.results:
+		var report: RefCounted = item.report
+		entries.append(report.to_dict())
+		if report.is_ok():
+			valid += 1
+			lines.append("OK    %s  %s" % [item.path, _summary(item.preset)])
+		else:
+			lines.append("FAIL  %s" % item.path)
+		lines.append_array(report.format_lines())
+	lines.append("%d valid, %d invalid" % [valid, paths.size() - valid])
+	_emit({"command": "validate-all", "ok": validation.ok, "results": entries}, "\n".join(lines))
+	return EXIT_OK if validation.ok else EXIT_FAILED
+
+
+func _generate(arg: String, out_dir: String, options: Dictionary) -> int:
+	var path := PathUtils.resolve_input_path(arg)
+	var result := Generator.generate_file(path, out_dir, options)
+	var lines := _generate_lines(path, result)
+	var data := {"command": "generate", "ok": result.ok, "dry_run": options.dry_run, "results": [_generate_entry(result)]}
+	_emit(data, "\n".join(lines))
+	return EXIT_OK if result.ok else EXIT_FAILED
+
+
+func _generate_all(arg: String, out_dir: String, options: Dictionary) -> int:
+	var dir := PathUtils.resolve_input_path(arg).trim_suffix("/")
+	if not DirAccess.dir_exists_absolute(dir):
+		return _fail_message("generate-all", "directory not found: %s" % dir)
+	var paths := Generator.find_presets(dir)
+	if paths.is_empty():
+		return _fail_message("generate-all", "no *%s files found under %s" % [OasisFx.VFX_PRESET_SUFFIX, dir])
+	var batch := Generator.generate_many(paths, out_dir, options)
+	var entries := []
+	var lines := PackedStringArray()
+	var counts := {}
+	for i in batch.results.size():
+		var result: Dictionary = batch.results[i]
+		entries.append(_generate_entry(result))
+		lines.append_array(_generate_lines(paths[i], result))
+		counts[result.action] = counts.get(result.action, 0) + 1
+	var parts := PackedStringArray()
+	for action in counts:
+		parts.append("%d %s" % [counts[action], String(action).replace("_", " ")])
+	lines.append(", ".join(parts) + ("" if batch.ok else "  (nothing was written)"))
+	_emit({"command": "generate-all", "ok": batch.ok, "dry_run": options.dry_run, "results": entries}, "\n".join(lines))
+	return EXIT_OK if batch.ok else EXIT_FAILED
+
+
+func _generate_entry(result: Dictionary) -> Dictionary:
+	var entry: Dictionary = result.report.to_dict()
+	entry["action"] = result.action
+	entry["id"] = result.id
+	entry["output_path"] = result.output_path
+	return entry
+
+
+func _generate_lines(path: String, result: Dictionary) -> PackedStringArray:
+	var lines := PackedStringArray()
+	if result.action == "skipped":
+		lines.append("SKIP  %s" % path)
+	elif result.ok:
 		lines.append("OK    %s -> %s  (%s)" % [path, result.output_path, String(result.action).replace("_", " ")])
 	else:
 		lines.append("FAIL  %s" % path)
-	lines.append_array(report.format_lines())
-	_emit(data, "\n".join(lines))
-	return EXIT_OK if result.ok else EXIT_FAILED
+	lines.append_array(result.report.format_lines())
+	return lines
+
+
+func _fail_message(command: String, message: String) -> int:
+	if _json:
+		print(JSON.stringify({"command": command, "ok": false, "error": message, "results": []}))
+	else:
+		print("FAIL  " + message)
+	return EXIT_FAILED
+
+
+static func _summary(preset: Dictionary) -> String:
+	return "%s (%d emitter(s), %d particles)" % [preset.id, preset.emitters.size(), _total_particles(preset)]
 
 
 func _parse(args: PackedStringArray) -> Dictionary:
@@ -126,6 +255,8 @@ func _parse(args: PackedStringArray) -> Dictionary:
 			flags["force"] = true
 		elif arg == "--dry-run":
 			flags["dry_run"] = true
+		elif arg == "--write":
+			flags["write"] = true
 		elif arg == "--out":
 			if i + 1 >= args.size():
 				return {"flags": flags, "positional": positional, "error": "--out needs a directory"}

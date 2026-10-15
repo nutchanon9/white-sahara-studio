@@ -30,7 +30,8 @@ func _expect_error(data: Variant, path: String, message_part: String) -> void:
 
 func test_all_examples_are_valid() -> void:
 	var files := DirAccess.get_files_at(OasisFx.EXAMPLES_DIR)
-	check(files.size() > 0, "no example presets found")
+	for id in ["fire_burst", "ice_nova", "sword_slash", "cooking_success"]:
+		check(files.has(id + OasisFx.VFX_PRESET_SUFFIX), "starter preset %s exists" % id)
 	for file in files:
 		if not file.ends_with(OasisFx.VFX_PRESET_SUFFIX):
 			continue
@@ -155,19 +156,57 @@ func test_executable_looking_strings_stay_plain_data() -> void:
 
 
 func test_duplicate_emitter_ids_are_reported() -> void:
-	# Phase 1A allows one emitter, so a second one is rejected on count; the
-	# duplicate-id rule is exercised directly through the semantic check.
 	var data := _valid()
-	data.emitters.append(data.emitters[0].duplicate(true))
-	_expect_error(data, "emitters", "at most 1 emitter")
-	var report := Report.new()
-	var preset := Validator.validate(_valid(), report)
-	preset.emitters.append(preset.emitters[0].duplicate(true))
-	var raw := _valid()
-	raw.emitters.append(raw.emitters[0].duplicate(true))
-	var semantic := Report.new()
-	Validator._check_effect_semantics(raw, preset, semantic)
-	check(semantic.has_error("emitters[1].id", "duplicate emitter id \"flame\""), "duplicate ids detected: " + " | ".join(semantic.format_lines()))
+	data.emitters.append(data.emitters[1].duplicate(true))
+	_expect_error(data, "emitters[3].id", "duplicate emitter id \"flame\" (also used by emitters[1])")
+
+
+func test_emitter_count_limit() -> void:
+	var data := _valid()
+	var template: Dictionary = data.emitters[1]
+	data.emitters = []
+	for i in 9:
+		var e := template.duplicate(true)
+		e.id = "e%d" % i
+		e.amount = 5
+		data.emitters.append(e)
+	_expect_error(data, "emitters", "at most 8 emitters (got 9)")
+	data.emitters.resize(8)
+	check(_validate(data).is_ok(), "8 emitters are allowed")
+
+
+func test_total_particle_limit() -> void:
+	var data := _valid()
+	for e in data.emitters:
+		e.amount = 1000
+	_expect_error(data, "emitters", "total particle amount 3000 exceeds the limit of 2000")
+
+
+func test_delay_must_be_inside_duration() -> void:
+	var data := _valid()
+	data.emitters[0].delay_seconds = 0.8
+	_expect_error(data, "emitters[0].delay_seconds", "must be less than duration_seconds")
+
+
+func test_ring_and_new_ranges() -> void:
+	var data := _valid()
+	data.emitters[1].emission_shape = "ring"
+	data.emitters[1].emission_radius = 10
+	data.emitters[1].emission_inner_radius = 20
+	_expect_error(data, "emitters[1].emission_inner_radius", "must be <= emission_radius")
+	data = _valid()
+	data.emitters[1].orbit_velocity_min = 2
+	data.emitters[1].orbit_velocity_max = 1
+	_expect_error(data, "emitters[1].orbit_velocity_min", "must be <= orbit_velocity_max")
+	data = _valid()
+	data.emitters[1].hue_variation = 2
+	_expect_error(data, "emitters[1].hue_variation", "must be <= 1")
+	data = _valid()
+	data.emitters[1].texture = "star"
+	_expect_error(data, "emitters[1].texture", "must be one of")
+	data = _valid()
+	data.origin = [0, "up"]
+	_expect_error(data, "origin[1]", "must be a number")
 
 
 func test_empty_emitters() -> void:
@@ -225,17 +264,37 @@ func test_particle_budget() -> void:
 	check(report.has_warning("emitters", "heavy effect"), "400 particles produces a warning")
 
 
-func test_shape_and_loop_warnings() -> void:
-	var data := _valid()
-	data.emitters[0].emission_shape = "point"
+func _warnings_for(data: Dictionary) -> RefCounted:
 	var report := Report.new()
 	Validator.validate(data, report)
-	check(report.has_warning("emitters[0].emission_radius", "ignored"), "radius ignored for point")
+	check(report.is_ok(), "should be valid: " + " | ".join(report.format_lines()))
+	return report
+
+
+func test_shape_and_option_warnings() -> void:
+	var data := _valid()
+	data.emitters[1].emission_shape = "point"
+	check(_warnings_for(data).has_warning("emitters[1].emission_radius", "ignored"), "radius ignored for point")
 	data = _valid()
-	data.emitters[0].one_shot = false
-	report = Report.new()
-	Validator.validate(data, report)
-	check(report.has_warning("emitters[0].one_shot", "never stops"), "continuous emitter in one-shot effect warns")
+	data.emitters[1].texture = "streak"
+	check(_warnings_for(data).has_warning("emitters[1].texture", "align_to_velocity"), "streak without alignment warns")
+	data = _valid()
+	data.emitters[1].align_to_velocity = true
+	data.emitters[1].angle_max = 90
+	check(_warnings_for(data).has_warning("emitters[1].align_to_velocity", "overrides"), "align overrides angle")
+	data = _valid()
+	data.emitters[1].preprocess_seconds = 1
+	check(_warnings_for(data).has_warning("emitters[1].preprocess_seconds", "ignored for one_shot"), "preprocess on one_shot warns")
+
+
+func test_loop_warnings() -> void:
+	var data := _valid()
+	data.loop = true
+	data.duration_seconds = 0.3
+	check(_warnings_for(data).has_warning("emitters[1].lifetime_seconds", "cycles will be skipped"), "long burst in short loop warns")
+	data = _valid()
+	data.emitters[1].one_shot = false
+	check(_warnings_for(data).warnings.is_empty(), "a continuous emitter in a one-shot effect is fine (stopped at duration_seconds)")
 
 
 func test_loader_reports_json_errors() -> void:
