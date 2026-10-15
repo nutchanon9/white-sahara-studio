@@ -1,6 +1,6 @@
 # white-sahara-studio — OasisFx
 
-ชุดเครื่องมือสร้าง asset (VFX, SFX และในอนาคต Animation) สำหรับ Godot 4
+ชุดเครื่องมือสร้าง asset (VFX, SFX, Animation และ Sprite frames) สำหรับ Godot 4
 ชื่อเครื่องมือคือ **OasisFx** (ในสเปกเดิมเรียกว่า "Godot Asset Studio")
 
 แนวคิด: คน, ChatGPT หรือ Claude เขียน **preset เป็น JSON** → CLI ตรวจความถูกต้อง →
@@ -14,10 +14,13 @@
 
 **Phase 1C ทำแล้ว:** แอปอยู่ใน `app/` build เป็น `OasisFx.exe` ได้ (ดู [desktop.md](addons/oasis_fx/docs/desktop.md))
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
+**Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
 
 ![OasisFx desktop app](docs/images/desktop_app.png)
 
 ![OasisFx — แก้เสียง](docs/images/desktop_sfx.png)
+
+![OasisFx — แก้ animation](docs/images/desktop_animation.png)
 
 รายละเอียดและคำสั่งงานล่าสุดอยู่ใน [Spec v1.1](Godot_Asset_Studio_Claude_Code_Implementation_Spec.md)
 และ [CLAUDE.md](CLAUDE.md) ซึ่งใช้แทนทิศทาง UI เดิมใน audit
@@ -31,7 +34,8 @@
 | 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide | ✅ เสร็จ |
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
 | 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
-| 3–4 | Animation, Rigging | ยังไม่เริ่ม |
+| 3 | Animation Timeline: keyframe ของ node ใน scene เดิม (bone, sprite, polygon), event ที่เรียก VFX/SFX, sprite frames, timeline + preview ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองกับตัวละครจริงของ White Sahara — repo เกมไม่อยู่ใน session นี้) |
+| 4 | Rigging (สร้าง/แก้ rig, IK, costume) | ยังไม่เริ่ม |
 
 ## โครงสร้าง repo
 
@@ -43,7 +47,7 @@ tests/                 เทสต์ระดับ repo (แอป, เดโ
 docs/images/           ภาพ preview ที่ render จริง
 app/                   แอป desktop (main.tscn, ui/, services/, export/ = plugin ตอน build)
 export_presets.cfg     การตั้งค่า export สำหรับ Windows และ Linux
-tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียงตัวอย่าง)
+tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียงและวาด sprite sheet ตัวอย่าง)
 AUDIT.md               รายงาน Phase 0
 CLAUDE.md              คำแนะนำเริ่มงานและ milestone ปัจจุบัน
 Godot_Asset_Studio_Claude_Code_Implementation_Spec.md   สเปกต้นฉบับ
@@ -67,7 +71,7 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd
 ```
 
 ดู effect ทำงานจริง: เปิดโปรเจกต์ใน Godot → เปิด `examples/runtime_demo/runtime_demo.tscn` → กด F6
-(คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
+(คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร, A = เชฟฟาดทัพพี, S = เชฟดีใจ) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
 
 ภาพหน้าจอจริงของเดโม (render ใน cloud ด้วย software OpenGL ผ่าน Xvfb):
 
@@ -86,6 +90,7 @@ Preview ของ effect ตัวอย่าง (8 เฟรมตามเว
 เอกสารละเอียด: [addons/oasis_fx/README.md](addons/oasis_fx/README.md),
 [รูปแบบ preset](addons/oasis_fx/docs/preset_format.md), [CLI](addons/oasis_fx/docs/cli.md),
 [รูปแบบ preset เสียง](addons/oasis_fx/docs/sfx_format.md),
+[รูปแบบ animation และ sprite frames](addons/oasis_fx/docs/animation_format.md),
 [คู่มือให้ AI เขียน preset](addons/oasis_fx/docs/ai_authoring_guide.md)
 
 ## ข้อจำกัดของ cloud session
@@ -183,6 +188,36 @@ OasisFx ไม่ได้สร้างเสียงเองหรือด
 - preset ตัวอย่าง 9 ไฟล์ผ่าน JSON Schema ด้วย Python `jsonschema`
 - build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` (preview เสียงและ export เสียงเข้าโฟลเดอร์ชื่อไทย)
 - **NOT RUN:** ฟังเสียงจริง (ไม่มีอุปกรณ์เสียงใน cloud), เปิด .exe บน Windows, GPU จริง
+
+
+## Phase 3: Animation Timeline
+
+มี preset ใหม่ 2 แบบ:
+
+| ชนิด | ไฟล์ | ได้อะไร | ใช้ทำอะไร |
+|---|---|---|---|
+| `animation` | `<id>.anim.json` | `<id>.tres` (Godot Animation) | ขยับ node ของ scene ที่มีอยู่แล้วในเกม (เช่น bone ของ Skeleton2D, sprite, polygon) ด้วย keyframe + **event** (hit_frame, footstep, cooking_complete) ที่เรียก VFX/SFX ของ OasisFx |
+| `sprite_frames` | `<id>.frames.json` | `<id>.tres` (SpriteFrames) | ตัด animation แบบทีละเฟรมจาก sprite sheet ไปใช้กับ AnimatedSprite2D |
+
+- **ไม่สร้าง/ไม่แก้ rig เดิม:** preset ชี้ไปที่ scene ของเกม (`target_scene`) และอ่านไฟล์ `.tscn` แบบ **ข้อความ**
+  เพื่อตรวจว่า node path มีจริงและเป็นชนิดที่ถูกต้อง (ไม่โหลดหรือรัน script ใด ๆ) ถ้าพิมพ์ path ผิดจะบอก path ที่น่าจะใช่
+- **ปลอดภัย:** property ที่ animate ได้มีแค่ position, rotation_degrees, scale, opacity, modulate, visible, frame, z_index
+  และ event เรียกได้เฉพาะ method ตายตัว `OasisAnimationEvents.oasis_event()` ซึ่งแสดงได้เฉพาะ scene ที่ OasisFx สร้าง
+- **Event เป็นแค่ภาพ/เสียง:** ไม่ตัดสินดาเมจ เกมฟัง signal `event_triggered` เองได้
+- **ตัวอย่าง:** rig เชฟ (`presets/examples/rigs/chef_rig.tscn`) + animation 3 แบบ (idle วนลูป, ฟาดทัพพีพร้อมไฟและเสียงตอนโดน,
+  กระโดดดีใจพร้อมประกาย) + sprite sheet เปลวไฟ CC0 ที่วาดด้วย `tools/synth_example_sprites.gd`
+- **แอป:** เมนู *New ▾* มี Animation / Sprite frames; preview สร้างตัวแทนของ scene จากไฟล์ข้อความแล้วเล่น animation จริง,
+  timeline แสดง track/key/event (คลิกเลือก track, ลากเพื่อดูท่า), แก้ key/event ได้, เลือก node จากรายการ,
+  sprite frames แสดง sheet พร้อมกริดและเฟรมปัจจุบัน; export `.tres` เข้าเกมพร้อม effect ที่ event ใช้
+- **โครงสร้างภายใน:** เพิ่ม registry ของชนิด asset (`asset_types.gd`) ให้ validator/schema/serializer/generator/CLI/แอป
+  ใช้ร่วมกัน — schema และ golden ของ VFX/SFX ออกมาเหมือนเดิมทุก byte
+
+**ผลการตรวจ Phase 3:**
+- เทสต์ทั้งหมด **163 passed, 0 failed** (exit 0) และได้ผลเดียวกันบนสำเนาใหม่ที่ไม่มี `.godot/`
+- preset ตัวอย่าง 13 ไฟล์ผ่าน JSON Schema ทั้ง 4 แบบด้วย Python `jsonschema`
+- animation ที่สร้างเล่นบน rig จริงใน Godot (ท่า, event, effect เกิดที่ปลายทัพพี) และ export เข้าโปรเจกต์แยกแล้วเล่นได้
+- build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` ครบทั้ง 4 ชนิด (export เข้าโฟลเดอร์ชื่อไทย), ภาพหน้าจอจริงอยู่ใน `docs/images/`
+- **NOT RUN:** เปิด .exe บน Windows, ลองกับตัวละครจริงของ White Sahara, GPU จริง
 
 ## License
 

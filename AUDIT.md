@@ -175,3 +175,25 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 - ข้อความ `ObjectDB instances leaked` / `resources still in use at exit` หลังรันเทสต์เสียง เป็นพฤติกรรมของ Godot 4.7.2
   กับ Dummy audio driver ตอนปิดโปรแกรม (`AudioStreamPlayer` ธรรมดาเล่นไฟล์เดียวก็เกิด) ไม่ใช่ leak ของ OasisFx
 
+---
+
+## 10. ภาคผนวก (2026-10-15): การตัดสินใจใน Phase 3 (Animation Timeline)
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| ชนิด asset | `animation` (`.anim.json` → Animation `.tres`) และ `sprite_frames` (`.frames.json` → SpriteFrames `.tres`) แยกกัน | สเปกข้อ 9 ให้ keyframe/skeleton กับ sprite sheet เป็นคนละ workflow; ผลลัพธ์เป็น resource มาตรฐานที่ใส่ AnimationPlayer / AnimatedSprite2D ของเกมได้ทันที |
+| Registry | `src/core/asset_types.gd` เป็นที่เดียวที่บอก field table, suffix, ไฟล์ schema, นามสกุล output ของแต่ละชนิด | ก่อนหน้านี้มีการเช็ก `"sfx"` กระจายหลายสิบจุด; refactor แล้ว schema/golden ของ VFX/SFX ไม่เปลี่ยนแม้แต่ byte เดียว |
+| Rig เดิมของเกม | preset ชี้ `target_scene`; OasisFx อ่าน `.tscn` เป็นข้อความด้วย `scene_outline.gd` (ตาม instanced scene ได้ 6 ชั้น) ไม่โหลด/ไม่รัน และไม่แก้ไฟล์ของเกม | สเปก: "import rather than regenerate" rig; ไม่ทำให้ script ของเกมทำงานใน validator/แอป |
+| ความปลอดภัย | property ที่ animate ได้มาจาก whitelist 8 ตัว; event เรียก method ตายตัว `oasis_event` บน node `OasisAnimationEvents`; ฝั่ง runtime แสดงเฉพาะ scene ที่มี runtime script ของ OasisFx; ค่า property ในไฟล์ scene decode เฉพาะชนิดข้อมูลธรรมดา (ปฏิเสธ `Object(`) | สเปกข้อ 9: ห้ามรับ node path/method name แบบไม่จำกัดจาก preset |
+| หน่วย | `rotation_degrees` ในไฟล์ แปลงเป็น `rotation` (เรเดียน) ใน track; `opacity` → `modulate:a`; interpolation ไม่ wrap มุม | อ่านง่ายสำหรับคน/AI และหมุนเกิน 180° ได้ตามที่เขียน |
+| Event → VFX/SFX | ใช้ method track หนึ่ง track; argument เป็น PackedScene (อ้างด้วย path) + NodePath; effect ไปอยู่ใต้ parent ของ root ตัวละคร (ตั้ง `effects_parent` ได้) | เป็นของ Godot ล้วน, dependency ถูกบันทึกใน manifest (รวมสิ่งที่ effect scene ต้องใช้) |
+| ตัวอย่างอ้าง effect นอก addon | animation ตัวอย่างอ้าง `examples/runtime_demo/fx/*.tscn`; เทสต์ "addon อย่างเดียว" จึง copy ไฟล์ที่ generate แล้วไปด้วย | generator เขียนลง `res://addons/oasis_fx` ไม่ได้ (ตั้งใจ); เกมจริงจะ generate effect ไว้ก่อนอยู่แล้ว |
+| Preview ในแอป | สร้างตัวแทน scene จาก outline ด้วย node มาตรฐาน (Polygon2D/Sprite2D/Bone2D/…) + AnimationPlayer ที่เล่น Animation จาก builder ตัวเดียวกับ generator; event แสดงเป็น marker แทนการเล่น effect จริง | scene ของเกมโหลดในแอปไม่ได้อย่างปลอดภัย (resource/script ของเกม) |
+| แพ็กเกจ | plugin `app/export/` ใส่ไฟล์ดิบของ rig, sprite sheet และ effect ตัวอย่างลง pck (Godot แปลง `.tscn` เป็น binary ตอน export) | validator อ่าน scene เป็นข้อความ และ exporter ต้อง copy ไฟล์ข้อความเข้าเกม |
+| ยังไม่ทำ | bezier track, AnimationTree, การสร้าง/แก้ rig/IK/weight (Phase 4), เสียงแบบ audio track (ใช้ event + SFX แทน) | ขอบเขต Phase 3 |
+
+ข้อค้นพบ:
+- AnimationPlayer เรียก method track แบบ deferred (`callback_mode_method` ค่าเริ่มต้น) — เทสต์รอ 1 frame ก่อนตรวจ event
+- Bone2D ที่ไม่มี bone ลูกเตือน "cannot calculate bone length" — rig ตัวอย่างตั้ง `length`/`bone_angle` เองแล้ว
+- sprite sheet ต้องเว้นขอบใส ไม่งั้น texture filter ดึงพิกเซลเฟรมข้าง ๆ มา (เห็นจากภาพหน้าจอ แก้ใน tool แล้ว)
+

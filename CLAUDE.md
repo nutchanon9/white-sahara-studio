@@ -54,6 +54,16 @@ Full suite 142 passed, 0 failed (also on a fresh copy); packaged Linux smoke tes
 listening to audio, Windows launch NOT RUN; WAV mixdown not implemented (feasibility noted).
 Awaiting owner acceptance; Phases 3–4 not started.
 
+**Phase 3 Animation Timeline (user requested "continue", 2026-10-15):** implemented —
+asset-type registry (`asset_types.gd`), `animation` presets (keyframe tracks on whitelisted
+properties of nodes of an existing scene read as text by `scene_outline.gd`, events via
+`src/runtime/oasis_animation_events.gd` showing OasisFx effects) → Animation `.tres`,
+`sprite_frames` presets → SpriteFrames `.tres`, example rig/animations/flame sheet, demo,
+app (New menu, rig stand-in preview, track timeline, key/event editors, sprite preview,
+export). Full suite 163 passed, 0 failed (also on a fresh copy); packaged Linux smoke test passed;
+Windows launch and a real White Sahara character NOT RUN. Awaiting owner acceptance; Phase 4
+(rigging) not started.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.
