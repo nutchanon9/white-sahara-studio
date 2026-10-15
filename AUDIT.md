@@ -120,7 +120,7 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | Manifest | `oasis_fx_manifest.json` หนึ่งไฟล์ต่อโฟลเดอร์ output, sort key, ไม่มี timestamp | รู้ว่าไฟล์ไหนถูกแก้มือ (เตือนตอน `--force`) และรู้ dependency สำหรับ export ใน 1C |
 | Batch | `generate-all` ทำทั้งหมดหรือไม่ทำเลย (ตรวจทุกไฟล์, id ซ้ำ, ไฟล์ที่มีอยู่แล้ว ก่อนเขียน) | ไม่เหลือโฟลเดอร์ที่ generate ไปครึ่งเดียว |
 | Exit code ของ CLI | ใช้ `ErrorCapture` (Logger) ร่วมกับ test runner; มี error ใดถูก log → exit 1 | พบว่า script error ใน `_run()` เดิมทำให้ CLI exit 0 (ทดสอบซ้ำได้) |
-| Golden files | commit scene ที่ generate แล้วใน `examples/runtime_demo/vfx/` และให้เทสต์ระดับ repo (`tests/`) generate ใหม่แล้วเทียบ | เดโมรันได้ทันทีบน clone ใหม่ และจับการเปลี่ยน output โดยไม่ตั้งใจ |
+| Golden files | commit scene ที่ generate แล้วใน `examples/runtime_demo/fx/` และให้เทสต์ระดับ repo (`tests/`) generate ใหม่แล้วเทียบ | เดโมรันได้ทันทีบน clone ใหม่ และจับการเปลี่ยน output โดยไม่ตั้งใจ |
 | ทิศทางหมุน | ตรวจจากภาพจริง: `orbit_velocity` > 0 หมุนทวนเข็มบนจอ, `rotation_degrees` > 0 หมุนตามเข็ม | เอกสารเดิมในร่างแรกเขียนทิศ orbit ผิด แก้แล้วหลัง render |
 | ภาพ preview | ภาพใน `docs/images/` render จริงด้วย Xvfb + Mesa llvmpipe (software OpenGL) | ใช้ดูทิศทาง/สี/ขนาด ไม่เท่ากับการตรวจบน GPU จริงหรือบน Windows |
 
@@ -146,3 +146,32 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 - เพิ่ม `preset_serializer.gd` + คำสั่ง `format` เพื่อให้ไฟล์ที่แอปบันทึกกับไฟล์ที่ AI/คนเขียน มีรูปแบบเดียวกัน; จัดรูป preset ตัวอย่างใหม่ (ค่าไม่เปลี่ยน, golden scene ไม่เปลี่ยน)
 - ขยาย `PathUtils` ให้ชื่อโฟลเดอร์ใช้ตัวอักษร Unicode ได้ (ภาษาไทย) แต่ยังห้าม `..`, `.`, ชื่อซ่อน, `res://.godot` และโฟลเดอร์ของ addon
 - เปลี่ยน `project.godot`: `run/main_scene` = แอป, ชื่อ "OasisFx", custom user dir, ขนาดหน้าต่าง 1440×900 — เหตุผล: repo นี้คือแอป; CLI/เทสต์ใช้ `--script` จึงไม่โหลด main scene
+
+---
+
+## 9. ภาคผนวก (2026-10-15): การตัดสินใจใน Phase 2 (SFX Composer)
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| รูปแบบ preset | `asset_type: "sfx"`, `schema_version: 1`, ไฟล์ `<id>.sfx.json`, ตาราง field `sfx_spec.gd` | ใช้ loader/validator/serializer/schema builder ตัวเดิม; ตาราง field เป็นแหล่งเดียวของ validator, JSON Schema, เอกสาร และ inspector |
+| VFX | schema และ golden scene ของ VFX ไม่เปลี่ยน (ยกเว้นคำอธิบาย `asset_type` ใน schema) | preset เดิมยังใช้ได้ |
+| Node ที่สร้าง | `Node2D` + `AudioStreamPlayer` (หรือ `AudioStreamPlayer2D` เมื่อ `positional`) ต่อ layer + runtime `oasis_sfx_effect.gd` | ใช้ node มาตรฐาน; timing/variant/fade/loop ทำใน runtime ด้วยนาฬิกาของตัวเอง จึงเหมือนกันทุก audio driver รวม Dummy ที่ใช้ทดสอบ |
+| ไฟล์เสียงตอน generate | scene อ้างไฟล์ด้วย path (placeholder + `take_over_path`) ไม่ต้อง import ก่อน | clone ใหม่กับโปรเจกต์ที่ import แล้วได้ไฟล์เหมือนกันทุก byte (ทดสอบแล้ว); ทำแบบเดียวกันกับ `texture: "file"` ของ VFX |
+| ผลข้างเคียงกับ VFX | visibility rect อัตโนมัติของ `texture: "file"` ถือว่าภาพ 64 px (เดิมใช้ขนาดจริง) | ไม่โหลดภาพตอน generate อีกต่อไป; ระบุใน preset_format.md |
+| ตัวสุ่ม | `seed` -1 = สุ่มจริง, ≥0 = ลำดับเดิมทุกครั้งที่รัน (ตั้งครั้งเดียว ไม่ reset ทุก play) | ทดสอบได้ และการเล่นแต่ละครั้งยังต่างกัน |
+| Loop + fade | `fade_in_ms` ของ layer ที่ loop ใช้ครั้งแรกครั้งเดียว; `fade_out_ms` บน loop ซ้ำทุกรอบและมีคำเตือน | เห็นจาก timeline ว่า fade-in ซ้ำทุกรอบทำให้เสียงวูบ |
+| ไฟล์เสียงตัวอย่าง | สังเคราะห์เองแบบ deterministic (`tools/synth_example_sounds.gd`) และให้เป็น CC0 | ไม่มีปัญหา license และไม่ต้องดาวน์โหลด |
+| หาไฟล์ `res://` | `ValidationReport.res_roots`: CLI = โปรเจกต์ที่รัน; แอป = โปรเจกต์เกมที่เลือกก่อน แล้วค่อยไฟล์ในแอป | preset อ้าง path ในเกม ซึ่งเป็นที่ที่ scene จะโหลดจริง |
+| Export ไฟล์ประกอบ | มีในเกมแล้ว = ใช้ (ไม่เขียนทับ); เป็นไฟล์ตัวอย่างของแอป = copy; นอกนั้น = error | ไม่แตะไฟล์ของเกม; ปลดข้อจำกัด `texture: "file"` ของ Phase 1C ได้ด้วยกฎเดียวกัน |
+| ไฟล์ต้นฉบับใน package | plugin สำหรับ build `app/export/` (เปิดใน `project.godot`) ใส่ไฟล์ `.wav` ต้นฉบับลง pck | Godot export ใส่แต่ไฟล์ที่ import แล้ว (QOA) แอปที่แพ็กแล้วจึงอ่าน/copy ไฟล์ต้นฉบับไม่ได้ — smoke test ที่ขยายจับได้ |
+| Test runner | auto-import (`godot --headless --import`) เมื่อไฟล์ที่ import หายไป | เทสต์ที่เล่นเสียงต้องใช้ไฟล์ที่ import แล้ว; clone ใหม่ยังรันคำสั่งเดียวได้ |
+| WAV mixdown | ไม่ทำ; ทดสอบความเป็นไปได้แล้วด้วย Movie Maker (`--write-movie`) ได้ WAV จริงใต้ Xvfb แต่ `--headless` abort | ตามสเปกข้อ 8: ทำเมื่อพิสูจน์ได้ และเกมเล่น scene หลาย layer ได้โดยตรง |
+
+ข้อค้นพบที่แก้คำกล่าวเดิม:
+- **Phase 1C บอกว่า "scene ที่ export จากแอปเหมือน CLI ทุก byte"** — จริงเมื่อรันจาก source เท่านั้น
+  build ที่แพ็กแล้ว (release template) เขียน id ของ ext_resource เป็นตัวเลขและเขียนค่า default ของ property ด้วย
+  เพราะ `Resource.set_id_for_path` และค่า default ของ script เป็นฟีเจอร์ฝั่ง editor; scene ทำงานเหมือนกันและ
+  ผลของแอปเองคงที่ทุกครั้ง แต่ข้อความไม่ตรงกับ CLI — บันทึกไว้ใน desktop.md
+- ข้อความ `ObjectDB instances leaked` / `resources still in use at exit` หลังรันเทสต์เสียง เป็นพฤติกรรมของ Godot 4.7.2
+  กับ Dummy audio driver ตอนปิดโปรแกรม (`AudioStreamPlayer` ธรรมดาเล่นไฟล์เดียวก็เกิด) ไม่ใช่ leak ของ OasisFx
+

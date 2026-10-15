@@ -46,6 +46,14 @@ docs/desktop.md with verification table and Windows manual QA. Full suite 116 pa
 0 failed; packaged Linux build smoke test passed; Windows launch NOT RUN. Awaiting owner
 acceptance; Phases 2–4 not started.
 
+**Phase 2 SFX Composer (user requested "continue", 2026-10-15):** implemented — `sfx`
+preset type (`sfx_spec.gd`, `sfx.v1.schema.json`, `docs/sfx_format.md`), builder, runtime
+`src/runtime/oasis_sfx_effect.gd`, four CC0 example sounds, CLI support, app timeline /
+game-project file picking / audio export, `app/export/` plugin that packs raw example audio.
+Full suite 142 passed, 0 failed (also on a fresh copy); packaged Linux smoke test passed;
+listening to audio, Windows launch NOT RUN; WAV mixdown not implemented (feasibility noted).
+Awaiting owner acceptance; Phases 3–4 not started.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

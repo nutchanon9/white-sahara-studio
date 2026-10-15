@@ -1,6 +1,6 @@
 # white-sahara-studio — OasisFx
 
-ชุดเครื่องมือสร้าง asset (VFX และในอนาคต SFX / Animation) สำหรับ Godot 4
+ชุดเครื่องมือสร้าง asset (VFX, SFX และในอนาคต Animation) สำหรับ Godot 4
 ชื่อเครื่องมือคือ **OasisFx** (ในสเปกเดิมเรียกว่า "Godot Asset Studio")
 
 แนวคิด: คน, ChatGPT หรือ Claude เขียน **preset เป็น JSON** → CLI ตรวจความถูกต้อง →
@@ -13,8 +13,11 @@
 ในเครื่องหรือ cloud ที่มี source และ Godot พร้อมใช้งาน
 
 **Phase 1C ทำแล้ว:** แอปอยู่ใน `app/` build เป็น `OasisFx.exe` ได้ (ดู [desktop.md](addons/oasis_fx/docs/desktop.md))
+**Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 
 ![OasisFx desktop app](docs/images/desktop_app.png)
+
+![OasisFx — แก้เสียง](docs/images/desktop_sfx.png)
 
 รายละเอียดและคำสั่งงานล่าสุดอยู่ใน [Spec v1.1](Godot_Asset_Studio_Claude_Code_Implementation_Spec.md)
 และ [CLAUDE.md](CLAUDE.md) ซึ่งใช้แทนทิศทาง UI เดิมใน audit
@@ -27,7 +30,8 @@
 | 1A | schema, loader, validator, CLI `validate`/`generate`, Fire Burst, headless tests | ✅ เสร็จ (แก้ test runner ตาม review แล้ว) |
 | 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide | ✅ เสร็จ |
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
-| 2–4 | SFX, Animation, Rigging | ยังไม่เริ่ม |
+| 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
+| 3–4 | Animation, Rigging | ยังไม่เริ่ม |
 
 ## โครงสร้าง repo
 
@@ -37,9 +41,9 @@ addons/oasis_fx/       ตัว addon — copy โฟลเดอร์นี�
 examples/runtime_demo/ เดโมการใช้ effect ในเกม + scene ที่ generate แล้ว (ใช้เป็น golden test)
 tests/                 เทสต์ระดับ repo (แอป, เดโม และ golden files)
 docs/images/           ภาพ preview ที่ render จริง
-app/                   แอป desktop (main.tscn, ui/, services/)
+app/                   แอป desktop (main.tscn, ui/, services/, export/ = plugin ตอน build)
 export_presets.cfg     การตั้งค่า export สำหรับ Windows และ Linux
-tools/                 เครื่องมือสำหรับนักพัฒนา (เช่น render ภาพ preview)
+tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียงตัวอย่าง)
 AUDIT.md               รายงาน Phase 0
 CLAUDE.md              คำแนะนำเริ่มงานและ milestone ปัจจุบัน
 Godot_Asset_Studio_Claude_Code_Implementation_Spec.md   สเปกต้นฉบับ
@@ -63,7 +67,7 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd
 ```
 
 ดู effect ทำงานจริง: เปิดโปรเจกต์ใน Godot → เปิด `examples/runtime_demo/runtime_demo.tscn` → กด F6
-(คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร)
+(คลิกซ้าย = Fire Burst, คลิกขวา = Ice Nova, Space = ฟันดาบ, C = ทำอาหาร) — effect ที่มีเสียงคู่กันจะเล่นเสียงด้วย
 
 ภาพหน้าจอจริงของเดโม (render ใน cloud ด้วย software OpenGL ผ่าน Xvfb):
 
@@ -81,6 +85,7 @@ Preview ของ effect ตัวอย่าง (8 เฟรมตามเว
 
 เอกสารละเอียด: [addons/oasis_fx/README.md](addons/oasis_fx/README.md),
 [รูปแบบ preset](addons/oasis_fx/docs/preset_format.md), [CLI](addons/oasis_fx/docs/cli.md),
+[รูปแบบ preset เสียง](addons/oasis_fx/docs/sfx_format.md),
 [คู่มือให้ AI เขียน preset](addons/oasis_fx/docs/ai_authoring_guide.md)
 
 ## ข้อจำกัดของ cloud session
@@ -135,7 +140,8 @@ godot --headless --path . --export-release "Windows Desktop" build/windows/Oasis
 
 **Export เข้าเกม:**
 - เลือกโฟลเดอร์ในโปรเจกต์เกม แอปหา `project.godot` เอง แล้วแสดงรายการไฟล์ที่จะเขียนก่อน
-- ไฟล์ที่ได้เหมือนกับที่ CLI สร้างทุก byte
+- รันจาก source: ไฟล์ที่ได้เหมือนกับที่ CLI สร้างทุก byte; **build ที่แพ็กแล้วได้ scene ที่ทำงานเหมือนกันแต่ข้อความไม่ตรงกันทุก byte**
+  (id ของ ext_resource เป็นตัวเลข และเขียนค่า default ลงไปด้วย เพราะ Godot release build ไม่มีข้อมูลฝั่ง editor — พบตอนทำ Phase 2)
 - copy runtime script ให้เฉพาะเมื่อเกมยังไม่มี
 
 **ผลการตรวจ:**
@@ -144,7 +150,39 @@ godot --headless --path . --export-release "Windows Desktop" build/windows/Oasis
 - scene ที่ export เปิดเล่นในโปรเจกต์แยกได้
 - **NOT RUN:** การเปิด .exe บน Windows จริง, file dialog ของ Windows และ GPU จริง (มี checklist ให้ทดสอบเองใน [desktop.md](addons/oasis_fx/docs/desktop.md))
 
-**ยังไม่รองรับ:** export preset ที่ใช้ไฟล์ภาพ (`texture: "file"`) ออกจากแอป ให้ใช้ CLI ในโปรเจกต์เกมแทน
+~~ยังไม่รองรับ export preset ที่ใช้ไฟล์ภาพ~~ → Phase 2 รองรับแล้ว ถ้าไฟล์อยู่ในโปรเจกต์เกม (ดูด้านล่าง)
+
+## Phase 2: SFX Composer
+
+preset เสียง (`<id>.sfx.json`) คือการ **เรียงไฟล์เสียงที่มีอยู่แล้ว** (wav/ogg/mp3) หลาย layer —
+เริ่มเมื่อไร ดังเท่าไร pitch ตัดช่วงไฟล์ fade loop และสุ่มไฟล์/pitch/ความดังทุกครั้งที่เล่น
+OasisFx ไม่ได้สร้างเสียงเองหรือดาวน์โหลดเสียง
+
+```json
+{"schema_version": 1, "asset_type": "sfx", "id": "sword_slash_sfx", "display_name": "Sword Slash SFX",
+ "layers": [
+   {"id": "whoosh", "source": "res://audio/whoosh_1.wav", "variants": ["res://audio/whoosh_2.wav"], "random_pitch_percent": 6, "source_license": "CC0"},
+   {"id": "impact", "source": "res://audio/impact.wav", "start_ms": 140, "gain_db": -3, "source_license": "CC0"}]}
+```
+
+- **ได้อะไร:** `<id>.tscn` = `Node2D` + `AudioStreamPlayer`/`AudioStreamPlayer2D` ต่อ layer + runtime
+  `OasisSfxEffect` (เล่นตาม offset, สุ่ม variant ไม่ซ้ำไฟล์เดิมติดกัน, fade, trim, loop, ลบตัวเองเมื่อจบ)
+  ใช้ในเกม: `OasisSfxEffect.spawn(preload("res://sfx/sword_slash_sfx.tscn"), self, position)`
+- **CLI เดิมทุกคำสั่งรองรับ `.sfx.json`:** `validate`, `validate-all`, `generate`, `generate-all`, `format`, `schema sfx`
+- **schema:** `schemas/sfx.v1.schema.json` สร้างจากตาราง field `sfx_spec.gd` เหมือน VFX; VFX v1 ไม่เปลี่ยน
+- **ตัวอย่าง 4 เสียง:** `sword_slash_sfx`, `fire_burst_sfx`, `cooking_success_sfx`, `cooking_sizzle_loop`
+  ใช้ไฟล์เสียงที่สังเคราะห์เองด้วย `tools/synth_example_sounds.gd` (CC0) เดโมเล่นเสียงคู่กับ effect แล้ว
+- **License:** ทุก layer มี `source_author`/`source_license` ถ้าว่างจะเตือน
+- **แอป:** ปุ่ม *New sound*, timeline แสดง layer/fade/loop/playhead, เลือก **Game project…** แล้วปุ่ม **…**
+  แปลงไฟล์ในเกมเป็น `res://` ให้อัตโนมัติ, export เข้าเกม: ไฟล์ที่เกมมีอยู่แล้ว = ใช้ (ไม่เขียนทับ),
+  ไฟล์ตัวอย่างของ OasisFx = copy ให้ (พร้อมคำเตือน), ไฟล์ที่ไม่มีที่ไหนเลย = error
+- **WAV mixdown:** ยังไม่ทำ ทดลองแล้วว่าเป็นไปได้ด้วย Movie Maker ของ Godot (ต้องมีจอ/Xvfb) — รายละเอียดใน sfx_format.md
+
+**ผลการตรวจ Phase 2:**
+- เทสต์ทั้งหมด **142 passed, 0 failed** (exit 0) และได้ผลเดียวกันบนสำเนาใหม่ที่ไม่มี `.godot/`
+- preset ตัวอย่าง 9 ไฟล์ผ่าน JSON Schema ด้วย Python `jsonschema`
+- build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` (preview เสียงและ export เสียงเข้าโฟลเดอร์ชื่อไทย)
+- **NOT RUN:** ฟังเสียงจริง (ไม่มีอุปกรณ์เสียงใน cloud), เปิด .exe บน Windows, GPU จริง
 
 ## License
 
