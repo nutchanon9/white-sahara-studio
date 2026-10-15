@@ -1,5 +1,10 @@
 # Phase 0 — Repository audit (OasisFx)
 
+> **Historical audit:** observations below describe the original Phase 0 session.
+> The owner subsequently selected a standalone Windows desktop app built with Godot,
+> sharing the core with the headless CLI. Specification v1.1 and `CLAUDE.md` supersede
+> future EditorPlugin/dock plans below; the original observations are preserved.
+
 วันที่: 2026-10-15 · branch: `claude/cool-brown-hrne5t` · ผู้ตรวจ: Claude Code (cloud session)
 
 ## 1. สภาพ repo ก่อนเริ่มงาน

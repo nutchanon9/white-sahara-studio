@@ -1,12 +1,14 @@
-# Godot Asset Studio — Implementation Specification for Claude Code
+# OasisFx — Implementation Specification for Claude Code
 
-> **Naming note (2026-10-15):** the tool described here is named **OasisFx**. The addon lives in `addons/oasis_fx/` instead of `addons/godot_asset_studio/`, and the CLI is `addons/oasis_fx/cli/oasis_fx_cli.gd`. The rest of this document is kept as originally written; see `AUDIT.md` for the decisions taken.
+> **Current direction (2026-10-15):** The owner wants **OasisFx as a standalone Windows desktop application built with Godot, plus a headless CLI using the same core**. This v1.1 direction supersedes the original EditorPlugin-first plan and the corresponding future-UI decisions in `AUDIT.md`. Keep the filename of this specification for existing links.
+>
+> **Current implementation:** `claude/cool-brown-hrne5t` at `4c6e7bf` implements Phase 1A under `addons/oasis_fx/`. An independent review reran the existing suite with Godot `4.7.2.stable.official.ed1daf0bf`: **41 passed, 0 failed, no script errors observed in that suite**. A separate deliberate runtime-error probe exposed a false-PASS bug in the test runner; fix this before accepting Phase 1A. No standalone UI or Windows export exists at this reviewed commit. Inspect the latest branch before coding; do not rebuild Phase 1A from scratch.
 
-**Version:** 1.0 (planning / initial implementation)  
-**Target:** Godot 4.x / GDScript; first consumer: White Sahara  
-**Execution environment:** GitHub-hosted Claude Code cloud session (may be headless)  
-**Language:** Thai instructions; English identifiers, file names, code, tests, and schema keys  
-**Primary goal:** Build a reusable, AI-friendly toolchain that turns structured asset presets into validated, previewable, reusable Godot game assets.  
+**Version:** 1.1 (standalone desktop direction; Phase 1A review follow-up)
+**Target:** Godot / GDScript; Windows desktop app + platform-compatible headless CLI; first consumer: White Sahara
+**Execution environment:** GitHub-hosted Claude Code cloud session (may be headless)
+**Language:** Thai instructions; English identifiers, file names, code, tests, and schema keys
+**Primary goal:** Build a reusable, AI-friendly toolchain that turns structured asset presets into validated, previewable, reusable Godot game assets.
 **Priority:** VFX first; SFX, animation, and rigging in subsequent phases.
 
 > **Important:** This document is a design brief, not a claim that these features exist. Claude MUST inspect the actual repository and installed Godot version before modifying code. Avoid inventing APIs or assuming a GUI/display is available in the cloud environment.
@@ -15,18 +17,20 @@
 
 ## 1. Executive decision
 
-Build a **Godot EditorPlugin + versioned JSON preset format + headless CLI/build/test pipeline**, NOT a standalone Windows desktop app or a web renderer in v0.1.
+Build **a standalone Godot desktop application + versioned JSON presets + headless CLI/build/test pipeline**. Windows is the first desktop target. The user should launch OasisFx without opening Godot Editor or an existing game project.
 
-- **AI-compatible:** ChatGPT and Claude can author the same documented JSON files; neither requires a proprietary AI integration.
-- **Godot-native rendering:** Use built-in Godot nodes and resources for final runtime effects, so previews and game behavior match.
-- **Headless-first:** CLI can validate/generate/test assets without launching a GUI; EditorPlugin supplies visual controls when Godot Editor is available locally.
-- **Reusable:** Place in a self-contained `addons/godot_asset_studio/` directory. Avoid hardcoded White Sahara-specific paths, autoloads, or assets.
-- **Safe integration:** Generate output in a designated directory, never overwrite hand-authored scenes without explicit action.
-- **Non-goal:** Do not build a Spine replacement, full DAW, AI model, or multi-user cloud service in v0.1.
+- **Human workflow:** launch OasisFx → open/create a preset → edit and preview → save → export Godot assets.
+- **AI workflow:** read the schema/docs → write JSON → invoke CLI → read diagnostics → fix/retry → integrate generated scenes into the game.
+- **Shared core:** reuse the existing loader, validator, builder and generator in `addons/oasis_fx/src/core/`. Desktop controls must call these same functions, not duplicate validation or rendering logic.
+- **Godot-native:** build the app UI with Godot Control nodes and preview with a dedicated SubViewport using the existing builder.
+- **Headless-first foundation:** preserve Phase 1A CLI compatibility; Phase 1B improves the core and Phase 1C builds the desktop app. An EditorPlugin is an optional future adapter, not the Phase 1C deliverable.
+- **Reusable:** keep the core self-contained in `addons/oasis_fx/`. The desktop shell lives separately under `app/`; do not hardcode White Sahara gameplay paths or autoloads.
+- **Safe integration:** use designated output locations and explicit overwrite actions. Generated game assets must not require the OasisFx desktop UI at runtime.
+- **Scope:** VFX first; SFX, animation and rigging remain later phases. No Tauri/Electron wrapper, full Spine replacement, DAW, AI model or hosted service is required.
 
 ### Definition of success for v0.1
 
-A developer or AI can create `fire_burst.vfx.json`, validate it from the command line, generate a Godot `.tscn`, open it in Godot Editor for preview, instantiate it in a sample scene, and run automated headless tests without changing White Sahara gameplay code.
+A human can launch the exported Windows app, open a Fire Burst preset, adjust it, preview it, save it and export a usable `.tscn`. An AI can author and generate the same preset through the CLI without the GUI. The generated scene loads in a separate Godot game project, and tests detect validation, generation and script-runtime failures.
 
 ---
 
@@ -40,7 +44,7 @@ A prior project status report (commit `5a4c870`, 2026-10-11) describes:
 - Existing headless tests under `tests/`.
 - No integrated audio playback system was found in that report.
 
-These are **historical observations**. Inspect the current branch before relying on them. Preserve current art import pipelines, skeleton rigs, and test conventions. The plugin should work independently of the game.
+These are **historical observations**. Inspect the current branch before relying on them. Preserve current art import pipelines, skeleton rigs, and test conventions. The OasisFx core and desktop app should work independently of the game.
 
 **Visual direction:** Hand-painted / illustrated anime fantasy, chibi characters, warm painterly backgrounds; prioritize stylized hand-drawn-looking fire, ice, slashes, smoke, impacts, cooking sparks, and readable particles. Avoid low-resolution pixel-art effects unless explicitly requested.
 
@@ -48,73 +52,71 @@ These are **historical observations**. Inspect the current branch before relying
 
 ## 3. Architecture
 
-```text
-ChatGPT / Claude Code / Human
-          |
-          v
-  JSON Presets + JSON Schema + Examples
-          |
-          v
-    Preset Validator (headless)
-          |
-          v
-  Deterministic Godot Asset Generator
-          |                 |
-          v                 v
-  Generated .tscn       Manifest + Warnings
-          |
-          +--------------------------+
-          |                          |
-          v                          v
-  Godot EditorPlugin            Game runtime
-  (preview, edit, export)        (instantiate effects)
+```mermaid
+flowchart TD
+    Human["Human"] --> Desktop["OasisFx desktop UI"]
+    AI["ChatGPT / Claude Code"] --> CLI["Headless CLI"]
+    Desktop --> Core["Shared preset and VFX core"]
+    CLI --> Core
+    Core --> Preview["Godot preview viewport"]
+    Core --> Assets["Native scenes and dependencies"]
+    Assets --> Game["Godot game"]
 ```
 
-**Key principle:** one parser/validator/generator code path is shared by the CLI and EditorPlugin. The GUI must not implement a separate renderer or divergent generation logic.
+**Key principle:** both entrypoints use one parser/validator/builder/generator. Preview is made with the same builder as generated scenes.
 
-### Proposed directory structure (adjust to existing conventions)
+### Existing foundation and planned desktop shell
 
 ```text
-addons/godot_asset_studio/
-  plugin.cfg
-  plugin.gd
+project.godot                         existing development host; desktop entry scene added in 1C
+app/                                  planned in Phase 1C
+  main.tscn
+  main.gd
+  ui/                                 preset controls and preview panel
+  services/                           workspace/export adapters around the core
+export_presets.cfg                    planned Windows export configuration; no secrets
+addons/oasis_fx/
   README.md
-  LICENSE                       # only if a license is selected by repo owner
   docs/
-    architecture.md
     preset_format.md
     cli.md
-    ai_authoring_guide.md
-    compatibility.md
-  schemas/
-    vfx.v1.schema.json
-  presets/examples/
-    fire_burst.vfx.json
-    ice_nova.vfx.json
-    sword_slash.vfx.json
-    cooking_success.vfx.json
-  src/
-    core/
-      preset_loader.gd
-      preset_validator.gd
-      vfx_generator.gd
-      asset_manifest.gd
-    editor/
-      asset_studio_dock.gd
-      asset_studio_dock.tscn
-      preview_controller.gd
-    runtime/
-      vfx_instance.gd            # only if genuinely needed
-  cli/
-    asset_studio_cli.gd
+    ai_authoring_guide.md              add in Phase 1B
+    desktop.md                        add in Phase 1C
+  schemas/vfx.v1.schema.json
+  presets/examples/fire_burst.vfx.json
+  src/core/                           existing Phase 1A implementation
+    oasis_fx.gd
+    vfx_spec.gd
+    validation_report.gd
+    path_utils.gd
+    preset_loader.gd
+    preset_validator.gd
+    vfx_builder.gd
+    vfx_generator.gd
+  src/runtime/                        Phase 1B, where needed
+  cli/oasis_fx_cli.gd
   tests/
-    test_presets.gd
-    test_generation.gd
-    test_regression.gd
-  generated/                     # generated artifacts, optionally ignored
+tools/render_preview.gd                existing development preview helper
 ```
 
-Avoid introducing an elaborate abstraction framework before implementing a working end-to-end example.
+Names under `app/` are proposed, not existing features. Preserve working paths and schema v1. `plugin.cfg` / EditorPlugin docks are not required for the desktop milestone.
+
+### Where AI runs
+
+- **Local Claude Code:** can invoke the local CLI when its environment has the project, compatible Godot binary and required permissions.
+- **Cloud Claude Code:** needs a checked-out copy of the tool and a compatible Godot binary in that cloud environment. A Windows `.exe` on the user's PC is not automatically reachable or runnable from the cloud.
+- GitHub stores source and changes; it is not the running application. No remote-control service is required.
+- Keep the tested developer CLI invocation via `godot --headless --script ...`. Do not assume an exported game executable can run arbitrary `--script` source paths. A packaged-app CLI dispatcher may be added later, with explicit tests/documentation; it is not needed to preserve the existing developer CLI.
+
+### Desktop workspace and export boundaries
+
+- Packaged `res://` contains application resources and must be treated as read-only. Keep settings, imported/working presets and intermediate generated files under `user://` or a deliberately selected writable workspace.
+- Phase 1A generator currently accepts sanitized `res://` / `user://` output directories. Preserve these protections. A desktop export adapter may stage under `user://` and copy validated outputs to the user's selected destination with explicit overwrite handling; do not simply permit arbitrary output paths in the core.
+- A standalone app's `res://` is the app project, not the target game. Define a workspace-relative asset mapping; resolve texture references into that workspace and remap/package them into stable target-game `res://` paths at export. Do not silently interpret paths against a different game or claim the app has mounted it.
+- Procedural Fire Burst must export as a standalone scene. For file-texture presets, include permitted dependencies with an explicit mapping/manifest or reject the export with an actionable error until that path is supported. A successful export must load in a separate target project without relying on the app's `user://` files.
+- Do not copy the target game's scripts/settings or automatically modify gameplay code during asset export. Document where the user copies the resulting asset bundle.
+
+Avoid adding an elaborate abstraction framework; implement one complete desktop Fire Burst workflow first.
 
 ---
 
@@ -136,21 +138,24 @@ Avoid introducing an elaborate abstraction framework before implementing a worki
 - Use built-in `GPUParticles2D`, `ParticleProcessMaterial`, `AnimationPlayer`, `Sprite2D`, `CanvasItemMaterial`, etc. only where needed.
 - Handle one-shot vs looping effects, particle pre-processing if applicable, and automatic cleanup **without deleting parent game nodes**.
 - Support effect lifetime and reliable restart/replay behavior.
-- Keep the runtime scene independent from EditorPlugin classes.
+- Keep the runtime scene independent from desktop application or EditorPlugin classes.
 - Generated scenes must load successfully in Godot headless mode.
 - Prefer generating editable native Godot resources/scenes rather than baking every effect to PNG.
 - If export to sprite sheets/PNG sequences is added later, clearly document that **headless rendering may need a GPU/display**; do not promise it in v0.1.
 
-### 4.3 Visual editor (after headless pipeline works)
+### 4.3 Standalone visual editor (Phase 1C)
 
-- Dock accessible from Godot Editor when the plugin is enabled.
-- Browse/load/save presets; choose examples.
-- Edit basic parameters (duration, color, count, velocity, spread, size, lifetime) with typed controls.
-- Live preview in a dedicated preview scene/panel using the same generated asset behavior as runtime.
-- Play, pause, restart, loop toggle, and reset to defaults.
-- Display validation errors without crashing the editor.
-- Save changes to preset JSON; explicit **Generate Scene** button.
-- Never auto-overwrite scenes that the user edited manually.
+- Launch as a normal desktop app; Godot Editor and the game project need not be open.
+- Browse/create/open/save versioned JSON presets, including a user-selected file outside packaged `res://`.
+- Edit duration, loop, color, count, velocity, spread, size and lifetime using typed Godot controls. Expose only parameters whose behavior is implemented.
+- Preview in a dedicated SubViewport built by the shared builder, isolated from the game.
+- Provide Play, Pause, Stop and Restart; show validation errors without crashing the app.
+- Generate via the shared core, then export to a chosen destination using the workspace/export rules in Section 3.
+- Preserve unsaved work on errors; prompt on closing/discarding modified presets and on overwriting existing files.
+- Ship a Windows export configuration and reproducible build instructions. Record whether export/build and Windows launch were actually verified.
+- Keep CLI runnable without constructing the desktop UI. No Godot Editor dock is required.
+
+---
 
 ### 4.4 Runtime integration
 
@@ -222,11 +227,11 @@ Provide a CLI entrypoint that supports equivalent operations to:
 
 ```bash
 # Syntax is illustrative; implement/document actual Godot flags and arguments.
-godot --headless --path . --script addons/godot_asset_studio/cli/asset_studio_cli.gd -- validate addons/godot_asset_studio/presets/examples/fire_burst.vfx.json
+godot --headless --path . --script addons/oasis_fx/cli/oasis_fx_cli.gd -- validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
 
-godot --headless --path . --script addons/godot_asset_studio/cli/asset_studio_cli.gd -- generate addons/godot_asset_studio/presets/examples/fire_burst.vfx.json --out res://generated_vfx/
+godot --headless --path . --script addons/oasis_fx/cli/oasis_fx_cli.gd -- generate addons/oasis_fx/presets/examples/fire_burst.vfx.json --out res://generated_vfx/
 
-godot --headless --path . --script addons/godot_asset_studio/cli/asset_studio_cli.gd -- validate-all addons/godot_asset_studio/presets/examples/
+godot --headless --path . --script addons/oasis_fx/cli/oasis_fx_cli.gd -- validate-all addons/oasis_fx/presets/examples/
 ```
 
 **Important:** Godot command-line argument handling and project import behavior vary; Claude must test the actual commands and adjust documentation accordingly. `--script` expects a script with a valid `SceneTree`/`MainLoop` entry pattern when appropriate.
@@ -251,33 +256,27 @@ godot --headless --path . --script addons/godot_asset_studio/cli/asset_studio_cl
 
 ---
 
-## 7. EditorPlugin UI requirements
+## 7. Desktop application UI and packaging
 
-### Minimum dock layout
+### Minimum desktop layout
 
-```text
-┌ Godot Asset Studio ─────────────────────────────┐
-│ Preset: [Fire Burst v]  [Open] [Save]           │
-│ Type: VFX | Animation* | SFX*                   │
-│                                                │
-│ [Preview viewport]                             │
-│ [Play] [Stop] [Restart] [Loop]                 │
-│                                                │
-│ Duration [0.8]  Particle count [64]            │
-│ Color [#FFDD66]  Speed [80..190]              │
-│ Spread [80°]  Lifetime [0.55]                 │
-│                                                │
-│ Validation: ✓ Valid                            │
-│ [Validate] [Generate Godot Scene]              │
-└────────────────────────────────────────────────┘
-* Disabled / Coming Later in v0.1
-```
+- **Toolbar:** New, Open, Save, Export; clear dirty/validation status.
+- **Preset browser:** shipped examples and writable user presets.
+- **Preview:** viewport, background/grid toggle, Play/Pause/Stop/Restart and loop controls.
+- **Inspector:** effect settings plus per-emitter typed controls; selected emitter is clear.
+- **Diagnostics:** actionable field-path errors and warnings from the shared validator.
 
-- Keep plugin dock responsive, readable at typical desktop editor sizes.
-- Don't require a custom icon/font asset for initial version.
-- Prefer Godot standard controls and theme colors.
-- Plugin should enable/disable cleanly and not leak orphaned nodes/resources.
-- Cloud session may not support GUI verification; document manual QA steps and screenshots to capture later.
+Use standard Godot controls/themes initially. Keep the app readable at typical desktop sizes and resizable. SFX/Animation/Rigging tabs should be absent or clearly unavailable until implemented.
+
+### Packaging acceptance
+
+- Provide a Windows x86_64 export preset using export templates matching the tested engine. Record whether the package consists of `.exe` plus `.pck` or an embedded package.
+- The application opens directly into the VFX tool; using the installed app does not require a separate Godot Editor installation.
+- Configure the app's entry scene in Phase 1C, while preserving the existing headless `--script` entrypoints.
+- Keep shipped examples read-only; Save As creates a writable copy. Persist settings to `user://` and handle paths containing spaces and Thai characters.
+- Confirm save/reopen, restart/replay, validation errors, cancellation and overwrite behavior.
+- Verify exported assets in a separate Godot project. A successful Windows export is not proof that the app launches correctly on Windows; report these checks separately.
+- If the cloud cannot run Windows or show the UI, supply exact manual QA steps and mark those checks **NOT RUN**. Screenshots must be captured from the actual app, not fabricated.
 
 ---
 
@@ -389,7 +388,7 @@ The guide must include:
 - Generate scenes; instantiate and free them in headless tests; no missing resources or parse errors.
 - One-shot effect lifecycle and looping behavior verified where headless testable.
 - Regeneration is deterministic and respects no-overwrite/`--force` rules.
-- Plugin enable/disable smoke test where feasible.
+- Desktop startup, open/save/export and CLI independence smoke tests in Phase 1C.
 - No modifications to existing game logic or test failures.
 
 ### Performance budgets (initial targets, tune by profiling)
@@ -417,7 +416,7 @@ The guide must include:
 
 ## 13. Phased delivery plan
 
-### Phase 0 — Repository audit (mandatory; no code changes yet)
+### Phase 0 — Repository audit (completed at the reviewed commit; refresh for new work)
 
 1. Inspect project layout, `project.godot`, existing `addons/`, `tools/`, `tests/`, art pipeline, and `Skeleton2D` assets.
 2. Detect installed Godot executable/version in cloud session; verify actual headless invocation.
@@ -427,7 +426,7 @@ The guide must include:
 
 **Deliverable:** concise audit report and confirmed directory/API plan.
 
-### Phase 1A — Minimal working headless pipeline (first coding milestone)
+### Phase 1A — Minimal working headless pipeline (implemented; review fix pending)
 
 - JSON schema + loader + validator.
 - CLI `validate` and `generate`.
@@ -436,6 +435,32 @@ The guide must include:
 - Tests and README usage.
 
 **Acceptance:** one valid Fire Burst JSON -> CLI -> generated scene -> headless load test passes.
+
+### Phase 1A review follow-up — test runner must fail on script errors
+
+At reviewed commit `4c6e7bf`, the existing suite ran as **41 passed, 0 failed**, with no observed script errors. However, `tests/run_tests.gd` checks `test.failures` after `await test.call(method)`. A GDScript runtime error can abort the method before an assertion records failure, and the runner still prints PASS and exits 0.
+
+Reproduced using a temporary test (removed after the review):
+
+```gdscript
+extends "res://addons/oasis_fx/tests/oasis_test_case.gd"
+
+func test_runtime_error_must_fail() -> void:
+    var value: Dictionary = {}
+    var missing = value["missing_key"]
+    check(false, "must reach the end")
+```
+
+Observed: `SCRIPT ERROR: Invalid access ... 'missing_key'`, followed by `1 passed, 0 failed`, exit code 0. This is a runner defect, not evidence that the existing 41 tests actually failed.
+
+Required fix before accepting Phase 1A:
+
+1. Make unhandled script errors produce a failed test/suite and nonzero exit status. Use a mechanism verified on the pinned engine (for example isolated workers with reliable error detection/completion reporting); do not assume GDScript has conventional exception handling.
+2. Add a regression that deliberately produces a runtime error and verifies the real supported runner command fails. Keep the deliberately failing fixture outside the normal `test_*.gd` discovery set and execute it from the regression in isolation.
+3. Check assertion failures, invalid/unloadable test scripts, zero discovered tests and ordinary passing tests too. A wrapper is acceptable only if it becomes the documented entrypoint and cannot silently hide engine errors.
+4. Record the actual updated test counts and commands; do not retain 41 as a claimed post-fix count.
+
+Do not continue Phase 1B until this review fix is verified.
 
 ### Phase 1B — Practical VFX authoring
 
@@ -446,13 +471,17 @@ The guide must include:
 
 **Acceptance:** all example presets generate/load; no changes to gameplay scripts.
 
-### Phase 1C — Godot EditorPlugin
+### Phase 1C — Standalone Windows desktop app
 
-- Enable/disable plugin, dock UI, preset browser, editable controls, preview, save, generate.
-- Manual QA checklist if cloud cannot show GUI.
-- README with screenshots **only if screenshots were actually captured**.
+- Add the Godot `app/` shell and entry scene; use the existing shared core.
+- Implement preset browser, typed controls, preview/playback, save and safe asset export.
+- Handle writable workspaces and dependencies as described in Section 3.
+- Provide Windows export preset/build instructions and a manual QA checklist.
+- Record actual screenshots and platform verification limits.
 
-**Acceptance:** human can open a preset, tweak values, preview, save and regenerate in Godot Editor.
+**Acceptance:** a human launches the Windows app without Godot Editor, opens a preset, tweaks/previews/saves it, exports a scene and loads it in a separate game project. The existing CLI remains usable in local/cloud environments without the app UI.
+
+---
 
 ### Phase 2 — SFX Composer
 
@@ -473,45 +502,42 @@ The guide must include:
 
 ## 14. GitHub Cloud Session workflow
 
-Claude should work in **small reviewable commits**, not a single giant change.
+Work in small reviewable commits. Start from the latest implementation branch, not an empty `main` or a rewrite of completed Phase 1A.
 
-Suggested order:
+1. Read `CLAUDE.md`, this v1.1 spec, README and the historical audit. Inspect the current branch and any uncommitted changes.
+2. Refresh the audit for this task and preserve working core paths and schema v1.
+3. Fix and verify the Phase 1A test-runner issue first, as a separate change.
+4. Report exact commands, actual counts and limitations. Complete the milestone requested by the user; the revised roadmap does not authorize implementing every later phase immediately.
+5. Phase 1B expands the core; Phase 1C builds the standalone desktop application. Keep those changes separately reviewable. Phases 2–4 remain deferred.
+6. Update README/status/docs to reflect delivered behavior, not future plans. Preserve the audit as historical evidence and append later decisions instead of rewriting old observations as if they were current.
+7. In the final report, list changed files, tests, GUI/Windows checks not run, export/dependency limitations and the next milestone.
 
-1. Read repo + this spec.
-2. Write `AUDIT.md` / report architecture decisions.
-3. Implement Phase 1A only.
-4. Run formatting/static checks and headless tests; record exact commands and results.
-5. Commit with descriptive message.
-6. If user permits, continue Phase 1B and Phase 1C as separate commits/PR sections.
-7. In final report, list files changed, test outcomes, untested GUI items, known limitations, and next steps.
+### When cloud session lacks GUI/GPU or Windows
 
-### When cloud session lacks GUI/GPU
-
-- Do not block CLI work.
-- Use headless validation/scene-loading tests.
-- Do not fake screenshots or claim visual correctness.
-- Provide precise local manual testing instructions for Godot Editor.
+- Continue headless core tests; use Xvfb/software rendering only if actually available and tested.
+- Do not equate headless load tests with visual verification or a Linux preview with Windows execution.
+- Provide local Windows launch/open/save/export checks; mark unrun checks **NOT RUN**.
 
 ### When cloud session lacks Godot binary
 
-- Check available installation methods permitted by environment.
-- If installation is impractical, write tests/docs and explicitly mark runtime validation **NOT RUN**.
-- Do not silently substitute another engine/version.
+- Check available permitted installation methods and use the pinned/tested version.
+- If installation is impractical, document exact unverified steps and mark runtime validation **NOT RUN**.
+- Do not claim a desktop `.exe` on the user's PC is reachable from the cloud.
 
 ---
 
 ## 15. Decisions Claude should make explicitly
 
-- Is this a standalone repository or plugin embedded in White Sahara? Prefer self-contained plugin either way.
-- Which Godot version is tested? Match actual repo, not an assumed version.
-- How to implement particle gradients/colors correctly with Godot 4.x APIs?
-- Which nodes/resources are serialized vs instantiated dynamically?
-- How to handle plugin preview without affecting active edited scenes?
-- Where generated files live and whether Git tracks them?
-- How to guarantee the CLI is independent of the EditorPlugin UI?
-- What is the smallest v0.1 feature set that can be tested in a cloud session?
+- Which latest implementation branch/commit and Godot version were tested?
+- How does `app/` reuse the existing core without making CLI depend on UI?
+- Where do presets/settings/intermediate files live in an installed app?
+- How do workspace-relative dependencies map to exported game `res://` paths?
+- How are exports verified in a separate target project?
+- How are pause/restart/lifecycle behavior shared between desktop preview and generated scenes?
+- How are runtime errors captured by the supported test entrypoint?
+- Which export templates/package layout and Windows checks were actually verified?
 
-Document decisions and tradeoffs rather than silently picking complex solutions.
+Document decisions and tradeoffs. Do not reopen the user's choice of a standalone desktop app by silently reverting to an EditorPlugin.
 
 ---
 
@@ -520,7 +546,8 @@ Document decisions and tradeoffs rather than silently picking complex solutions.
 - Full Spine feature parity or Spine proprietary file compatibility.
 - AI model training or built-in paid API calls.
 - Automatic creation of finished art/audio from text alone.
-- Standalone desktop app, browser editor, or hosted collaboration backend.
+- Browser editor, hosted collaboration backend, and automatic remote control of the user's PC.
+- EditorPlugin UI is optional future work; it is not a substitute for the required standalone desktop app.
 - Network synchronization of cosmetic assets or online marketplace features.
 - Replacement of White Sahara combat, cooking, character, or audio systems.
 - Auto-publishing to the Godot Asset Library.
@@ -529,33 +556,50 @@ Document decisions and tradeoffs rather than silently picking complex solutions.
 
 ## 17. Copy-paste task for Claude Code (GitHub Cloud Session)
 
-**Paste the text below into Claude Code after adding this Markdown file to the repository:**
+**Next task after these documentation changes are available on your implementation branch:**
 
-> Please read `Godot_Asset_Studio_Claude_Code_Implementation_Spec.md` in full and inspect the actual repository before coding. We want a reusable Godot 4.x EditorPlugin + versioned JSON preset + headless CLI toolchain called **Godot Asset Studio**. This is intended for AI-assisted creation by both ChatGPT and Claude, and for the White Sahara game, but must not be tightly coupled to that game. **First, audit the repo and report the architecture and risks. Then implement Phase 1A only**: schema, loader, validator, CLI, one Fire Burst VFX generator, headless scene-load test, and concise documentation. Prefer existing project conventions and preserve all existing gameplay/art/rigging code. Run actual Godot headless tests if possible, and report precisely what passed, failed, or could not be run. Do not implement SFX, animation, rigging, or a standalone app yet. Do not invent Godot APIs or claim visual verification in a headless environment. Commit in small, reviewable steps and summarize changed files, test commands, limitations, and the next recommended milestone.
+> Read `CLAUDE.md`, `Godot_Asset_Studio_Claude_Code_Implementation_Spec.md` v1.1 and README in full, then inspect the current branch. The owner has clarified that **OasisFx must become a standalone Windows desktop application built with Godot, plus a headless CLI using the same core**. Phase 1C is the standalone app, not a Godot EditorPlugin. Preserve the existing Phase 1A under `addons/oasis_fx/` and schema v1; do not rebuild it. First address the verified runtime-error false-PASS defect in `addons/oasis_fx/tests/run_tests.gd`, add an isolated regression proving that script errors make the supported runner exit nonzero, and rerun the real suite with the pinned Godot version. Report the updated counts and exact commands, then stop at this review-fix milestone. Do not start Phase 1B/1C or SFX/animation/rigging as part of this task. Keep the review fix in a small commit and document any checks you could not run.
 
-### Suggested next message after Phase 1A is accepted
+### Suggested next message after the review fix is accepted
 
-> Continue with Phase 1B of the spec. Add multiple emitters, four example VFX presets, batch validation/generation, deterministic output, lifecycle cleanup, and regression tests. Keep backward compatibility with the Phase 1A schema and report any necessary migration. Do not begin Phase 1C EditorPlugin UI until Phase 1B passes tests.
+> Continue with Phase 1B of spec v1.1: multiple emitters, four starter VFX presets, batch validation/generation, manifest, lifecycle/restart helpers and regression tests. Preserve schema v1 and existing CLI behavior. Implement the shared core so Phase 1C can use it in a standalone Godot desktop app. Do not start the desktop UI yet.
+
+### Suggested next message after Phase 1B is accepted
+
+> Implement Phase 1C of spec v1.1 as a standalone Windows desktop app built with Godot. Reuse the core in `addons/oasis_fx/`; add the app shell, preset editing, preview/playback, writable workspace, safe export and Windows build configuration. Keep the developer CLI independent of the UI. Verify exported scenes in a separate Godot project and report build, visual and Windows-launch results separately; mark checks you cannot run NOT RUN. Do not replace this milestone with an EditorPlugin or begin Phases 2–4.
 
 ---
 
 ## 18. Acceptance checklist
 
-- [ ] Current repo and Godot version audited.
-- [ ] Self-contained `addons/godot_asset_studio/` implementation.
-- [ ] JSON Schema v1 documented.
-- [ ] Headless `validate` command works with useful errors.
-- [ ] Headless `generate` command produces a Godot-loadable `.tscn`.
-- [ ] Fire Burst example validated/generated/loaded successfully.
-- [ ] Tests cover invalid input and path traversal.
-- [ ] Output cannot overwrite unrelated files by default.
-- [ ] CLI does not require the visual EditorPlugin.
-- [ ] No gameplay or character rig regressions.
-- [ ] README explains local Godot usage and cloud limitations.
-- [ ] Phase 1B and 1C remain separate reviewable milestones.
+### Phase 1A review gate
+
+- [ ] Latest implementation branch and Godot version inspected.
+- [ ] Existing core, JSON schema v1, CLI and Fire Burst preserved.
+- [ ] Original suite rerun and actual result recorded.
+- [ ] Runtime-error false-PASS defect fixed and regression verified with nonzero exit.
+- [ ] Validation, generation, deterministic output, path checks and overwrite behavior still pass.
+
+### Phase 1B gate
+
+- [ ] Multiple emitters, four starter presets and batch commands work.
+- [ ] Lifecycle/restart helpers and manifest are implemented and tested.
+- [ ] AI authoring guide describes the supported schema and CLI.
+
+### Phase 1C desktop gate
+
+- [ ] Godot desktop shell uses the shared core and dedicated preview viewport.
+- [ ] User can launch the exported Windows app without Godot Editor.
+- [ ] Open/create/edit/preview/save/reopen/export workflow works.
+- [ ] Packaged `res://` is treated as read-only; workspace/settings are writable.
+- [ ] Procedural export loads in a separate Godot project; external dependencies are mapped/bundled or clearly rejected.
+- [ ] CLI works without constructing the app UI.
+- [ ] Windows export configuration/build instructions and manual QA are documented.
+- [ ] Actual verified checks and NOT RUN items are distinguished.
+- [ ] No changes to White Sahara gameplay/rigging; Phases 2–4 remain separate.
 
 ---
 
 ## 19. Final guidance
 
-The tool is successful if it **saves time producing game assets**. Do not build an entire graphics suite before shipping one usable Fire Burst effect. Favor native Godot features, clear AI-readable schemas, deterministic generation, automated tests, and compatibility with the existing game. Keep the initial surface area small, then expand based on real White Sahara asset-production needs.
+The tool is successful if it **saves time producing game assets**. Do not build an entire graphics suite before shipping one usable Fire Burst effect. Favor a focused desktop workflow, native Godot features, clear AI-readable schemas, deterministic generation, reliable automated tests, and compatibility with the existing game. Keep the initial surface area small, then expand based on real White Sahara asset-production needs.

@@ -4,6 +4,13 @@ The CLI is a plain `SceneTree` script. It needs no editor, no display and no plu
 it runs in CI and in cloud sessions. Every command below was run with Godot
 **4.7.2-stable** (Linux x86_64) during development.
 
+This developer CLI remains supported alongside the planned standalone Windows desktop
+app. Both use the same core. Cloud sessions need this source checkout and a compatible
+Godot binary in their own environment; they cannot automatically invoke the `.exe` on
+the user's PC. Exported-app CLI dispatch is not implemented; do not substitute a
+packaged executable for the tested `godot --script` command below without implementing
+and verifying its argument dispatcher.
+
 ```bash
 # Run from the project root (the folder that contains project.godot).
 OASIS="godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd --"
@@ -105,6 +112,13 @@ godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd     
 godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd -- cli     # files containing "cli"
 ```
 
-The runner exits with 0 when every test passes. Tests write only under
+**Review issue at commit `4c6e7bf`:** the current runner exits 0 when no assertion failure
+is recorded, but can incorrectly print PASS after an unhandled GDScript runtime error.
+The original suite was independently rerun: 41 passed, 0 failed, no observed script
+errors. A separate deliberate runtime-error probe reproduced the false PASS. Fix and
+regression-test this before relying on exit 0 as a release gate (see specification
+Section 13); inspect engine error output as well until the fix lands.
+
+Tests write only under
 `user://oasis_fx_tests` and a temporary `res://_oasis_fx_test_output` folder, and remove
 both afterwards.

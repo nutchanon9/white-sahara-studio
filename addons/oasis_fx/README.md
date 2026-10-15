@@ -7,12 +7,22 @@ generates `.tscn` files built only from built-in nodes (`Node2D`, `GPUParticles2
 
 **Status: 0.1.0 — Phase 1A.** One particle emitter per effect, CLI `validate` and
 `generate`, one example (Fire Burst). Multiple emitters, more presets, batch commands and
-runtime helpers come in Phase 1B; the Godot editor panel in Phase 1C.
+runtime helpers come in Phase 1B. Phase 1C builds a standalone Windows desktop app
+with Godot, using this same core; an EditorPlugin panel is not the required UI.
+
+The repository's specification v1.1 is the current plan. At reviewed commit `4c6e7bf`,
+the existing suite ran as 41 passed / 0 failed, but an independent runtime-error probe
+exposed a false-PASS defect in the test runner. Fix that review issue before accepting
+Phase 1A or starting Phase 1B; documentation updates do not implement the fix.
 
 ## Install
 
 1. Copy `addons/oasis_fx/` into your project's `addons/` folder.
-2. That's it for the CLI. (There is no editor plugin to enable yet — it arrives in Phase 1C.)
+2. That's it for the CLI. There is no editor plugin to enable. The standalone desktop
+   application and Windows packaging are planned for Phase 1C, not implemented yet.
+
+Copying the addon is for developer/CLI use inside a Godot project. The planned desktop
+app is a separate user entrypoint; generated assets must work without its UI.
 
 The addon has no autoloads, does not change project settings, and does not touch your
 scenes. It only writes into the output folder you give it.
