@@ -1,0 +1,405 @@
+extends Control
+## OasisFx desktop app: main window.
+##
+## Layout: toolbar on top; preset browser (left), preview and diagnostics
+## (center), inspector (right). All preset logic lives in the shared core
+## (addons/oasis_fx/src/core) and the app services; this script only wires UI.
+##
+## Public methods (new_preset, open_file, save_to, plan_export, run_export…)
+## are what the toolbar uses and what the headless UI tests call.
+
+const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const PresetDocument := preload("res://app/services/preset_document.gd")
+const AppSettings := preload("res://app/services/app_settings.gd")
+const Exporter := preload("res://app/services/asset_exporter.gd")
+const Inspector := preload("res://app/ui/inspector.gd")
+const PreviewPanel := preload("res://app/ui/preview_panel.gd")
+const PresetBrowser := preload("res://app/ui/preset_browser.gd")
+const DiagnosticsPanel := preload("res://app/ui/diagnostics_panel.gd")
+
+const STARTUP_PRESET := "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json"
+## Delay between an edit and re-validation/preview rebuild.
+const REVALIDATE_DELAY := 0.15
+
+var document := PresetDocument.new()
+## Replaceable before the node enters the tree (tests use their own file).
+var settings := AppSettings.new()
+## Opened on start; tests may set it to "" for an empty new preset.
+var startup_preset := STARTUP_PRESET
+var inspector: Inspector
+var preview: PreviewPanel
+var browser: PresetBrowser
+var diagnostics: DiagnosticsPanel
+## Latest validation: {"report", "preset"}.
+var validation: Dictionary = {}
+
+var _title: Label
+var _save_button: Button
+var _export_button: Button
+var _open_dialog: FileDialog
+var _save_dialog: FileDialog
+var _export_dialog: FileDialog
+var _discard_dialog: ConfirmationDialog
+var _export_confirm: ConfirmationDialog
+var _message: AcceptDialog
+var _revalidate_timer: Timer
+## Action to run after the user dealt with unsaved changes.
+var _pending_action: Callable
+var _pending_plan: Dictionary = {}
+
+
+func _ready() -> void:
+	get_tree().auto_accept_quit = false
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if not Engine.is_editor_hint():
+		get_window().min_size = Vector2i(1024, 640)
+	settings.load_settings()
+	settings.ensure_workspace()
+	_build_ui()
+	document.changed.connect(_on_document_changed)
+	browser.workspace_dir = settings.workspace_dir
+	browser.refresh()
+	var from_command_line := preset_from_command_line(Array(OS.get_cmdline_args()) + Array(OS.get_cmdline_user_args()))
+	if not from_command_line.is_empty():
+		startup_preset = from_command_line
+	if startup_preset.is_empty() or not open_file(startup_preset):
+		new_preset()
+	var args := OS.get_cmdline_user_args()
+	var smoke := args.find("--smoke-test")
+	if smoke >= 0:
+		_smoke_test.call_deferred(args[smoke + 1] if smoke + 1 < args.size() else "")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		confirm_discard(func() -> void: get_tree().quit())
+
+
+# --- Commands --------------------------------------------------------------
+
+func new_preset() -> void:
+	document.new_preset()
+	_after_load()
+
+
+## Opens a preset file. Returns false (and shows why) when it cannot be read.
+func open_file(path: String) -> bool:
+	var report: RefCounted = document.open(path)
+	if not report.is_ok():
+		show_message("Cannot open preset", "\n".join(report.format_lines()))
+		return false
+	settings.add_recent(path)
+	settings.save_settings()
+	_after_load()
+	return true
+
+
+## Saves to `path`. Returns OK or the error (shown to the user). The document
+## stays dirty when saving fails, so no work is lost.
+func save_to(path: String) -> Error:
+	if not path.ends_with(OasisFx.VFX_PRESET_SUFFIX):
+		path = path.trim_suffix(".json") + OasisFx.VFX_PRESET_SUFFIX
+	var err: Error = document.save(path)
+	if err != OK:
+		show_message("Save failed", "Could not save %s:\n%s" % [path, error_string(err)])
+		return err
+	settings.add_recent(path)
+	settings.save_settings()
+	browser.refresh()
+	_update_title()
+	return OK
+
+
+## Save, or Save As when the preset has no writable file yet.
+func save() -> void:
+	if document.path.is_empty() or document.is_read_only():
+		save_as()
+	else:
+		save_to(document.path)
+
+
+func save_as() -> void:
+	_save_dialog.current_dir = settings.workspace_dir
+	_save_dialog.current_file = "%s%s" % [str(document.get_value("id")), OasisFx.VFX_PRESET_SUFFIX]
+	_save_dialog.popup_centered_ratio(0.6)
+
+
+## Runs `action` now, or after asking to save/discard unsaved changes.
+func confirm_discard(action: Callable) -> void:
+	if not document.dirty:
+		action.call()
+		return
+	_pending_action = action
+	_discard_dialog.dialog_text = "Save changes to \"%s\" before continuing?" % document.display_name()
+	_discard_dialog.popup_centered()
+
+
+## Builds an export plan for the current preset into `dest_dir` (see asset_exporter.gd).
+func plan_export(dest_dir: String) -> Dictionary:
+	_revalidate()
+	return Exporter.plan(validation.get("preset", {}), document.path, dest_dir)
+
+
+## Writes a plan. Returns the exporter result and reports it to the user.
+func run_export(planned: Dictionary, allow_overwrite: bool) -> Dictionary:
+	var result := Exporter.run(planned, allow_overwrite)
+	if result.ok:
+		settings.last_export_dir = planned.files[0].path.get_base_dir()
+		settings.save_settings()
+		show_message("Exported", "Exported %s to %s\n\nIn the game, instantiate %s (it plays and frees itself).\nThe scene needs %s, which is now in the game project." % [
+			planned.preset.id, planned.project_root, planned.files[0].res_path, OasisFx.RUNTIME_SCRIPT_PATH])
+	else:
+		show_message("Export failed", "\n".join(PackedStringArray(result.errors)))
+	return result
+
+
+## First *.vfx.json argument (e.g. from "Open with OasisFx" on Windows), or "".
+static func preset_from_command_line(args: Array) -> String:
+	for arg in args:
+		if String(arg).ends_with(OasisFx.VFX_PRESET_SUFFIX):
+			return arg
+	return ""
+
+
+func workspace_exists() -> bool:
+	return DirAccess.dir_exists_absolute(settings.workspace_dir)
+
+
+func show_message(title: String, text: String) -> void:
+	_message.title = title
+	_message.dialog_text = text
+	# Deferred: this is often called from another dialog's `confirmed` signal,
+	# which fires before that dialog hides; two exclusive popups at once fail.
+	_message.popup_centered.call_deferred()
+
+
+# --- UI construction -------------------------------------------------------
+
+func _build_ui() -> void:
+	var background := Panel.new()
+	background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(background)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 8)
+	add_child(margin)
+	var column := VBoxContainer.new()
+	margin.add_child(column)
+
+	var toolbar := HBoxContainer.new()
+	column.add_child(toolbar)
+	_tool_button(toolbar, "New", "Ctrl+N", func() -> void: confirm_discard(new_preset))
+	_tool_button(toolbar, "Open…", "Ctrl+O", func() -> void: confirm_discard(_show_open_dialog))
+	_save_button = _tool_button(toolbar, "Save", "Ctrl+S", save)
+	_tool_button(toolbar, "Save As…", "Ctrl+Shift+S", save_as)
+	toolbar.add_child(VSeparator.new())
+	_export_button = _tool_button(toolbar, "Export to game…", "Ctrl+E", _show_export_dialog)
+	_title = Label.new()
+	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	toolbar.add_child(_title)
+
+	var split := HSplitContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(split)
+	browser = PresetBrowser.new()
+	browser.custom_minimum_size = Vector2(220, 0)
+	browser.open_requested.connect(func(path: String) -> void:
+		if path != document.path:
+			confirm_discard(func() -> void: open_file(path)))
+	split.add_child(browser)
+	var right_split := HSplitContainer.new()
+	split.add_child(right_split)
+	var center := VSplitContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_split.add_child(center)
+	preview = PreviewPanel.new()
+	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center.add_child(preview)
+	diagnostics = DiagnosticsPanel.new()
+	diagnostics.custom_minimum_size = Vector2(0, 150)
+	center.add_child(diagnostics)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(420, 0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right_split.add_child(scroll)
+	inspector = Inspector.new()
+	inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(inspector)
+	diagnostics.emitter_requested.connect(inspector.select_emitter)
+
+	_revalidate_timer = Timer.new()
+	_revalidate_timer.one_shot = true
+	_revalidate_timer.wait_time = REVALIDATE_DELAY
+	_revalidate_timer.timeout.connect(_revalidate)
+	add_child(_revalidate_timer)
+	_build_dialogs()
+
+
+func _tool_button(parent: Control, text: String, shortcut_text: String, action: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.tooltip_text = shortcut_text
+	button.pressed.connect(action)
+	var shortcut := Shortcut.new()
+	var key := InputEventKey.new()
+	var parts := shortcut_text.split("+")
+	key.keycode = OS.find_keycode_from_string(parts[parts.size() - 1])
+	key.ctrl_pressed = parts.has("Ctrl")
+	key.shift_pressed = parts.has("Shift")
+	key.command_or_control_autoremap = true
+	shortcut.events = [key]
+	button.shortcut = shortcut
+	parent.add_child(button)
+	return button
+
+
+func _build_dialogs() -> void:
+	_open_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_FILE, "Open preset")
+	_open_dialog.file_selected.connect(open_file)
+	_save_dialog = _file_dialog(FileDialog.FILE_MODE_SAVE_FILE, "Save preset as")
+	_save_dialog.file_selected.connect(func(path: String) -> void:
+		if save_to(path) == OK and _pending_action.is_valid():
+			var action := _pending_action
+			_pending_action = Callable()
+			action.call())
+	_export_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_DIR, "Export to a folder in your Godot game")
+	_export_dialog.dir_selected.connect(_on_export_dir_selected)
+
+	_discard_dialog = ConfirmationDialog.new()
+	_discard_dialog.title = "Unsaved changes"
+	_discard_dialog.ok_button_text = "Save"
+	_discard_dialog.add_button("Don't Save", true, "discard")
+	_discard_dialog.confirmed.connect(func() -> void:
+		if document.path.is_empty() or document.is_read_only():
+			save_as()  # the pending action runs after the file is saved
+		elif save_to(document.path) == OK:
+			_run_pending())
+	_discard_dialog.custom_action.connect(func(_action: StringName) -> void:
+		_discard_dialog.hide()
+		_run_pending())
+	_discard_dialog.canceled.connect(func() -> void: _pending_action = Callable())
+	add_child(_discard_dialog)
+
+	_export_confirm = ConfirmationDialog.new()
+	_export_confirm.title = "Export"
+	_export_confirm.ok_button_text = "Export"
+	_export_confirm.confirmed.connect(func() -> void: run_export(_pending_plan, true))
+	add_child(_export_confirm)
+
+	_message = AcceptDialog.new()
+	add_child(_message)
+
+
+func _file_dialog(mode: FileDialog.FileMode, title: String) -> FileDialog:
+	var dialog := FileDialog.new()
+	dialog.file_mode = mode
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.title = title
+	dialog.use_native_dialog = true
+	if mode != FileDialog.FILE_MODE_OPEN_DIR:
+		dialog.filters = PackedStringArray(["*.vfx.json ; OasisFx VFX preset"])
+	add_child(dialog)
+	return dialog
+
+
+func _show_open_dialog() -> void:
+	_open_dialog.current_dir = settings.workspace_dir
+	_open_dialog.popup_centered_ratio(0.6)
+
+
+func _show_export_dialog() -> void:
+	_revalidate()
+	if validation.get("preset", {}).is_empty():
+		show_message("Cannot export", "The preset has errors. Fix the errors listed under the preview first.")
+		return
+	if not settings.last_export_dir.is_empty():
+		_export_dialog.current_dir = settings.last_export_dir
+	_export_dialog.popup_centered_ratio(0.6)
+
+
+func _on_export_dir_selected(dir: String) -> void:
+	var planned := plan_export(dir)
+	if not planned.ok:
+		show_message("Cannot export", "\n".join(PackedStringArray(planned.errors)))
+		return
+	_pending_plan = planned
+	var lines := PackedStringArray(["Game project: " + planned.project_root, ""])
+	for f in planned.files:
+		lines.append("%s  %s" % [String(f.action).to_upper(), f.res_path])
+	lines.append("UPDATE  %s/%s" % [planned.res_dir, OasisFx.MANIFEST_FILE])
+	for w in planned.warnings:
+		lines.append("\nWarning: " + w)
+	if Exporter.needs_confirmation(planned):
+		lines.append("\nExisting files marked OVERWRITE will be replaced.")
+	_export_confirm.dialog_text = "\n".join(lines)
+	_export_confirm.popup_centered()
+
+
+# --- Reactions -------------------------------------------------------------
+
+func _after_load() -> void:
+	inspector.bind(document)
+	_revalidate()
+	_update_title()
+
+
+func _on_document_changed() -> void:
+	_update_title()
+	_revalidate_timer.start()
+
+
+func _revalidate() -> void:
+	_revalidate_timer.stop()
+	validation = document.validate()
+	diagnostics.show_report(validation.report, validation.preset)
+	preview.show_preset(validation.preset)
+
+
+func _update_title() -> void:
+	var name: String = document.display_name()
+	var flags := []
+	if document.dirty:
+		name += " *"
+	if document.is_read_only():
+		flags.append("read-only example — use Save As")
+	_title.text = name + ("   (%s)" % ", ".join(flags) if not flags.is_empty() else "")
+	var window := get_window()
+	if window and not Engine.is_editor_hint():
+		window.title = "OasisFx %s — %s" % [OasisFx.VERSION, name]
+
+
+func _run_pending() -> void:
+	if _pending_action.is_valid():
+		var action := _pending_action
+		_pending_action = Callable()
+		action.call()
+
+
+# --- Packaging check -------------------------------------------------------
+
+## `OasisFx --headless -- --smoke-test <folder in a Godot game>` checks a
+## packaged build end to end without a person: the bundled examples are
+## listed and valid, the preview builds, settings live in user://, packaged
+## res:// refuses writes, and Fire Burst exports into the given game folder.
+## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
+func _smoke_test(export_dir: String) -> void:
+	var checks := {}
+	checks["examples_listed"] = Array(browser.listed_paths()).filter(func(p): return p.begins_with("res://")).size()
+	checks["startup_valid"] = validation.report.is_ok()
+	checks["preview_built"] = is_instance_valid(preview.effect) and preview.effect.get_child_count() > 0
+	checks["settings_in_user_dir"] = ProjectSettings.globalize_path("user://").begins_with(OS.get_user_data_dir())
+	checks["res_write_refused"] = document.save("res://smoke_test.vfx.json") != OK
+	checks["runtime_source_bundled"] = not FileAccess.get_file_as_string(OasisFx.RUNTIME_SCRIPT_PATH).is_empty()
+	var ok: bool = checks.examples_listed >= 4 and checks.startup_valid and checks.preview_built \
+			and checks.res_write_refused and checks.runtime_source_bundled
+	if not export_dir.is_empty():
+		var planned := plan_export(export_dir)
+		var result := Exporter.run(planned, true) if planned.ok else {"ok": false, "errors": planned.errors}
+		checks["export_ok"] = result.ok
+		checks["export_errors"] = result.errors
+		ok = ok and result.ok
+	checks["ok"] = ok
+	print("SMOKE " + JSON.stringify(checks))
+	get_tree().quit(0 if ok else 1)

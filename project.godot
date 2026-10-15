@@ -1,18 +1,28 @@
-; Development host project for the OasisFx addon.
-; The addon itself lives in addons/oasis_fx/ and can be copied into any Godot 4.x project.
+; OasisFx: the desktop app (app/, entry scene app/main.tscn) and the development
+; host project for the addon. The addon itself lives in addons/oasis_fx/ and can be
+; copied into any Godot 4.x project. The headless CLI and test runner are started
+; with --script and do not load the main scene.
 
 config_version=5
 
 [application]
 
-config/name="OasisFx Dev"
-config/description="Development and test host project for the OasisFx Godot addon."
+config/name="OasisFx"
+config/description="OasisFx: create and preview Godot VFX presets, export them to a game."
+config/version="0.3.0"
+run/main_scene="res://app/main.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="OasisFx"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://app/icon.svg"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/resizable=true
+window/stretch/mode="disabled"
+window/subwindows/embed_subwindows=false
 
 [rendering]
 

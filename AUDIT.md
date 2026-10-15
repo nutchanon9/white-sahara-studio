@@ -123,3 +123,26 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | Golden files | commit scene ที่ generate แล้วใน `examples/runtime_demo/vfx/` และให้เทสต์ระดับ repo (`tests/`) generate ใหม่แล้วเทียบ | เดโมรันได้ทันทีบน clone ใหม่ และจับการเปลี่ยน output โดยไม่ตั้งใจ |
 | ทิศทางหมุน | ตรวจจากภาพจริง: `orbit_velocity` > 0 หมุนทวนเข็มบนจอ, `rotation_degrees` > 0 หมุนตามเข็ม | เอกสารเดิมในร่างแรกเขียนทิศ orbit ผิด แก้แล้วหลัง render |
 | ภาพ preview | ภาพใน `docs/images/` render จริงด้วย Xvfb + Mesa llvmpipe (software OpenGL) | ใช้ดูทิศทาง/สี/ขนาด ไม่เท่ากับการตรวจบน GPU จริงหรือบน Windows |
+
+---
+
+## 8. ภาคผนวก (2026-10-15): การตัดสินใจใน Phase 1C (แอป desktop)
+
+ตอบคำถามสเปก v1.1 หัวข้อ 15:
+
+| คำถาม | คำตอบ |
+|---|---|
+| branch/commit และเวอร์ชัน Godot ที่ทดสอบ | `claude/cool-brown-hrne5t` ต่อจาก `87884f3`; Godot 4.7.2-stable + export templates 4.7.2 (official) |
+| `app/` ใช้ core โดยไม่ให้ CLI พึ่ง UI ได้อย่างไร | `app/` preload core (validator/builder/generator/serializer) โดยตรง; addon ไม่อ้างถึง `res://app/` เลย (มีเทสต์ตรวจ) และมีเทสต์รัน CLI ในโปรเจกต์ที่มีแค่โฟลเดอร์ addon |
+| preset/settings/ไฟล์ชั่วคราวอยู่ที่ไหน | `user://` = `%APPDATA%\OasisFx` (`config/use_custom_user_dir`): `settings.cfg`, `presets/` (workspace เริ่มต้น), `oasis_fx_export_staging/`; ตัวอย่างใน `res://` อ่านอย่างเดียว และ document ปฏิเสธการเขียน `res://` |
+| dependency ใน workspace map ไป `res://` ของเกมอย่างไร | หา `project.godot` จากโฟลเดอร์ที่เลือกขึ้นไป → path ส่วนที่เหลือคือ `res://` ในเกม; scene ใส่ uid คงที่ตาม path นั้น จึงเหมือนกับผลของ CLI ในเกมทุก byte; runtime script ไปที่ path เดิม `res://addons/oasis_fx/src/runtime/`; preset ที่ใช้ไฟล์ภาพถูกปฏิเสธพร้อมคำอธิบาย (ยังไม่ทำ mapping) |
+| ตรวจ export ในโปรเจกต์แยกอย่างไร | เทสต์สร้างโปรเจกต์เกมใหม่ชั่วคราว export ลงไป แล้วรัน Godot อีก process เปิด scene: เล่นเอง, ลบตัวเอง, node แม่ไม่ถูกแตะ; ทำแบบเดียวกันกับ build Linux ที่แพ็กแล้ว |
+| pause/restart/lifecycle ใช้ร่วมกันระหว่าง preview กับเกมอย่างไร | preview สร้าง effect ด้วย builder ตัวเดียวกับ generator และเล่นด้วย `OasisFxEffect` ตัวเดียวกัน (ปิด `free_when_finished` และ `auto_play` เท่านั้น) |
+| runtime error ถูกจับใน test entrypoint อย่างไร | `ErrorCapture` (Logger) ใน runner และ CLI; UI test เจอบั๊กจริงจากการจับ error นี้ (dialog ซ้อนตอน export) และแก้แล้ว |
+| export template / รูปแบบ package / การตรวจบน Windows | Windows x86_64: `OasisFx.exe` ฝัง pck + `OasisFx.console.exe`, script แบบ text, `modify_resources=false` (ไม่มี rcedit); export และตรวจไส้ในไฟล์แล้ว; **การเปิดบน Windows ยังไม่ได้รัน** |
+
+การตัดสินใจอื่น:
+- เลือก window แยกสำหรับ dialog (`embed_subwindows=false`) และใช้ native file dialog เมื่อ OS รองรับ
+- เพิ่ม `preset_serializer.gd` + คำสั่ง `format` เพื่อให้ไฟล์ที่แอปบันทึกกับไฟล์ที่ AI/คนเขียน มีรูปแบบเดียวกัน; จัดรูป preset ตัวอย่างใหม่ (ค่าไม่เปลี่ยน, golden scene ไม่เปลี่ยน)
+- ขยาย `PathUtils` ให้ชื่อโฟลเดอร์ใช้ตัวอักษร Unicode ได้ (ภาษาไทย) แต่ยังห้าม `..`, `.`, ชื่อซ่อน, `res://.godot` และโฟลเดอร์ของ addon
+- เปลี่ยน `project.godot`: `run/main_scene` = แอป, ชื่อ "OasisFx", custom user dir, ขนาดหน้าต่าง 1440×900 — เหตุผล: repo นี้คือแอป; CLI/เทสต์ใช้ `--script` จึงไม่โหลด main scene

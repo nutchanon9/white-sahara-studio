@@ -10,9 +10,11 @@
 
 ปลายทางคือ **โปรแกรม Windows Desktop ที่สร้างด้วย Godot + Headless CLI ใช้ Core ร่วมกัน**
 คนเปิดแอปเพื่อแก้ preset, preview และ export ได้โดยไม่ต้องเปิด Godot Editor ส่วน AI เรียก CLI
-ในเครื่องหรือ cloud ที่มี source และ Godot พร้อมใช้งาน โค้ด CLI/Core ของ Phase 1A ใช้ต่อได้
-ขณะนี้ยังไม่มีหน้าต่างแอปหรือ Windows package; Phase 1C จะสร้างส่วนนี้ ไม่ใช่ EditorPlugin dock
-Core และ CLI ของ Phase 1A/1B คือส่วนที่แอปจะเรียกใช้
+ในเครื่องหรือ cloud ที่มี source และ Godot พร้อมใช้งาน
+
+**Phase 1C ทำแล้ว:** แอปอยู่ใน `app/` build เป็น `OasisFx.exe` ได้ (ดู [desktop.md](addons/oasis_fx/docs/desktop.md))
+
+![OasisFx desktop app](docs/images/desktop_app.png)
 
 รายละเอียดและคำสั่งงานล่าสุดอยู่ใน [Spec v1.1](Godot_Asset_Studio_Claude_Code_Implementation_Spec.md)
 และ [CLAUDE.md](CLAUDE.md) ซึ่งใช้แทนทิศทาง UI เดิมใน audit
@@ -23,19 +25,20 @@ Core และ CLI ของ Phase 1A/1B คือส่วนที่แอป
 |---|---|---|
 | 0 | สำรวจ repo และสภาพแวดล้อม ([AUDIT.md](AUDIT.md)) | ✅ เสร็จ |
 | 1A | schema, loader, validator, CLI `validate`/`generate`, Fire Burst, headless tests | ✅ เสร็จ (แก้ test runner ตาม review แล้ว) |
-| 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide | ✅ ทำแล้ว รอรับงาน |
-| 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ยังไม่เริ่ม |
+| 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide | ✅ เสร็จ |
+| 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
 | 2–4 | SFX, Animation, Rigging | ยังไม่เริ่ม |
 
 ## โครงสร้าง repo
 
 ```
-project.godot          ปัจจุบันเป็น host ทดสอบ; เพิ่ม entry scene ของแอปใน Phase 1C
+project.godot          โปรเจกต์ของแอป (main scene = app/main.tscn) และ host สำหรับเทสต์ addon
 addons/oasis_fx/       ตัว addon — copy โฟลเดอร์นี้ไปใส่เกมได้เลย
 examples/runtime_demo/ เดโมการใช้ effect ในเกม + scene ที่ generate แล้ว (ใช้เป็น golden test)
-tests/                 เทสต์ระดับ repo (เดโมและ golden files)
+tests/                 เทสต์ระดับ repo (แอป, เดโม และ golden files)
 docs/images/           ภาพ preview ที่ render จริง
-app/                  วางแผนเพิ่มใน Phase 1C สำหรับ desktop UI
+app/                   แอป desktop (main.tscn, ui/, services/)
+export_presets.cfg     การตั้งค่า export สำหรับ Windows และ Linux
 tools/                 เครื่องมือสำหรับนักพัฒนา (เช่น render ภาพ preview)
 AUDIT.md               รายงาน Phase 0
 CLAUDE.md              คำแนะนำเริ่มงานและ milestone ปัจจุบัน
@@ -109,6 +112,39 @@ Preview ของ effect ตัวอย่าง (8 เฟรมตามเว
 - **CLI:** `validate-all` และ `generate-all` (ทำทั้งหมดหรือไม่ทำเลย), `schema`, manifest
   ถ้า OasisFx เองเกิด script error จะ exit 1 แทน 0
 - **ผลเทสต์ล่าสุด: 86 passed, 0 failed** (exit 0) บน Godot 4.7.2 และได้ผลเดียวกันบนสำเนาใหม่ที่ไม่มี `.godot/`
+
+## Phase 1C: แอป desktop
+
+**เปิดจาก source:**
+```bash
+godot --path .
+```
+
+**Build สำหรับ Windows** (ต้องมี export templates 4.7.2):
+```bash
+godot --headless --path . --export-release "Windows Desktop" build/windows/OasisFx.exe
+```
+ได้ไฟล์ `OasisFx.exe` (~105MB, ฝังข้อมูลไว้ในไฟล์เดียว) และ `OasisFx.console.exe`
+
+**สิ่งที่ทำได้ในแอป:**
+- เปิดตัวอย่าง (อ่านอย่างเดียว) และ preset ของตัวเองใน workspace (`%APPDATA%\OasisFx\presets`)
+- ปรับค่าด้วย control ที่มี type และช่วงค่าตรงกับ validator
+- preview ทันที พร้อม Play/Pause/Stop/Restart, พื้นหลัง, grid และ zoom
+- แสดง error/warning พร้อม path ของ field
+- Save/Save As ในรูปแบบ canonical และถามก่อนทิ้งงานที่ยังไม่บันทึก
+
+**Export เข้าเกม:**
+- เลือกโฟลเดอร์ในโปรเจกต์เกม แอปหา `project.godot` เอง แล้วแสดงรายการไฟล์ที่จะเขียนก่อน
+- ไฟล์ที่ได้เหมือนกับที่ CLI สร้างทุก byte
+- copy runtime script ให้เฉพาะเมื่อเกมยังไม่มี
+
+**ผลการตรวจ:**
+- เทสต์ทั้งหมด **116 passed, 0 failed**
+- build Linux ที่แพ็กแล้วผ่าน `--smoke-test` และ export เข้าโฟลเดอร์ชื่อไทยได้
+- scene ที่ export เปิดเล่นในโปรเจกต์แยกได้
+- **NOT RUN:** การเปิด .exe บน Windows จริง, file dialog ของ Windows และ GPU จริง (มี checklist ให้ทดสอบเองใน [desktop.md](addons/oasis_fx/docs/desktop.md))
+
+**ยังไม่รองรับ:** export preset ที่ใช้ไฟล์ภาพ (`texture: "file"`) ออกจากแอป ให้ใช้ CLI ในโปรเจกต์เกมแทน
 
 ## License
 

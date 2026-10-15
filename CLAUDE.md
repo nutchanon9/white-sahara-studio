@@ -39,6 +39,13 @@ multi-emitter schema v1 (additive optional fields), five example presets, `valid
 `examples/runtime_demo/` with committed golden scenes, AI authoring guide. Full suite
 86 passed, 0 failed on Godot 4.7.2. Awaiting owner acceptance before Phase 1C.
 
+**Phase 1C (user requested, 2026-10-15):** implemented — `app/` desktop shell (main.tscn,
+ui/, services/), `export_presets.cfg` (Windows x86_64 embedded pck + console wrapper, Linux),
+canonical serializer + `format` command, exporter into game projects, `--smoke-test` hook,
+docs/desktop.md with verification table and Windows manual QA. Full suite 116 passed,
+0 failed; packaged Linux build smoke test passed; Windows launch NOT RUN. Awaiting owner
+acceptance; Phases 2–4 not started.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

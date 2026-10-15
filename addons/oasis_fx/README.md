@@ -5,12 +5,13 @@ ChatGPT and Claude can all write the same presets; a headless CLI validates them
 generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D`,
 `ParticleProcessMaterial`, …) plus one small runtime script that handles playback.
 
-**Status: 0.2.0 — Phase 1B.** Up to 8 emitters per effect, five example presets (Fire
+**Status: 0.3.0 — Phase 1C.** Up to 8 emitters per effect, five example presets (Fire
 Burst, Ice Nova, Sword Slash, Cooking Success Sparkle, Campfire Loop), batch commands
 (`validate-all`, `generate-all`), an output manifest, and runtime playback with delays,
-loops, restart/pause and automatic cleanup. Phase 1C builds a standalone Windows desktop
-app with Godot on top of this same core; an EditorPlugin panel is not the required UI.
-The desktop app is not implemented yet.
+loops, restart/pause and automatic cleanup. A canonical `format` command keeps preset
+files tidy. The standalone OasisFx desktop app (Phase 1C, in this repository's `app/`)
+uses this same core; see [docs/desktop.md](docs/desktop.md). Nothing in this addon depends
+on the app.
 
 ## Install
 
@@ -67,7 +68,7 @@ registered class names (e.g. `--script` tools on a fresh clone), use
 
 ```
 addons/oasis_fx/
-  cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], schema)
+  cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], format, schema)
   src/core/                      shared loader, validator, builder, generator, manifest
   src/runtime/oasis_fx_effect.gd playback script attached to generated scenes
   schemas/vfx.v1.schema.json     JSON Schema for presets (generated from the field table)
@@ -81,6 +82,7 @@ addons/oasis_fx/
 - [Preset format](docs/preset_format.md) — every field, unit, range, rule and the runtime behavior
 - [CLI](docs/cli.md) — commands, options, exit codes, manifest, CI setup, tests
 - [AI authoring guide](docs/ai_authoring_guide.md) — prompt, rules, examples and edit recipes for ChatGPT/Claude
+- [Desktop app](docs/desktop.md) — using, building and verifying the standalone app
 
 ## Generated files and Git
 
