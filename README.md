@@ -328,7 +328,7 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - **ตัดสินใจ:** ยังไม่ทำ pooling และ quality presets (ฝั่ง CPU ไม่จำเป็น); ฝั่ง GPU วัดไม่ได้ใน cloud — **NOT RUN**
 - **ปรับปรุง:** การดัดชิ้นส่วนใช้เฉพาะ bone ที่มีผลต่อแต่ละจุด และข้ามเมื่อ bone ไม่ขยับ → งู 1 ตัวจาก 89 µs เหลือ ~22–37 µs ต่อเฟรม
 - เทสต์ใหม่ `test_busy_fight_and_cooking_scene_runs_clean` (ไม่มี error, ทุกอย่างลบตัวเอง, ไม่มี node ค้าง)
-- เทสต์ทั้งหมด **199 passed, 0 failed** (รวมบนสำเนาใหม่ และจำลองขั้นตอน CI); GitHub Actions: CI_RESULT
+- เทสต์ทั้งหมด **199 passed, 0 failed** (รวมบนสำเนาใหม่ และจำลองขั้นตอน CI); GitHub Actions run [#3](https://github.com/nutchanon9/white-sahara-studio/actions/runs/38867219736): ผ่าน **199 passed, 0 failed**
 
 ## License
 
