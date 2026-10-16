@@ -10,6 +10,7 @@ extends RefCounted
 ##     <emitter id> (GPUParticles2D)            one per emitter, in preset order
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
+const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
 
 const _BLEND_MODES := {
 	"mix": CanvasItemMaterial.BLEND_MODE_MIX,
@@ -262,12 +263,8 @@ static func placeholder_texture(path: String) -> Texture2D:
 ## Loads an image file from disk as a texture for previews; `roots` as in
 ## ValidationReport.res_roots. Returns null when it cannot be read.
 static func load_texture_from_disk(path: String, roots: PackedStringArray) -> Texture2D:
-	var file := path
-	for root in (roots if not roots.is_empty() else PackedStringArray(["res://"])):
-		var candidate := path if root == "res://" else root.path_join(path.trim_prefix("res://"))
-		if FileAccess.file_exists(candidate):
-			file = candidate
-			break
+	var found := PathUtils.resolve_res_path(path, roots)
+	var file := found if not found.is_empty() else path
 	if file.get_extension().to_lower() in ["tres", "res"]:
 		return ResourceLoader.load(file) as Texture2D
 	var image := Image.load_from_file(OasisFx.raw_file_path(file))

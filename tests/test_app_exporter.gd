@@ -502,3 +502,16 @@ func _check():
 		check(info.moved > 2.0, "the body bends in the game (%s px)" % info.moved)
 		check_eq(info.uv, info.points, "texture pinned to the rest points")
 		check_eq(info.texture, "res://addons/oasis_fx/presets/examples/rig_parts/serpent_skin.png", "copied texture")
+
+
+func test_crlf_copy_of_the_runtime_counts_as_unchanged() -> void:
+	# Review fix 0.8.1: a game checked out on Windows (CRLF) showed every
+	# runtime script as different and asked to overwrite it.
+	var game := _game("export_crlf")
+	var dest := game.path_join("vfx")
+	check(Exporter.run(Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest)).ok, "first export")
+	for f in Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest).files:
+		write_text(f.path, FileAccess.get_file_as_string(f.path).replace("\n", "\r\n"))
+	var again := Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest)
+	check_eq(again.files.map(func(f): return f.action), ["unchanged", "unchanged"], "line endings alone are not a change")
+	check(again.warnings.is_empty(), "no 'different runtime' warning: %s" % [again.warnings])

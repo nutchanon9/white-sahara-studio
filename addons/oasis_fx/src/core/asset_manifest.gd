@@ -32,7 +32,7 @@ func load_dir(dir: String, report: RefCounted = null) -> void:
 	# JSON.new().parse() reports problems without logging an engine error.
 	var json := JSON.new()
 	var data: Variant = json.data if json.parse(FileAccess.get_file_as_string(path)) == OK else null
-	if data is Dictionary and data.get("format") == FORMAT and data.get("entries") is Dictionary:
+	if data is Dictionary and data.get("format") is String and data.format == FORMAT and data.get("entries") is Dictionary:
 		entries = data.entries
 	elif report != null:
 		report.warn("", "ignoring unreadable manifest %s; it will be rewritten" % path)
@@ -63,9 +63,17 @@ func scene_state(id: String, scene_path: String, scene_file := "") -> String:
 	var file := scene_file if not scene_file.is_empty() else scene_path
 	if not FileAccess.file_exists(file):
 		return "missing"
-	if not entries.has(id) or entries[id].get("scene") != scene_path:
+	# Entries come from a file that may have been edited by hand: check types.
+	var entry: Variant = entries.get(id)
+	if not entry is Dictionary or not entry.get("scene") is String or entry.scene != scene_path:
 		return "unknown"
-	return "unmodified" if FileAccess.get_sha256(file) == entries[id].get("scene_sha256") else "modified"
+	var recorded: Variant = entry.get("scene_sha256")
+	if not recorded is String:
+		return "modified"
+	if FileAccess.get_sha256(file) == recorded:
+		return "unmodified"
+	# The same text with CRLF line endings (a Windows checkout) is not an edit.
+	return "unmodified" if FileAccess.get_file_as_string(file).replace("\r\n", "\n").sha256_text() == recorded else "modified"
 
 
 ## Dependencies recorded for the generated file `res_path` in the manifest of
@@ -78,8 +86,8 @@ static func dependencies_of(res_path: String, roots := PackedStringArray()) -> P
 	if json.parse(FileAccess.get_file_as_string(file)) != OK or not json.data is Dictionary:
 		return PackedStringArray()
 	for entry in json.data.get("entries", {}).values():
-		if entry is Dictionary and entry.get("scene") == res_path:
-			return PackedStringArray(entry.get("dependencies", []))
+		if entry is Dictionary and entry.get("scene") is String and entry.scene == res_path and entry.get("dependencies") is Array:
+			return PackedStringArray(entry.dependencies.filter(func(d): return d is String))
 	return PackedStringArray()
 
 

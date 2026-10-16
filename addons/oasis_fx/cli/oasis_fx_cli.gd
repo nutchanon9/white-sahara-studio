@@ -39,6 +39,16 @@ const RigWeights := preload("res://addons/oasis_fx/src/core/rig_weights.gd")
 const SfxMixdown := preload("res://addons/oasis_fx/src/core/sfx_mixdown.gd")
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 
+## Options each command accepts (besides --json); anything else is a usage
+## error, so a misplaced option (e.g. `generate --check`) never runs silently.
+const COMMAND_OPTIONS := {
+	"help": [], "version": [], "validate": [], "validate-all": [],
+	"generate": ["out", "force", "dry_run"], "generate-all": ["out", "force", "dry_run"],
+	"format": ["check"], "schema": ["write"],
+	"import-rig": ["out", "id", "force"], "auto-weights": ["part", "bones"],
+	"mixdown": ["out", "variant", "seconds", "normalize", "force"],
+}
+
 const EXIT_OK := 0
 const EXIT_FAILED := 1
 const EXIT_USAGE := 2
@@ -120,8 +130,14 @@ func _run(args: PackedStringArray) -> int:
 		return _usage_error("missing command")
 	var command: String = positional[0]
 	var rest := positional.slice(1)
+	if command in ["--help", "-h"]:
+		command = "help"
+	for flag in parsed.flags:
+		if flag != "json" and COMMAND_OPTIONS.has(command) and not flag in COMMAND_OPTIONS[command]:
+			var allowed := PackedStringArray(COMMAND_OPTIONS[command].map(func(f): return "--" + f.replace("_", "-")))
+			return _usage_error("%s does not accept --%s%s" % [command, flag.replace("_", "-"), (" (options: %s)" % ", ".join(allowed)) if not allowed.is_empty() else ""])
 	match command:
-		"help", "--help", "-h":
+		"help":
 			print(USAGE % [OasisFx.VERSION, OasisFx.DEFAULT_OUTPUT_DIR])
 			return EXIT_OK
 		"import-rig":
@@ -129,16 +145,12 @@ func _run(args: PackedStringArray) -> int:
 				return _usage_error("import-rig expects exactly one scene (.tscn)")
 			if not parsed.flags.has("out"):
 				return _usage_error("import-rig needs --out <file.rig.json>")
-			if parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check"):
-				return _usage_error("import-rig only accepts --out, --id and --force")
 			return _import_rig(rest[0], parsed.flags.out, parsed.flags.get("id", ""), parsed.flags.has("force"))
 		"auto-weights":
 			if rest.size() != 1:
 				return _usage_error("auto-weights expects exactly one rig preset (.rig.json)")
 			if not parsed.flags.has("part"):
 				return _usage_error("auto-weights needs --part <part id>")
-			if parsed.flags.has("out") or parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check") or parsed.flags.has("force"):
-				return _usage_error("auto-weights only accepts --part and --bones")
 			var bones := PackedStringArray()
 			for b in String(parsed.flags.get("bones", "")).split(",", false):
 				bones.append(b.strip_edges())
@@ -148,8 +160,6 @@ func _run(args: PackedStringArray) -> int:
 				return _usage_error("mixdown expects exactly one sound preset (.sfx.json)")
 			if not parsed.flags.has("out"):
 				return _usage_error("mixdown needs --out <file.wav>")
-			if parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check") or parsed.flags.has("part") or parsed.flags.has("bones"):
-				return _usage_error("mixdown only accepts --out, --variant, --seconds, --normalize and --force")
 			var variant := String(parsed.flags.get("variant", "0"))
 			var seconds := String(parsed.flags.get("seconds", "0"))
 			if not variant.is_valid_int() or int(variant) < 0:
@@ -163,17 +173,13 @@ func _run(args: PackedStringArray) -> int:
 		"validate":
 			if rest.size() != 1:
 				return _usage_error("validate expects exactly one preset path")
-			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
-				return _usage_error("--out, --force and --dry-run only apply to generate")
 			return _validate(rest[0])
 		"format":
 			if rest.size() != 1:
 				return _usage_error("format expects exactly one preset path or directory")
-			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out") or parsed.flags.has("write"):
-				return _usage_error("format only accepts --check")
 			return _format(rest[0], parsed.flags.has("check"))
 		"schema":
-			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out") or rest.size() > 1:
+			if rest.size() > 1:
 				return _usage_error("schema takes an optional asset type (%s) and --write" % _type_list())
 			var type: String = rest[0] if rest.size() == 1 else "vfx"
 			if not AssetTypes.has(type):
@@ -182,8 +188,6 @@ func _run(args: PackedStringArray) -> int:
 		"validate-all":
 			if rest.size() != 1:
 				return _usage_error("validate-all expects exactly one directory")
-			if parsed.flags.has("force") or parsed.flags.has("dry_run") or parsed.flags.has("out"):
-				return _usage_error("--out, --force and --dry-run only apply to generate and generate-all")
 			return _validate_all(rest[0])
 		"generate", "generate-all":
 			if rest.size() != 1:
@@ -274,6 +278,15 @@ func _auto_weights(arg: String, part_id: String, bones: PackedStringArray) -> in
 	var raw: Dictionary = Loader.load_file(path, Report.new(path))
 	for key in ["bone", "position", "rotation_degrees", "scale", "weights"]:
 		raw.parts[index][key] = updated[key]
+	# Check the result before touching the file: a valid preset is never
+	# replaced by an invalid one.
+	var check := Report.new(path)
+	Validator.validate(raw.duplicate(true), check)
+	if not check.is_ok():
+		var failed := PackedStringArray(["FAIL  %s  part %s: the result would not be valid; the file was not changed" % [path, part_id]])
+		failed.append_array(check.format_lines())
+		_emit({"command": "auto-weights", "ok": false, "results": [check.to_dict()]}, "\n".join(failed))
+		return EXIT_FAILED
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return _fail_message("auto-weights", "cannot write %s: %s" % [path, error_string(FileAccess.get_open_error())])
@@ -347,7 +360,8 @@ func _format(arg: String, check: bool) -> int:
 		var status := "failed"
 		if data != null:
 			var text := Serializer.to_text(data)
-			if FileAccess.get_file_as_string(path) == text:
+			# CRLF from a Windows checkout is not a formatting difference.
+			if FileAccess.get_file_as_string(path).replace("\r\n", "\n") == text:
 				status = "unchanged"
 			elif check:
 				status = "needs_format"

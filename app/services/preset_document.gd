@@ -278,7 +278,7 @@ func get_value(key: String) -> Variant:
 
 
 func set_value(key: String, value: Variant) -> void:
-	if raw.get(key) == value and raw.has(key):
+	if raw.has(key) and same_value(raw[key], value):
 		return
 	raw[key] = value
 	_touch()
@@ -302,10 +302,20 @@ func get_item_value(index: int, key: String) -> Variant:
 
 func set_item_value(index: int, key: String, value: Variant) -> void:
 	var item: Dictionary = items()[index]
-	if item.has(key) and item[key] == value:
+	if item.has(key) and same_value(item[key], value):
 		return
 	item[key] = value
 	_touch()
+
+
+## Equality that never errors: the stored value can be any JSON type (an
+## invalid preset is still editable), and `==` between different types is a
+## script error in GDScript. Numbers compare by value (1 == 1.0).
+static func same_value(a: Variant, b: Variant) -> bool:
+	var numbers := [TYPE_INT, TYPE_FLOAT]
+	if typeof(a) in numbers and typeof(b) in numbers:
+		return float(a) == float(b)
+	return typeof(a) == typeof(b) and a == b
 
 
 ## Adds a default emitter/layer (with a unique id) and returns its index.

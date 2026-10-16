@@ -448,3 +448,21 @@ func test_render_wav_from_the_app() -> void:
 	app.open_file("res://addons/oasis_fx/presets/examples/fire_burst.vfx.json")
 	check(not app._wav_button.visible, "hidden for effects")
 	await _stop(app)
+
+
+func test_inspector_shows_fields_of_the_wrong_type() -> void:
+	# Review fix 0.8.1: a bool field holding text ("yes" == true) stopped the
+	# inspector with a script error.
+	var dir := temp_dir("ui_wrong_types")
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://addons/oasis_fx/presets/examples/fire_burst.vfx.json"))
+	data.loop = "yes"
+	data.emitters[0].one_shot = 1
+	write_text(dir + "/types.vfx.json", JSON.stringify(data))
+	var app := await _start("ui_wrong_types_app", dir + "/types.vfx.json")
+	check(not app.validation.report.is_ok(), "the errors are listed")
+	var loop: CheckBox = app.inspector.controls.get("effect:loop")
+	if check(loop != null, "loop control built"):
+		check(not loop.button_pressed, "shown unticked")
+		loop.button_pressed = true
+		check_eq(app.document.get_value("loop"), true, "and can be fixed")
+	await _stop(app)

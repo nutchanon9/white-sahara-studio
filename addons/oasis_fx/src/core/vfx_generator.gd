@@ -218,10 +218,6 @@ static func _collect_presets(dir: String, out: PackedStringArray) -> void:
 			_collect_presets(dir + "/" + sub, out)
 
 
-static func scene_path_for(dir: String, id: String) -> String:
-	return dir.trim_suffix("/") + "/" + id + OasisFx.SCENE_EXTENSION
-
-
 ## Output file of a preset in `dir`: <id>.tscn, or <id>.tres for resource types.
 static func output_path_for(dir: String, preset: Dictionary) -> String:
 	return dir.trim_suffix("/") + "/" + preset.id + AssetTypes.output_extension(preset.asset_type)

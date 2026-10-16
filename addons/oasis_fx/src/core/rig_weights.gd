@@ -10,6 +10,8 @@ extends RefCounted
 ## a bone follow it. The outline needs points where it should bend (several
 ## along each side of a limb): a 4-point rectangle cannot bend.
 
+const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
+
 ## Bones that share one point, at most (the nearest ones).
 const BONES_PER_POINT := 2
 const FALLOFF := 4.0
@@ -81,4 +83,11 @@ static func make_deforming(preset: Dictionary, part: Dictionary, bone_ids: Array
 	for id in segments:
 		if values[id].any(func(w): return w > 0.0):
 			out.weights.append({"bone": id, "values": values[id]})
+	if out.weights.size() > RigSpec.MAX_WEIGHT_BONES:
+		# A part may follow at most 8 bones: keep the 8 that carry the most
+		# weight and weight the points again among those.
+		var totals: Array = out.weights.map(func(w): return [w.values.reduce(func(a, b): return a + b, 0.0), w.bone])
+		totals.sort_custom(func(a, b): return a[0] > b[0])
+		var kept: Array = totals.slice(0, RigSpec.MAX_WEIGHT_BONES).map(func(t): return t[1])
+		return make_deforming(preset, part, preset.bones.map(func(b): return b.id).filter(func(id): return kept.has(id)))
 	return out

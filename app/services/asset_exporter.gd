@@ -192,7 +192,8 @@ static func with_uid(scene_text: String, uid: int) -> String:
 static func _file_entry(file_path: String, res_path: String, kind: String, content: String) -> Dictionary:
 	var action := "create"
 	if FileAccess.file_exists(file_path):
-		action = "unchanged" if FileAccess.get_file_as_string(file_path) == content else "overwrite"
+		# Line endings only (CRLF from a Windows checkout of the game) do not count as a change.
+		action = "unchanged" if FileAccess.get_file_as_string(file_path).replace("\r\n", "\n") == content.replace("\r\n", "\n") else "overwrite"
 	return {"path": file_path, "res_path": res_path, "kind": kind, "action": action, "content": content}
 
 

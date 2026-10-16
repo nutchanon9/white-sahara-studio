@@ -169,3 +169,22 @@ func test_rig_documents() -> void:
 	check(doc.validate().report.is_ok(), "still valid with the added bone")
 	doc.set_value("parts", doc.get_value("parts") + [{"id": "hips", "bone": "hips", "polygon": [[0, 0], [1, 0], [0, 1]]}])
 	check(not doc.validate().report.is_ok(), "a part may not reuse a bone id")
+
+
+func test_fields_of_the_wrong_json_type_can_be_fixed() -> void:
+	# Review fix 0.8.1: comparing "1" with 1.0 was a script error, so a field of
+	# the wrong type could not be corrected in the app.
+	var dir := temp_dir("app_doc_types")
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIRE_BURST))
+	data.duration_seconds = "1"
+	data.loop = "no"
+	data.emitters[0].amount = "24"
+	write_text(dir + "/types.vfx.json", JSON.stringify(data))
+	var doc := PresetDocument.new()
+	check(doc.open(dir + "/types.vfx.json").is_ok(), "opens")
+	doc.set_value("duration_seconds", 1.0)
+	doc.set_value("loop", false)
+	doc.set_item_value(0, "amount", 24)
+	check(doc.get_value("duration_seconds") is float and doc.get_value("loop") == false and doc.get_item_value(0, "amount") is int, "the values were replaced")
+	check(doc.validate().report.is_ok(), "now valid: " + " | ".join(doc.validate().report.format_lines()))
+	check(PresetDocument.same_value(1, 1.0) and not PresetDocument.same_value("1", 1.0) and not PresetDocument.same_value(null, false), "same_value")

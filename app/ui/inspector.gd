@@ -270,7 +270,7 @@ func _make_control(key: String, spec: Dictionary, value: Variant, setter: Callab
 			return _spin(spec, value, setter)
 		"bool":
 			var check := CheckBox.new()
-			check.button_pressed = value == true
+			check.button_pressed = value is bool and value
 			check.toggled.connect(func(on: bool) -> void: setter.call(on))
 			return check
 		"list":
@@ -594,7 +594,7 @@ func _new_entry(fields: Dictionary, entries: Array, base: String) -> Dictionary:
 		# Start with a bone that has a child bone, and that child.
 		var bones: Variant = document.get_value("bones") if document else []
 		for bone in (bones if bones is Array else []):
-			if bone is Dictionary and bone.get("parent", "") != "":
+			if bone is Dictionary and bone.get("parent") is String and bone.parent != "":
 				entry["upper"] = bone.parent
 				entry["lower"] = str(bone.get("id", ""))
 	return entry
@@ -767,7 +767,7 @@ func _key_value_control(prop: Dictionary, value: Variant, setter: Callable) -> C
 			return _color({}, value, setter)
 		"bool":
 			var check := CheckBox.new()
-			check.button_pressed = value == true
+			check.button_pressed = value is bool and value
 			check.text = "visible"
 			check.toggled.connect(func(on: bool) -> void: setter.call(on))
 			return check

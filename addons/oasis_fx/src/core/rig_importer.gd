@@ -129,7 +129,8 @@ static func import_scene(scene_path: String, roots: PackedStringArray, id := "")
 				entry["scale"] = _vec(Vector2(-scale.x, scale.y))
 			for prop in ["hframes", "vframes", "region_enabled"]:
 				var value: Variant = Outline.property(outline, path, prop)
-				if value != null and value != 1 and value != false:
+				# Compare by type: int vs bool is a script error in GDScript.
+				if (typeof(value) == TYPE_INT and value > 1) or (typeof(value) == TYPE_BOOL and value):
 					notes.append("%s: %s is not supported (the whole image is shown)" % [path, prop])
 					break
 			var tint: Variant = Outline.property(outline, path, "self_modulate")
@@ -182,14 +183,23 @@ static func import_scene(scene_path: String, roots: PackedStringArray, id := "")
 	if not renamed.is_empty():
 		notes.append("node names became snake_case ids: %s" % ", ".join(renamed))
 
+	for limit in [["bones", bones.size(), RigSpec.MAX_BONES], ["parts", parts.size(), RigSpec.MAX_PARTS], ["markers", markers.size(), RigSpec.MAX_MARKERS]]:
+		if limit[1] > limit[2]:
+			result.error = "%s has %d %s; a rig preset allows at most %d" % [scene_path, limit[1], limit[0], limit[2]]
+			return result
 	var root_name: String = outline.nodes["."].name
+	# The full list of notes is in `result.notes`; the preset keeps what fits.
+	var summary := "Imported by OasisFx from %s.%s" % [scene_path, "" if notes.is_empty() else " Not imported: " + "; ".join(notes)]
+	var max_notes: int = RigSpec.EFFECT_FIELDS.notes.max_length
+	if summary.length() > max_notes:
+		summary = summary.left(max_notes - 40) + " … (see the import report)"
 	var preset := {
 		"schema_version": 1,
 		"asset_type": "rig",
 		"id": id if not id.is_empty() else _to_id(root_name),
-		"display_name": root_name.capitalize(),
+		"display_name": root_name.capitalize().left(80),
 		"description": "Imported from %s" % scene_path,
-		"notes": "Imported by OasisFx from %s.%s" % [scene_path, "" if notes.is_empty() else " Not imported: " + "; ".join(notes)],
+		"notes": summary,
 	}
 	if textured:
 		preset["source_license"] = ""
@@ -231,7 +241,12 @@ static func _import_mesh(outline: Dictionary, path: String, entry: Dictionary, n
 		entry["polygons"] = pieces.map(func(piece): return Array(piece).map(func(i): return int(i)))
 	for prop in ["texture_offset", "texture_scale", "texture_rotation"]:
 		var value: Variant = Outline.property(outline, path, prop)
-		if value != null and value != Vector2.ZERO and value != Vector2.ONE and not (value is float and is_zero_approx(value)):
+		var changed := false
+		if prop == "texture_rotation":
+			changed = typeof(value) in [TYPE_FLOAT, TYPE_INT] and not is_zero_approx(float(value))
+		else:
+			changed = value is Vector2 and not value.is_equal_approx(Vector2.ONE if prop == "texture_scale" else Vector2.ZERO)
+		if changed:
 			notes.append("%s: %s is not supported (the texture may sit differently)" % [path, prop])
 
 

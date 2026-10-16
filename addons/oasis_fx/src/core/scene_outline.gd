@@ -110,12 +110,17 @@ static func _parse_into(res_path: String, roots: PackedStringArray, out: Diction
 	var current := ""
 	var prop_name := ""
 	var value := ""
-	var balance := 0
+	# A value continues on the next lines while a bracket or a string is open
+	# (multi-line strings hold raw newlines, and lines inside them can look
+	# like section headers or properties).
+	var scan := {"depth": 0, "in_string": false, "escaped": false}
+	var pending := false
 	for line in text.split("\n"):
-		if balance > 0:
+		if pending:
 			value += "\n" + line
-			balance += _balance(line)
-			if balance <= 0:
+			_scan(line, scan)
+			if scan.depth <= 0 and not scan.in_string:
+				pending = false
 				_set_prop(out, current, prop_name, value, ext)
 			continue
 		var stripped := line.strip_edges()
@@ -141,8 +146,10 @@ static func _parse_into(res_path: String, roots: PackedStringArray, out: Diction
 			continue
 		prop_name = line.substr(0, eq).strip_edges()
 		value = line.substr(eq + 3)
-		balance = _balance(value)
-		if balance <= 0:
+		scan = {"depth": 0, "in_string": false, "escaped": false}
+		_scan(value, scan)
+		pending = scan.depth > 0 or scan.in_string
+		if not pending:
 			_set_prop(out, current, prop_name, value, ext)
 	return ""
 
@@ -208,22 +215,19 @@ static func _header(line: String) -> Dictionary:
 
 
 # Open minus closed brackets outside strings.
-static func _balance(text: String) -> int:
-	var depth := 0
-	var in_string := false
-	var escaped := false
+# Updates `state` {depth, in_string, escaped} with the characters of `text`.
+static func _scan(text: String, state: Dictionary) -> void:
 	for c in text:
-		if in_string:
-			if escaped:
-				escaped = false
+		if state.in_string:
+			if state.escaped:
+				state.escaped = false
 			elif c == "\\":
-				escaped = true
+				state.escaped = true
 			elif c == "\"":
-				in_string = false
+				state.in_string = false
 		elif c == "\"":
-			in_string = true
+			state.in_string = true
 		elif c in "([{":
-			depth += 1
+			state.depth += 1
 		elif c in ")]}":
-			depth -= 1
-	return depth
+			state.depth -= 1

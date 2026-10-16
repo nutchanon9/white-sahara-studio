@@ -6,15 +6,18 @@ extends RefCounted
 ## the headless CLI works on a fresh clone, before the editor has built its
 ## global class cache.
 
-const VERSION := "0.8.1"
+const VERSION := "0.8.2"
 const ADDON_ROOT := "res://addons/oasis_fx"
 const EXAMPLES_DIR := "res://addons/oasis_fx/presets/examples"
 const SCHEMA_PATH := "res://addons/oasis_fx/schemas/vfx.v1.schema.json"
 const SFX_SCHEMA_PATH := "res://addons/oasis_fx/schemas/sfx.v1.schema.json"
 const DEFAULT_OUTPUT_DIR := "res://generated/oasis_fx"
+## The per-type constants below predate the asset-type registry and are kept
+## for scripts that use them; asset_types.gd lists every type (suffixes,
+## schemas, outputs) and is what OasisFx itself uses.
 const VFX_PRESET_SUFFIX := ".vfx.json"
 const SFX_PRESET_SUFFIX := ".sfx.json"
-## File suffix for each asset type.
+## Deprecated: only vfx and sfx; use AssetTypes.suffix(type).
 const PRESET_SUFFIXES := {"vfx": ".vfx.json", "sfx": ".sfx.json"}
 const SCENE_EXTENSION := ".tscn"
 const MANIFEST_FILE := "oasis_fx_manifest.json"
