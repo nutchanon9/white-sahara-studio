@@ -7,7 +7,11 @@ and generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D
 `ParticleProcessMaterial`, `AudioStreamPlayer`, …) plus one small runtime script that
 handles playback.
 
-**Status: 0.8.0.** Sound presets render to one WAV file (`mixdown` command, **Render
+**Status: 0.8.1.** CPU profiling of a busy fight + cooking scene
+([docs/performance.md](docs/performance.md)): no pooling or quality presets needed on the
+CPU side; CPU bending 2–4× faster (sparse weights, skip when bones are still).
+
+0.8.0: Sound presets render to one WAV file (`mixdown` command, **Render
 WAV…** in the app) offline and headless with `AudioStreamPlayback.mix_audio()` and the
 runtime's timing rules; GitHub Actions runs the suite with the pinned Godot
 (`.github/workflows/oasisfx.yml`).
@@ -150,6 +154,7 @@ addons/oasis_fx/
 - [Rig format](docs/rig_format.md) — bones, parts, bending parts, markers, IK, skins, poses, import, runtime API
 - [CLI](docs/cli.md) — commands, options, exit codes, manifest, CI setup, tests
 - [AI authoring guide](docs/ai_authoring_guide.md) — prompt, rules, examples and edit recipes for ChatGPT/Claude
+- [Performance](docs/performance.md) — CPU profiling of many effects, sounds and rigs at once
 - [Desktop app](docs/desktop.md) — using, building and verifying the standalone app
 
 ## Generated files and Git

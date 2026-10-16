@@ -253,3 +253,15 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | การสุ่ม | mixdown เป็น take เดียว: ไฟล์ที่ `variant` ของแต่ละ layer, ไม่สุ่ม pitch/volume | ไฟล์เสียงหนึ่งไฟล์เก็บความสุ่มไม่ได้; ผลเหมือนเดิมทุกครั้ง (ทดสอบได้) |
 | clip | รายงานจำนวน sample; `--normalize` (−1 dBFS) แบบเลือกเอง; แอป normalize เฉพาะเมื่อจะ clip และบอกผู้ใช้ | ไม่เปลี่ยนความดังแบบเงียบ ๆ ใน CLI |
 | CI | GitHub Actions บน ubuntu-24.04, Godot 4.7.2 จาก release ทางการ + ตรวจ SHA-256 (ตรงกับ binary ที่ใช้ใน session นี้), import → validate-all → format --check → เทสต์ทั้งหมด | สเปก §6 แนะนำ; ผู้ใช้ตอบ "ทำต่อเลย" หลังจากเสนอ CI; ไม่ build ตัวติดตั้งเพราะ export templates ใหญ่ |
+
+---
+
+## 15. ภาคผนวก (2026-10-16): 0.8.1 — วัดประสิทธิภาพฝั่ง CPU
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| วิธีวัด | จับเวลาช่วง process ของแต่ละเฟรมด้วย node ที่ทำงานก่อนสุดและหลังสุด | `Performance.TIME_PROCESS` ไม่ได้อัปเดตทุกเฟรมใน headless (ค่า p95 เท่ากับ max ทุกครั้งในการวัดรอบแรก) |
+| ฉากทดสอบ | ใช้เฉพาะ asset ตัวอย่างที่ generate แล้ว, สุ่มแบบมี seed | ทำซ้ำได้; ใช้ทั้งในเครื่องมือวัดและในเทสต์ |
+| pooling / quality presets | ยังไม่ทำ | ฉากหนักใช้ CPU เฉลี่ย 3.2 ms/เฟรม (ไม่ถึง 16.7 ms ของ 60 fps); GPU วัดไม่ได้ (NOT RUN) |
+| การดัดบน CPU | sparse weights (normalize ครั้งเดียว) + ข้ามเมื่อ transform เท่าเดิม | งู 50 จุด × 6 bone: 89 → ~22–37 µs ต่อเฟรมขณะขยับ, ~0 ขณะนิ่ง |
+| ข้อความ "resources still in use at exit" ในเครื่องมือ | รอ 0.5 วินาทีก่อนออก | เกิดจากออกโปรแกรมเร็วเกินไปขณะ audio server ยังถือ stream ของเสียงวนลูป ไม่ใช่การรั่วของ runtime (ตรวจด้วย --verbose) |

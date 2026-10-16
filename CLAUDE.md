@@ -91,9 +91,15 @@ hardware, Windows launch and the real mannequin import NOT RUN. Awaiting owner a
 **0.8.0 WAV mixdown + CI (user requested "continue", 2026-10-16):** `sfx_mixdown.gd` renders sound presets offline
 with `AudioStreamPlayback.mix_audio()` and the runtime's timing functions → 16-bit stereo WAV (CLI `mixdown`, app
 Render WAV…; one fixed take, loops need a length, clipping reported / `--normalize`); `.github/workflows/oasisfx.yml`
-runs import, validate-all, format --check and the suite with Godot 4.7.2 (zip SHA-256 pinned). Full suite TOTAL
+runs import, validate-all, format --check and the suite with Godot 4.7.2 (zip SHA-256 pinned). Full suite 198
 passed, 0 failed (also on a fresh copy); packaged Linux smoke test incl. `sound_mixdown` passed; listening and
 Windows launch NOT RUN. Awaiting owner acceptance.
+
+**0.8.1 CPU profiling (user requested "continue", 2026-10-16):** spec §12 gate for pooling / quality presets —
+`examples/runtime_demo/stress_scenario.gd` (fight + cooking from generated assets) and `tools/benchmark_runtime.gd`
+(per-frame process time, headless = no GPU cost): heavy scene 3.2 ms avg → no pooling or quality presets needed on
+the CPU side (docs/performance.md); CPU bending uses sparse normalized weights and skips still rigs (89 → ~22–37 µs
+per serpent). Full suite 199 passed, 0 failed (also on a fresh copy); GPU profiling NOT RUN. Awaiting owner acceptance.
 
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows

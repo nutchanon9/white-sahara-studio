@@ -256,8 +256,10 @@ their sum); points without weight stay put. The texture stays pinned to the rest
   the first were drawn in the wrong place, even at rest. `gpu_deform = true` (exported on the
   rig root) links `Polygon2D.skeleton` instead and lets Godot do it — use it only after
   checking it on your renderer and GPU (**NOT RUN** here on a GPU).
-- Cost: points × bones per frame in GDScript; dozens to a few hundred points per rig are
-  cheap. Only weighted parts are processed; rigs without them do not process at all.
+- Cost: each point uses only the bones that pull it (weights normalized once in `_ready()`),
+  and a part whose bones did not move since the last frame is skipped. The Sand Serpent's
+  body (50 points, 6 bones) takes about 22–37 µs per frame while moving (measured, see
+  [performance.md](performance.md)). Rigs without weighted parts do not process at all.
 - Bending needs points where the outline bends: several points along each side of a limb
   (the serpent has one every 10 px); a 4-point rectangle cannot bend. Internal points plus
   `polygons` (custom pieces) give smoother results for wide parts.

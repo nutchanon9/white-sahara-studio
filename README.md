@@ -16,6 +16,7 @@
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 **Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
 **Phase 4 ทำแล้ว:** rig ตัวละคร 2D แบบ cutout — bone, ชิ้นส่วน PNG/polygon, IK สองท่อน, skin (เปลี่ยนชุด), pose และนำเข้า rig จาก scene เดิม (ดู [rig_format.md](addons/oasis_fx/docs/rig_format.md))
+**0.8.1 ทำแล้ว:** วัดประสิทธิภาพ (ฝั่ง CPU) ของฉากต่อสู้ + ทำอาหารที่มี effect/เสียง/rig จำนวนมาก — ไม่จำเป็นต้องมี pooling หรือ quality presets; การดัดชิ้นส่วนเร็วขึ้น 2–4 เท่า (ดู [performance.md](addons/oasis_fx/docs/performance.md))
 **0.8.0 ทำแล้ว:** แปลงเสียง (sfx) เป็นไฟล์ **WAV ไฟล์เดียว** (mixdown) ได้ทั้งใน CLI และแอป และมี **GitHub CI** รันเทสต์ด้วย Godot 4.7.2 ที่ตรึงเวอร์ชันไว้
 **0.7.0 ทำแล้ว:** ชิ้นส่วนที่ **บิดงอตาม bone** (deformation / bone weights) — คำนวณ weight อัตโนมัติ, นำเข้า weight จาก scene เดิม, ตัวอย่างงูทะเลทรายที่เลื้อยได้
 
@@ -313,6 +314,21 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - GitHub Actions (run แรก [#1](https://github.com/nutchanon9/white-sahara-studio/actions/runs/38850508710) บน ubuntu-24.04):
   ผ่านทุกขั้น — import, `validate-all`, `format --check` และเทสต์ **198 passed, 0 failed**
 - **NOT RUN:** ฟังไฟล์ WAV ที่ได้ (ไม่มีลำโพงใน cloud), เปิด .exe บน Windows
+
+## 0.8.1: วัดประสิทธิภาพฝั่ง CPU (สเปก §12)
+
+สเปกบอกให้ทดสอบ effect จำนวนมากพร้อมกัน "โดยเฉพาะตอนสู้มอนสเตอร์และทำอาหาร" และให้ทำ pooling / quality presets
+**เฉพาะเมื่อการวัดบอกว่าจำเป็น** — รอบนี้คือการวัดนั้น
+
+- ฉากทดสอบ `examples/runtime_demo/stress_scenario.gd` ใช้แต่ asset ที่ generate แล้ว: effect + เสียงต่อสู้เกิดเป็นระลอก,
+  เตาทำอาหาร (ไฟ + เสียงวนลูป + ประกายทุก 1 วินาที), เชฟ rig เล่น animation IK และงูเลื้อย (ดัดบน CPU)
+- เครื่องมือ `tools/benchmark_runtime.gd` จับเวลาช่วง process ของทุกเฟรม (headless = ไม่มีต้นทุน GPU)
+- ผล (CPU 4 core, 10 วินาที): ฉากต่อสู้ปกติ เฉลี่ย **1.3 ms**/เฟรม (p95 2.1); ฉากหนัก (เชฟ 12, งู 12, effect 4 ตัวทุก 0.05 วินาที,
+  สร้าง 834 effect + 568 เสียง) เฉลี่ย **3.2 ms** (p95 4.7, มีเฟรมกระตุกครั้งเดียว 34 ms) — ทุก effect/เสียงลบตัวเองหมด
+- **ตัดสินใจ:** ยังไม่ทำ pooling และ quality presets (ฝั่ง CPU ไม่จำเป็น); ฝั่ง GPU วัดไม่ได้ใน cloud — **NOT RUN**
+- **ปรับปรุง:** การดัดชิ้นส่วนใช้เฉพาะ bone ที่มีผลต่อแต่ละจุด และข้ามเมื่อ bone ไม่ขยับ → งู 1 ตัวจาก 89 µs เหลือ ~22–37 µs ต่อเฟรม
+- เทสต์ใหม่ `test_busy_fight_and_cooking_scene_runs_clean` (ไม่มี error, ทุกอย่างลบตัวเอง, ไม่มี node ค้าง)
+- เทสต์ทั้งหมด **199 passed, 0 failed** (รวมบนสำเนาใหม่ และจำลองขั้นตอน CI); GitHub Actions: CI_RESULT
 
 ## License
 
