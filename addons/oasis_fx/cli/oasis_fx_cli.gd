@@ -17,6 +17,8 @@ extends SceneTree
 ##            [--id ID] [--force]
 ##   auto-weights <f.rig.json> --part ID       make a polygon part bend with nearby bones
 ##            [--bones a,b,c]
+##   mixdown <f.sfx.json> --out <file.wav>     render a sound preset into one WAV file
+##            [--variant N] [--seconds S] [--normalize] [--force]
 ##   version | help
 ## Global flag: --json  prints one JSON object (on its own line) instead of text.
 ##
@@ -34,6 +36,7 @@ const Loader := preload("res://addons/oasis_fx/src/core/preset_loader.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 const RigImporter := preload("res://addons/oasis_fx/src/core/rig_importer.gd")
 const RigWeights := preload("res://addons/oasis_fx/src/core/rig_weights.gd")
+const SfxMixdown := preload("res://addons/oasis_fx/src/core/sfx_mixdown.gd")
 const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 
 const EXIT_OK := 0
@@ -62,6 +65,11 @@ Commands:
   auto-weights <rig>     Make polygon part --part ID bend (deform) with its nearest bones
                          (--bones a,b,c to choose them): moves it to the rig root and
                          writes its weights into the preset (rewritten in canonical form).
+  mixdown <sound>        Render an sfx preset into one 16-bit stereo WAV file (--out
+                         <file.wav>; --force overwrites). --variant N picks file N of each
+                         layer's source + variants (default 0 = the sources); sounds with
+                         looping layers need --seconds S; --normalize scales the peak
+                         to -1 dBFS.
   version                Print the OasisFx version.
   help                   Show this help.
 
@@ -135,6 +143,20 @@ func _run(args: PackedStringArray) -> int:
 			for b in String(parsed.flags.get("bones", "")).split(",", false):
 				bones.append(b.strip_edges())
 			return _auto_weights(rest[0], parsed.flags.part, bones)
+		"mixdown":
+			if rest.size() != 1:
+				return _usage_error("mixdown expects exactly one sound preset (.sfx.json)")
+			if not parsed.flags.has("out"):
+				return _usage_error("mixdown needs --out <file.wav>")
+			if parsed.flags.has("dry_run") or parsed.flags.has("write") or parsed.flags.has("check") or parsed.flags.has("part") or parsed.flags.has("bones"):
+				return _usage_error("mixdown only accepts --out, --variant, --seconds, --normalize and --force")
+			var variant := String(parsed.flags.get("variant", "0"))
+			var seconds := String(parsed.flags.get("seconds", "0"))
+			if not variant.is_valid_int() or int(variant) < 0:
+				return _usage_error("--variant must be a whole number >= 0")
+			if not seconds.is_valid_float() or float(seconds) < 0.0:
+				return _usage_error("--seconds must be a number >= 0")
+			return _mixdown(rest[0], parsed.flags.out, {"variant": int(variant), "seconds": float(seconds), "normalize": parsed.flags.has("normalize")}, parsed.flags.has("force"))
 		"version":
 			_emit({"command": "version", "ok": true, "version": OasisFx.VERSION}, "OasisFx " + OasisFx.VERSION)
 			return EXIT_OK
@@ -267,6 +289,40 @@ func _auto_weights(arg: String, part_id: String, bones: PackedStringArray) -> in
 	data["bones"] = Array(used)
 	_emit({"command": "auto-weights", "ok": report.is_ok(), "results": [data]}, "\n".join(lines))
 	return EXIT_OK if report.is_ok() else EXIT_FAILED
+
+
+## Renders a sound preset into one WAV file (sfx_mixdown.gd).
+func _mixdown(arg: String, out_arg: String, options: Dictionary, force: bool) -> int:
+	var path := PathUtils.resolve_input_path(arg)
+	var out := PathUtils.resolve_input_path(out_arg)
+	if out.get_extension().to_lower() != "wav":
+		return _usage_error("--out must end with .wav")
+	var report := Report.new(path)
+	var preset := Validator.validate_file(path, report)
+	if not report.is_ok():
+		var failed := PackedStringArray(["FAIL  %s  (fix these first)" % path])
+		failed.append_array(report.format_lines())
+		_emit({"command": "mixdown", "ok": false, "results": [report.to_dict()]}, "\n".join(failed))
+		return EXIT_FAILED
+	if preset.asset_type != "sfx":
+		return _fail_message("mixdown", "%s is not a sound (sfx) preset" % path)
+	if FileAccess.file_exists(out) and not force:
+		return _fail_message("mixdown", "%s already exists; pass --force to overwrite it" % out)
+	var mix := SfxMixdown.render(preset, PackedStringArray(), options)
+	if not mix.ok:
+		return _fail_message("mixdown", mix.error)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out.get_base_dir()))
+	var error := SfxMixdown.save_wav(mix.frames, mix.mix_rate, out)
+	if error != OK:
+		return _fail_message("mixdown", "cannot write %s: %s" % [out, error_string(error)])
+	var lines := PackedStringArray(["OK    %s -> %s  %s (variant %d)" % [path, out, SfxMixdown.describe(mix), options.variant]])
+	lines.append_array(report.format_lines())
+	if mix.clipped > 0:
+		lines.append("  warning: %d sample(s) were clipped" % mix.clipped)
+	var data := report.to_dict()
+	data.merge({"output_path": out, "seconds": mix.seconds, "mix_rate": mix.mix_rate, "peak": mix.peak, "clipped": mix.clipped, "gain_db": mix.gain_db, "files": mix.files, "variant": options.variant})
+	_emit({"command": "mixdown", "ok": true, "results": [data]}, "\n".join(lines))
+	return EXIT_OK
 
 
 func _format(arg: String, check: bool) -> int:
@@ -466,6 +522,8 @@ func _parse(args: PackedStringArray) -> Dictionary:
 			flags["dry_run"] = true
 		elif arg == "--write":
 			flags["write"] = true
+		elif arg == "--normalize":
+			flags["normalize"] = true
 		elif arg == "--check":
 			flags["check"] = true
 		elif arg == "--out":
@@ -480,7 +538,7 @@ func _parse(args: PackedStringArray) -> Dictionary:
 				return {"flags": flags, "positional": positional, "error": "--id needs a rig id"}
 			i += 1
 			flags["id"] = args[i]
-		elif arg in ["--part", "--bones"]:
+		elif arg in ["--part", "--bones", "--variant", "--seconds"]:
 			if i + 1 >= args.size():
 				return {"flags": flags, "positional": positional, "error": "%s needs a value" % arg}
 			i += 1
