@@ -310,7 +310,8 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - เทสต์ mixdown ด้วยเสียงทดสอบ (sine): ตำแหน่งเริ่ม, gain, pitch, trim, fade, loop, variant, normalize, clip, ผลเหมือนเดิมทุกครั้ง;
   ดูรูปคลื่นของเสียงตัวอย่างแล้วถูกต้อง (เสียงกระทบเริ่มที่ 140 ms)
 - build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` (`sound_mixdown`, `rig_bending`, `matches_cli` เป็น true)
-- GitHub Actions: CI_RESULT
+- GitHub Actions (run แรก [#1](https://github.com/nutchanon9/white-sahara-studio/actions/runs/38850508710) บน ubuntu-24.04):
+  ผ่านทุกขั้น — import, `validate-all`, `format --check` และเทสต์ **198 passed, 0 failed**
 - **NOT RUN:** ฟังไฟล์ WAV ที่ได้ (ไม่มีลำโพงใน cloud), เปิด .exe บน Windows
 
 ## License

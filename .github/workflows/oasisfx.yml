@@ -27,7 +27,7 @@ jobs:
       GODOT_VERSION: 4.7.2-stable
       GODOT_ZIP_SHA256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Godot ${{ env.GODOT_VERSION }}
         run: |

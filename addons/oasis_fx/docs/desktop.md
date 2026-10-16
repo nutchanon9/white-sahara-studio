@@ -314,7 +314,7 @@ example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 | Example mixdowns inspected as waveform images (Sword Slash: whoosh, then the hit at 140 ms; Cooking Sizzle 3 s loop fading in) | **PASS** (visual) |
 | App **Render WAV…** (file name with spaces and Thai, normalize on clipping, loop length, hidden for other types) (automated) | **PASS** |
 | Packaged Linux build `--smoke-test` incl. `"sound_mixdown": true`, `"rig_bending": true`, `"matches_cli": true` | **PASS** |
-| GitHub Actions workflow on the pushed branch | see README (result of the first run) |
+| GitHub Actions workflow on the pushed branch (run #1, ubuntu-24.04, Godot 4.7.2 from the official zip) | **PASS** — import, validate-all, format --check, suite 198 passed, 0 failed |
 | **Listening** to the rendered files; Windows launch | **NOT RUN** — no audio device in the cloud session |
 
 ## Verification status (0.7.0 — bending parts, 2026-10-15)
