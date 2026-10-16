@@ -546,3 +546,18 @@ func test_sprite_restart_starts_at_the_first_frame() -> void:
 	app.preview.restart()
 	check_eq(preview.sprite.frame, 0, "Restart shows frame 0 again")
 	await _stop(app)
+
+
+func test_rebuilding_the_inspector_leaves_no_orphan_nodes() -> void:
+	# The events editor created a GridContainer per event that was never added
+	# to the tree (leaked on every rebuild; seen as "leaked" warnings at exit).
+	var app := await _start("ui_orphans", "res://addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json")
+	for i in 3:
+		await tree.process_frame
+	var before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	for i in 5:
+		app.inspector.rebuild()
+	for i in 3:
+		await tree.process_frame
+	check_eq(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)), before, "orphan nodes after 5 rebuilds")
+	await _stop(app)

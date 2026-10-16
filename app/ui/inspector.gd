@@ -805,8 +805,6 @@ func _events_editor() -> Control:
 		if not events[i] is Dictionary:
 			continue
 		var event: Dictionary = events[i]
-		var grid := GridContainer.new()
-		grid.columns = 2
 		var head := HBoxContainer.new()
 		var time := _spin({"type": "number", "min": 0.0, "max": 60.0}, event.get("time", 0.0), func(v: Variant) -> void:
 			event["time"] = v
