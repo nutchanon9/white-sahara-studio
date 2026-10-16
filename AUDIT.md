@@ -265,3 +265,16 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | pooling / quality presets | ยังไม่ทำ | ฉากหนักใช้ CPU เฉลี่ย 3.2 ms/เฟรม (ไม่ถึง 16.7 ms ของ 60 fps); GPU วัดไม่ได้ (NOT RUN) |
 | การดัดบน CPU | sparse weights (normalize ครั้งเดียว) + ข้ามเมื่อ transform เท่าเดิม | งู 50 จุด × 6 bone: 89 → ~22–37 µs ต่อเฟรมขณะขยับ, ~0 ขณะนิ่ง |
 | ข้อความ "resources still in use at exit" ในเครื่องมือ | รอ 0.5 วินาทีก่อนออก | เกิดจากออกโปรแกรมเร็วเกินไปขณะ audio server ยังถือ stream ของเสียงวนลูป ไม่ใช่การรั่วของ runtime (ตรวจด้วย --verbose) |
+
+---
+
+## 16. ภาคผนวก (2026-10-16): 0.8.2 — แก้จาก code review
+
+| ข้อค้นพบ | การแก้ | หลักฐาน |
+|---|---|---|
+| `==`/`!=` ต่างชนิดเป็น script error ใน GDScript 4 (ยืนยันใน 4.7.2) — importer (hframes/region/texture_*), preset_document.set_value, inspector bool, manifest | เทียบชนิดก่อน (`same_value()`, `typeof`, `is`) | test_review_fixes / test_app_services / test_app_ui ล้มเหลวกับโค้ดเดิม |
+| auto-weights > 8 bone และเขียนไฟล์ก่อนตรวจ | จำกัด 8 bone ที่มีน้ำหนักมากสุด; validate ในหน่วยความจำก่อนเขียน | test_auto_weights_follow_at_most_eight_bones |
+| import: notes > 2000 ตัวอักษร, ไม่จำกัดจำนวน bone/part/marker | ย่อ notes, error เมื่อเกินขีดจำกัด | test_import_keeps_the_preset_within_limits |
+| CRLF (Windows autocrlf) ทำให้ format --check / export / manifest เห็นเป็นไฟล์ต่าง | `.gitattributes` eol=lf + เทียบแบบไม่สน CRLF (เทสต์ใหม่เจอจุดที่ manifest ด้วย) | test_format_check_accepts_crlf…, test_crlf_copy_of_the_runtime… |
+| scene_outline อ่านบรรทัดในสตริงหลายบรรทัดเป็น header | สถานะ "อยู่ในสตริง" ต่อเนื่องข้ามบรรทัด | test_multi_line_strings… |
+| CLI รับ option ของคำสั่งอื่นเงียบ ๆ | ตาราง option ต่อคำสั่ง | test_cli_rejects_options… |

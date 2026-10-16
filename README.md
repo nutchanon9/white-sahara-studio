@@ -16,6 +16,7 @@
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 **Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
 **Phase 4 ทำแล้ว:** rig ตัวละคร 2D แบบ cutout — bone, ชิ้นส่วน PNG/polygon, IK สองท่อน, skin (เปลี่ยนชุด), pose และนำเข้า rig จาก scene เดิม (ดู [rig_format.md](addons/oasis_fx/docs/rig_format.md))
+**0.8.2 ทำแล้ว:** แก้บั๊กจากการ code review 11 จุด (เช่น `import-rig` พังกับ sprite sheet, แก้ field ผิดชนิดในแอปไม่ได้, ไฟล์ CRLF บน Windows) พร้อมเทสต์กันซ้ำ
 **0.8.1 ทำแล้ว:** วัดประสิทธิภาพ (ฝั่ง CPU) ของฉากต่อสู้ + ทำอาหารที่มี effect/เสียง/rig จำนวนมาก — ไม่จำเป็นต้องมี pooling หรือ quality presets; การดัดชิ้นส่วนเร็วขึ้น 2–4 เท่า (ดู [performance.md](addons/oasis_fx/docs/performance.md))
 **0.8.0 ทำแล้ว:** แปลงเสียง (sfx) เป็นไฟล์ **WAV ไฟล์เดียว** (mixdown) ได้ทั้งใน CLI และแอป และมี **GitHub CI** รันเทสต์ด้วย Godot 4.7.2 ที่ตรึงเวอร์ชันไว้
 **0.7.0 ทำแล้ว:** ชิ้นส่วนที่ **บิดงอตาม bone** (deformation / bone weights) — คำนวณ weight อัตโนมัติ, นำเข้า weight จาก scene เดิม, ตัวอย่างงูทะเลทรายที่เลื้อยได้
@@ -329,6 +330,25 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - **ปรับปรุง:** การดัดชิ้นส่วนใช้เฉพาะ bone ที่มีผลต่อแต่ละจุด และข้ามเมื่อ bone ไม่ขยับ → งู 1 ตัวจาก 89 µs เหลือ ~22–37 µs ต่อเฟรม
 - เทสต์ใหม่ `test_busy_fight_and_cooking_scene_runs_clean` (ไม่มี error, ทุกอย่างลบตัวเอง, ไม่มี node ค้าง)
 - เทสต์ทั้งหมด **199 passed, 0 failed** (รวมบนสำเนาใหม่ และจำลองขั้นตอน CI); GitHub Actions run [#3](https://github.com/nutchanon9/white-sahara-studio/actions/runs/38867219736): ผ่าน **199 passed, 0 failed**
+
+## 0.8.2: แก้จาก code review
+
+รีวิวโค้ดส่วน core, CLI และ services ของแอป เจอ 10 จุด (และเทสต์ใหม่เจอเพิ่มอีก 1) แก้ครบทุกจุด:
+
+- **GDScript หยุดทำงานเมื่อเทียบค่าต่างชนิดกัน** (`int != bool`, `float != Vector2`, `"1" == 1.0`) — ค่าที่อ่านจากไฟล์ของผู้ใช้
+  จึงต้องเช็คชนิดก่อน: `import-rig` พังกับ Sprite2D ที่ใช้ `hframes`/`region_enabled` และ Polygon2D ที่ตั้ง `texture_rotation`;
+  แอปแก้ค่า field ที่ชนิดผิด (เช่น `"duration_seconds": "1"`) ไม่ได้; inspector พังเมื่อ bool เป็นข้อความ; manifest ที่ถูกแก้มือทำ generate พัง
+- **`auto-weights`** อาจผูก bone เกิน 8 ตัว แล้วเขียนทับ preset ที่ถูกต้องด้วยไฟล์ที่ไม่ผ่าน → จำกัด 8 bone (เลือกตัวที่มีน้ำหนักมากสุด)
+  และตรวจผลก่อนเขียนไฟล์ทุกครั้ง
+- **import ตัวละครใหญ่:** รายการ node ที่เปลี่ยนชื่อทำให้ `notes` ยาวเกิน 2000 ตัวอักษร → ย่อใน preset (รายการเต็มยังอยู่ในรายงาน);
+  เกินจำนวน bone/part/marker → แจ้ง error ชัดเจนแทนการเขียน preset ที่ใช้ไม่ได้
+- **Windows CRLF:** เพิ่ม `.gitattributes` (LF เสมอ); `format --check`, การ export และ manifest ไม่นับความต่างของ line ending เป็นการแก้ไฟล์
+- **อ่าน .tscn:** ข้อความหลายบรรทัด (เช่น `[center]...[/center]` ใน RichTextLabel) เคยถูกอ่านเป็น header/property
+- **CLI:** option ที่ไม่ใช่ของคำสั่งนั้นเป็น usage error (exit 2) เช่น `generate --check` เดิมสร้างไฟล์โดยไม่เตือน
+- ลบโค้ดซ้ำ/ไม่ได้ใช้ (หา res path ซ้ำใน vfx_builder, `scene_path_for`); ค่าคงที่เก่าใน `oasis_fx.gd` เก็บไว้เพื่อความเข้ากันได้
+
+เทสต์ใหม่ `test_review_fixes.gd` (7) + เทสต์แอป 3 — **ทั้งหมดล้มเหลวกับโค้ดเดิม** (ตรวจแล้ว) และผ่านกับโค้ดใหม่;
+เทสต์ทั้งหมด **209 passed, 0 failed** (รวมบนสำเนาใหม่และจำลองขั้นตอน CI)
 
 ## License
 

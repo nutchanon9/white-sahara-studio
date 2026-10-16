@@ -72,6 +72,9 @@ Every command handles all asset types; the type comes from the preset's `asset_t
 | `--write` | schema | Write the schema file instead of printing it. |
 | `--check` | format | Report non-canonical files without rewriting them. |
 
+Each command accepts only its own options (and `--json`); any other option is a usage
+error (exit 2), e.g. `generate --check` does not quietly generate.
+
 Preset paths and folders may be `res://…`, relative to the project root, or absolute paths
 inside the project.
 

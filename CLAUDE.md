@@ -101,6 +101,11 @@ Windows launch NOT RUN. Awaiting owner acceptance.
 the CPU side (docs/performance.md); CPU bending uses sparse normalized weights and skips still rigs (89 → ~22–37 µs
 per serpent). Full suite 199 passed, 0 failed (also on a fresh copy); GPU profiling NOT RUN. Awaiting owner acceptance.
 
+**0.8.2 review fixes (user requested "continue", 2026-10-16):** code review of core/CLI/app services — mixed-type
+`==` crashes (import-rig with sprite sheets, editing wrong-typed fields, manifest), auto-weights capped at 8 bones and
+validated before writing, import notes/limits, CRLF tolerance + `.gitattributes`, multi-line strings in scene_outline,
+per-command CLI options. Regression tests fail on the old code. Full suite 209 passed, 0 failed (also on a fresh copy). Awaiting owner acceptance.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.
