@@ -314,11 +314,11 @@ func _make_control(key: String, spec: Dictionary, value: Variant, setter: Callab
 		"node_path":
 			return _node_path_field(str(value if value != null else ""), setter)
 		"id_ref":
-			return _id_pick_field(str(value if value != null else ""), _id_choices(key), setter, true)
+			return _id_pick_field(str(value if value != null else ""), key, setter, true)
 		"id":
 			var choices := _id_choices(key)
 			if not choices.is_empty() or key in REFERENCE_KEYS:
-				return _id_pick_field(str(value if value != null else ""), choices, setter, false)
+				return _id_pick_field(str(value if value != null else ""), key, setter, false)
 			return _line(value, setter)
 		"points":
 			var text := TextEdit.new()
@@ -436,7 +436,9 @@ func _id_choices(key: String) -> Array:
 
 
 ## An id typed or picked from `choices` ("" = none when `allow_empty`).
-func _id_pick_field(value: String, choices: Array, setter: Callable, allow_empty: bool) -> Control:
+## The ▾ list is filled when it opens, so it always offers the current ids
+## (after bones or parts were added, renamed or removed).
+func _id_pick_field(value: String, key: String, setter: Callable, allow_empty: bool) -> Control:
 	var row := HBoxContainer.new()
 	var line := LineEdit.new()
 	line.text = value
@@ -447,10 +449,14 @@ func _id_pick_field(value: String, choices: Array, setter: Callable, allow_empty
 	var pick := MenuButton.new()
 	pick.text = "▾"
 	pick.flat = false
-	var options := ([""] if allow_empty else []) + choices
-	for c in options:
-		pick.get_popup().add_item(c if not c.is_empty() else "(none)")
-	pick.disabled = options.is_empty()
+	var options := []
+	var fill := func() -> void:
+		options.assign(([""] if allow_empty else []) + _id_choices(key))
+		pick.get_popup().clear()
+		for c in options:
+			pick.get_popup().add_item(c if not c.is_empty() else "(none)")
+	fill.call()
+	pick.about_to_popup.connect(fill)
 	pick.get_popup().index_pressed.connect(func(i: int) -> void:
 		line.text = options[i]
 		setter.call(options[i]))
@@ -827,7 +833,7 @@ func _events_editor() -> Control:
 			commit.call())
 		at.tooltip_text = AnimSpec.EVENT_FIELDS.at.doc
 		box.add_child(at)
-		var effects := _path_list_field(AnimSpec.EVENT_FIELDS.effects, event.get("effects", []), func(v: Variant) -> void:
+		var effects := _path_list_field(AnimSpec.EVENT_FIELDS.effects, event.effects if event.get("effects") is Array else [], func(v: Variant) -> void:
 			event["effects"] = v
 			commit.call())
 		effects.tooltip_text = AnimSpec.EVENT_FIELDS.effects.doc

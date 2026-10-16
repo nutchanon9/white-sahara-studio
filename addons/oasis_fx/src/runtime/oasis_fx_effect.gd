@@ -20,8 +20,13 @@ signal finished
 ## Length of one effect cycle in seconds (effect time, see playback_speed).
 @export var duration_seconds: float = 1.0
 @export var loop: bool = false
-## Multiplies effect time and every emitter's speed_scale.
-@export var playback_speed: float = 1.0
+## Multiplies effect time and every emitter's speed_scale (also when changed
+## while playing, e.g. right after spawn()).
+@export var playback_speed: float = 1.0:
+	set(value):
+		playback_speed = value
+		if is_inside_tree():
+			_apply_speed()
 ## Start playing when the effect enters the scene tree.
 @export var auto_play: bool = true
 ## queue_free() this effect after finished. Looping effects are never freed automatically.

@@ -466,3 +466,83 @@ func test_inspector_shows_fields_of_the_wrong_type() -> void:
 		loop.button_pressed = true
 		check_eq(app.document.get_value("loop"), true, "and can be fixed")
 	await _stop(app)
+
+
+# --- Second review fixes (0.8.3) ---------------------------------------------
+
+func test_cancelled_save_drops_the_waiting_action() -> void:
+	var app := await _start("ui_pending")
+	var ran := []
+	app._pending_action = func() -> void: ran.append(true)
+	app._save_dialog.canceled.emit()
+	var path := ProjectSettings.globalize_path(temp_dir("ui_pending_out")).path_join("later.vfx.json")
+	app._save_dialog.file_selected.emit(path)
+	check(FileAccess.file_exists(path), "the later Save As works")
+	check(ran.is_empty(), "the action of the cancelled dialog (e.g. quit) did not run")
+	app._pending_action = func() -> void: ran.append(true)
+	app._save_dialog.file_selected.emit("/proc/oasis_cannot_write.vfx.json")  # not writable, even as root
+	await tree.process_frame
+	app._message.hide()
+	check(ran.is_empty() and not app._pending_action.is_valid(), "a failed save drops it too")
+	await _stop(app)
+
+
+func test_save_as_never_overwrites_another_preset_silently() -> void:
+	var app := await _start("ui_suffix")
+	var dir := ProjectSettings.globalize_path(temp_dir("ui_suffix_out"))
+	write_text(dir.path_join("fire_burst.vfx.json"), "{\"keep\": true}")
+	check_eq(app.save_to(dir.path_join("fire_burst")), ERR_ALREADY_EXISTS, "the suffix is added, the file exists: refused")
+	check_eq(FileAccess.get_file_as_string(dir.path_join("fire_burst.vfx.json")), "{\"keep\": true}", "the other preset is untouched")
+	await tree.process_frame
+	check(app._message.visible and app._message.dialog_text.contains("already exists"), "the user is told why")
+	app._message.hide()
+	check_eq(app.save_to(dir.path_join("my_fire")), OK, "a new name gets the suffix and saves")
+	check(FileAccess.file_exists(dir.path_join("my_fire.vfx.json")), "saved as my_fire.vfx.json")
+	await _stop(app)
+
+
+func test_event_effects_of_the_wrong_type_do_not_break_the_inspector() -> void:
+	var dir := temp_dir("ui_event_types")
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://addons/oasis_fx/presets/examples/chef_ladle_attack.anim.json"))
+	data.events[1].effects = "res://examples/runtime_demo/fx/fire_burst.tscn"
+	write_text(dir + "/events.anim.json", JSON.stringify(data))
+	var app := await _start("ui_event_types_app", dir + "/events.anim.json")
+	check(not app.validation.report.is_ok(), "the validator reports the field")
+	check(app.inspector.controls.has("event:1") and app.inspector.controls.has("events:add"), "the events editor was built")
+	await _stop(app)
+
+
+func test_pause_holds_a_pending_replay() -> void:
+	var app := await _start("ui_replay_pause")
+	var preview = app.preview
+	preview.loop_preview = true
+	preview._on_finished()
+	preview.set_paused(true)
+	await tree.create_timer(preview.REPLAY_GAP + 0.2).timeout
+	check(preview.effect.is_paused(), "the effect stays paused (no replay restarted it)")
+	preview.play()
+	check(not preview.effect.is_paused(), "Play resumes")
+	await _stop(app)
+
+
+func test_id_lists_offer_current_bone_ids() -> void:
+	var app := await _start("ui_id_lists", "res://addons/oasis_fx/presets/examples/oasis_chef.rig.json")
+	var field: HBoxContainer = app.inspector.controls["parts[0].bone"]
+	var pick: MenuButton = field.get_child(1)
+	app.document.set_item_value(0, "id", "pelvis")
+	pick.about_to_popup.emit()
+	var items := []
+	for i in pick.get_popup().item_count:
+		items.append(pick.get_popup().get_item_text(i))
+	check(items.has("pelvis") and not items.has("hips"), "the renamed bone is offered: %s" % [items])
+	await _stop(app)
+
+
+func test_sprite_restart_starts_at_the_first_frame() -> void:
+	var app := await _start("ui_sprite_restart", "res://addons/oasis_fx/presets/examples/campfire_flame.frames.json")
+	var preview = app.preview.effect
+	await tree.create_timer(0.35).timeout
+	check(preview.sprite.frame > 0, "it has moved on (frame %d)" % preview.sprite.frame)
+	app.preview.restart()
+	check_eq(preview.sprite.frame, 0, "Restart shows frame 0 again")
+	await _stop(app)

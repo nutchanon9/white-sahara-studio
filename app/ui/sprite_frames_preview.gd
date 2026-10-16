@@ -74,6 +74,8 @@ func play() -> void:
 	_paused = false
 	sprite.speed_scale = 1.0
 	sprite.play(StringName(animation_name))
+	# play() of the current animation does not rewind; start from frame 0.
+	sprite.set_frame_and_progress(0, 0.0)
 
 
 func restart() -> void:

@@ -15,6 +15,9 @@ const _ALLOWED_RUNTIMES := [
 	"res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
 	"res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd",
 ]
+## The same runtimes by class name, so they are recognised when the addon
+## folder was moved in the game (UIDs keep the scenes working).
+const _ALLOWED_CLASSES := [&"OasisFxEffect", &"OasisSfxEffect"]
 
 ## Emitted for every event, before its effects appear. `at` is the node the
 ## event names (null when it does not exist).
@@ -41,8 +44,11 @@ func oasis_event(event_name: StringName, effects: Array, at: NodePath) -> void:
 		if not scene is PackedScene:
 			continue
 		var effect: Node = scene.instantiate()
+		if effect == null:
+			push_warning("OasisAnimationEvents: %s could not be instantiated (missing files?); not shown" % scene.resource_path)
+			continue
 		var script: Script = effect.get_script()
-		if script == null or not _ALLOWED_RUNTIMES.has(script.resource_path):
+		if script == null or not (_ALLOWED_RUNTIMES.has(script.resource_path) or _ALLOWED_CLASSES.has(script.get_global_name())):
 			push_warning("OasisAnimationEvents: %s is not an OasisFx effect or sound; not shown" % scene.resource_path)
 			effect.free()
 			continue

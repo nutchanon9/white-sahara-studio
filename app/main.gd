@@ -170,6 +170,11 @@ func save_to(path: String) -> Error:
 		for other in AssetTypes.suffixes():
 			base = base.trim_suffix(other)
 		path = base.trim_suffix(".json") + suffix
+		# The dialog confirmed overwriting the name the user typed, not this
+		# one: never replace another preset without asking.
+		if FileAccess.file_exists(path) and path != document.path:
+			show_message("Not saved", "%s already exists. Save under another name, or open that file to change it." % path)
+			return ERR_ALREADY_EXISTS
 	var err: Error = document.save(path)
 	if err != OK:
 		show_message("Save failed", "Could not save %s:\n%s" % [path, error_string(err)])
@@ -390,10 +395,14 @@ func _build_dialogs() -> void:
 	_open_dialog.file_selected.connect(open_file)
 	_save_dialog = _file_dialog(FileDialog.FILE_MODE_SAVE_FILE, "Save preset as")
 	_save_dialog.file_selected.connect(func(path: String) -> void:
-		if save_to(path) == OK and _pending_action.is_valid():
-			var action := _pending_action
-			_pending_action = Callable()
+		var saved := save_to(path) == OK
+		var action := _pending_action
+		# The action waiting for this save (quit, open, new) runs only when
+		# the save worked; otherwise it is dropped, never run by a later save.
+		_pending_action = Callable()
+		if saved and action.is_valid():
 			action.call())
+	_save_dialog.canceled.connect(func() -> void: _pending_action = Callable())
 	_export_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_DIR, "Export to a folder in your Godot game")
 	_export_dialog.dir_selected.connect(_on_export_dir_selected)
 	_game_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_DIR, "Choose your game's project folder (contains project.godot)")

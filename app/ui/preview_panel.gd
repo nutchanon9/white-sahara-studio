@@ -277,6 +277,7 @@ func focus_item(index: int) -> void:
 
 
 func play() -> void:
+	_replay_timer.paused = false
 	if is_instance_valid(effect):
 		_pause_button.set_pressed_no_signal(false)
 		effect.set_paused(false)
@@ -287,6 +288,7 @@ func play() -> void:
 
 func stop() -> void:
 	_replay_timer.stop()
+	_replay_timer.paused = false
 	if is_instance_valid(effect):
 		_pause_button.set_pressed_no_signal(false)
 		effect.stop()
@@ -295,6 +297,7 @@ func stop() -> void:
 
 func restart() -> void:
 	_replay_timer.stop()
+	_replay_timer.paused = false
 	if is_instance_valid(effect):
 		_pause_button.set_pressed_no_signal(false)
 		effect.restart()
@@ -303,6 +306,8 @@ func restart() -> void:
 
 func set_paused(paused: bool) -> void:
 	_pause_button.set_pressed_no_signal(paused)
+	# A pending auto-replay waits while paused instead of restarting the effect.
+	_replay_timer.paused = paused
 	if is_instance_valid(effect):
 		effect.set_paused(paused)
 	state_changed.emit()

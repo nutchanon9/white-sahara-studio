@@ -142,3 +142,61 @@ func test_format_check_accepts_crlf_line_endings() -> void:
 	write_text(path, FileAccess.get_file_as_string(FIRE_BURST).replace("\n", "\r\n"))
 	var run := _cli(["format", path, "--check"])
 	check_eq(run.code, 0, "a CRLF checkout is canonical:\n" + run.text)
+
+
+# --- Second review (runtimes and app UI), 0.8.3 -----------------------------
+
+const Effect := preload("res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd")
+
+
+func test_playback_speed_set_after_spawn_reaches_the_particles() -> void:
+	var scene: PackedScene = load("res://examples/runtime_demo/fx/fire_burst.tscn")
+	var fx: Node2D = Effect.spawn(scene, tree.root, Vector2.ZERO)
+	fx.playback_speed = 2.0
+	check(fx.get_emitters().all(func(e): return e.speed_scale == 2.0), "emitters follow a speed set after spawn()")
+	fx.set_paused(true)
+	fx.playback_speed = 3.0
+	check(fx.get_emitters().all(func(e): return e.speed_scale == 0.0), "and stay frozen while paused")
+	fx.queue_free()
+	await tree.process_frame
+
+
+## A separate game where the addon lives in res://plugins/oasis_fx (moved in
+## the editor) and an animation event lists a scene that cannot be
+## instantiated before a good one.
+func test_animation_events_in_a_game_with_a_moved_addon_and_a_broken_scene() -> void:
+	var game := ProjectSettings.globalize_path(temp_dir("review_moved_addon"))
+	write_text(game.path_join("project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"Moved\"\n")
+	for file in ["oasis_fx_effect.gd", "oasis_sfx_effect.gd", "oasis_animation_events.gd"]:
+		DirAccess.make_dir_recursive_absolute(game.path_join("plugins/oasis_fx/src/runtime"))
+		DirAccess.copy_absolute(ProjectSettings.globalize_path("res://addons/oasis_fx/src/runtime/" + file), game.path_join("plugins/oasis_fx/src/runtime/" + file))
+	var fx := FileAccess.get_file_as_string("res://examples/runtime_demo/fx/sword_slash.tscn")
+	fx = RegEx.create_from_string(" uid=\"[^\"]*\"").sub(fx, "", true).replace("res://addons/oasis_fx", "res://plugins/oasis_fx")
+	DirAccess.make_dir_recursive_absolute(game.path_join("fx"))
+	write_text(game.path_join("fx/sword_slash.tscn"), fx)
+	var output := []
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--import"]), output, true)
+	write_text(game.path_join("verify.gd"), """extends SceneTree
+func _initialize():
+	_go.call_deferred()
+func _go():
+	var actor = Node2D.new()
+	root.add_child(actor)
+	var events = load("res://plugins/oasis_fx/src/runtime/oasis_animation_events.gd").new()
+	events.name = "OasisAnimationEvents"
+	actor.add_child(events)
+	var broken = PackedScene.new()  # instantiate() returns null
+	events.oasis_event(&"hit", [broken, load("res://fx/sword_slash.tscn")], NodePath("."))
+	var shown = root.get_children().filter(func(c): return c != actor).map(func(c): return String(c.get_script().get_global_name()) if c.get_script() else "")
+	print("RESULT " + JSON.stringify(shown))
+	quit(0)
+""")
+	output = []
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--script", "res://verify.gd"]), output, true)
+	var text := "\n".join(PackedStringArray(output))
+	check(not text.contains("SCRIPT ERROR"), "no script error from the broken scene:\n" + text)
+	var line := ""
+	for l in text.split("\n"):
+		if l.begins_with("RESULT "):
+			line = l.substr(7)
+	check_eq(JSON.parse_string(line) if line.begins_with("[") else null, ["OasisFxEffect"], "the good effect is shown although the addon moved:\n" + text)
