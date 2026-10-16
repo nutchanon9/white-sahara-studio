@@ -60,24 +60,29 @@ func update_deformation() -> void:
 		# Godot's skinning: points in skeleton space, moved by each bone's
 		# (current pose × inverse rest pose), blended by weight.
 		var into: Transform2D = to_skeleton * poly.global_transform
-		var back := into.affine_inverse()
-		var moves: Array[Transform2D] = []
+		var moves: Array[Transform2D] = [into]
 		for i in d.bones.size():
 			moves.append(to_skeleton * (d.bones[i] as Bone2D).global_transform * d.rest_inverse[i])
+		if moves == d.last:
+			continue  # nothing moved since the last frame
+		d.last = moves
+		var back := into.affine_inverse()
 		var rest: PackedVector2Array = d.rest
 		var offset := poly.offset
+		var first: PackedInt32Array = d.first
+		var bone: PackedInt32Array = d.bone
+		var weight: PackedFloat32Array = d.weight
 		var out := PackedVector2Array()
 		out.resize(rest.size())
 		for v in rest.size():
+			if first[v] == first[v + 1]:
+				out[v] = rest[v]  # no weight: stays put
+				continue
 			var p: Vector2 = into * (rest[v] + offset)
 			var sum := Vector2.ZERO
-			var total := 0.0
-			for i in moves.size():
-				var w: float = d.weights[i][v]
-				if w > 0.0:
-					sum += moves[i] * p * w
-					total += w
-			out[v] = (back * (sum / total) - offset) if total > 0.0 else rest[v]
+			for k in range(first[v], first[v + 1]):
+				sum += moves[bone[k]] * p * weight[k]
+			out[v] = back * sum - offset
 		poly.polygon = out
 
 
@@ -165,7 +170,7 @@ func _setup_deformation() -> void:
 			if gpu_deform:
 				poly.skeleton = poly.get_path_to(skeleton)
 				continue
-			var d := {"poly": poly, "rest": poly.polygon, "bones": [], "weights": [], "rest_inverse": []}
+			var d := {"poly": poly, "rest": poly.polygon, "bones": [], "weights": [], "rest_inverse": [], "last": []}
 			for i in poly.get_bone_count():
 				var bone := skeleton.get_node_or_null(poly.get_bone_path(i)) as Bone2D
 				var weights := poly.get_bone_weights(i)
@@ -175,6 +180,7 @@ func _setup_deformation() -> void:
 				d.bones.append(bone)
 				d.weights.append(weights)
 				d.rest_inverse.append(bone.get_skeleton_rest().affine_inverse())
+			_sparse_weights(d)
 			# The texture must stay on the rest points while the outline bends.
 			if poly.uv.size() != poly.polygon.size():
 				var uv := PackedVector2Array()
@@ -185,6 +191,27 @@ func _setup_deformation() -> void:
 	process_priority = 1000
 	set_process(not _deformers.is_empty())
 	update_deformation()
+
+
+# Per point, only the bones that pull it, with weights divided by their sum:
+# point v uses entries first[v] … first[v + 1] - 1 of `bone` (index into the
+# moves of update_deformation(), 1 = the first bone) and `weight`.
+static func _sparse_weights(d: Dictionary) -> void:
+	var first := PackedInt32Array([0])
+	var bone := PackedInt32Array()
+	var weight := PackedFloat32Array()
+	for v in d.rest.size():
+		var total := 0.0
+		for i in d.weights.size():
+			total += maxf(d.weights[i][v], 0.0)
+		for i in d.weights.size():
+			if total > 0.0 and d.weights[i][v] > 0.0:
+				bone.append(i + 1)
+				weight.append(d.weights[i][v] / total)
+		first.append(bone.size())
+	d.first = first
+	d.bone = bone
+	d.weight = weight
 
 
 # All instances of a rig scene share the skeleton's SkeletonModificationStack2D

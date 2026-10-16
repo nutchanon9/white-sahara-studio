@@ -145,3 +145,30 @@ func test_runtime_demo_plays_generated_chef_animations_and_sprite_frames() -> vo
 	check_eq(String(chef_player.current_animation), "oasis/idle", "back to idle after the attack")
 	demo.queue_free()
 	await tree.process_frame
+
+
+func test_busy_fight_and_cooking_scene_runs_clean() -> void:
+	# Spec §12: many effects at once, during fights and cooking. Every logged
+	# error fails this test (runner), so this also checks the runtimes stay quiet.
+	var scenario: Node2D = load("res://examples/runtime_demo/stress_scenario.gd").new()
+	scenario.rigs = 2
+	scenario.serpents = 2
+	scenario.wave_interval = 0.05
+	var before := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	tree.root.add_child(scenario)
+	var peak := 0
+	var until := Time.get_ticks_msec() + 1200
+	while Time.get_ticks_msec() < until:
+		await tree.process_frame
+		peak = maxi(peak, scenario.live_one_shots())
+	check(scenario.spawned_effects >= 40 and scenario.spawned_sounds >= 20, "spawned %d effects, %d sounds" % [scenario.spawned_effects, scenario.spawned_sounds])
+	check(peak >= 10, "many play at the same time (%d)" % peak)
+	scenario.wind_down()
+	await tree.create_timer(2.5).timeout  # the longest one-shot, Cooking Success, lasts 1.9 s
+	check_eq(scenario.live_one_shots(), 0, "every one-shot effect and sound freed itself")
+	var serpent: Node2D = scenario.get_children().filter(func(c): return c.has_method("update_deformation") and c.get_node_or_null("body") != null)[0]
+	check(serpent.get_node("body").polygon.size() == 50, "rigs are still there")
+	scenario.queue_free()
+	for i in 10:
+		await tree.process_frame
+	check(int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) <= before + 2, "no nodes left behind")
