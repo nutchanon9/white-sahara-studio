@@ -286,7 +286,10 @@ assistant must never invent a file path, and must not claim to have made, downlo
 | "heard only nearby" | `positional: true`, smaller `max_distance` |
 
 Generate (`generate my_sound.sfx.json --out res://sfx`) and **listen to it** in the game or the
-desktop app before using it; a valid preset can still sound wrong.
+desktop app before using it; a valid preset can still sound wrong. An assistant without
+speakers can at least render it (`mixdown my_sound.sfx.json --out my_sound.wav`) and read
+the reported length, peak and clipping — "clipped" means lower `volume_db` or a layer's
+`gain_db`; it still has to be listened to by a person.
 
 ### Complete example: Sword Slash SFX (whoosh with variants, then a hit)
 

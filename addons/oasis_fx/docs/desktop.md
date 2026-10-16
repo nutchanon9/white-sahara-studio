@@ -47,7 +47,7 @@ weights (one value per point for each bone).*
 
 | Area | What it does |
 |---|---|
-| Toolbar | **New ▾**: effect (Ctrl+N), sound (Ctrl+Shift+N), animation (Ctrl+Alt+N), sprite frames, rig, rig from a scene in the game; **Open…** (Ctrl+O), **Save** (Ctrl+S), **Save As…**, **Export to game…** (Ctrl+E), **Game project…** (the game whose `res://` files presets use). The title shows the file, `*` for unsaved changes, and "read-only example" for shipped presets. |
+| Toolbar | **New ▾**: effect (Ctrl+N), sound (Ctrl+Shift+N), animation (Ctrl+Alt+N), sprite frames, rig, rig from a scene in the game; **Open…** (Ctrl+O), **Save** (Ctrl+S), **Save As…**, **Export to game…** (Ctrl+E), **Render WAV…** (sounds only: mixes the layers into one `.wav` file — one fixed take, loops rendered for 4 s, normalized to −1 dBFS when the mix would clip; see [sfx_format.md](sfx_format.md#mixdown-to-one-wav-file-080)), **Game project…** (the game whose `res://` files presets use). The title shows the file, `*` for unsaved changes, and "read-only example" for shipped presets. |
 | Presets (left) | *Examples (read-only)* shipped inside the app, and *My presets* in the workspace folder; sounds are marked ♪, animations ▶, sprite frames ▦, rigs ✦. Click to open. |
 | Preview (center) | Effects: the effect in its own viewport, with background color, grid with the spawn point and zoom. Sounds: the timeline (one row per layer, fades, loop repeats, playhead) and the sound plays through the speakers. Animations: the target scene's stand-in posed by the animation, event markers at their nodes, and a track timeline below (click a row to select the track, click/drag the time area to see that pose). Sprite frames: the selected animation and the sheet with its grid. Rigs: the rig built by the generator's builder with its part images, bones and IK targets drawn on top (**Bones**), a row with **skin** and **pose** pickers; drag an IK target with the mouse to bend its chain. All: Play / Stop / Restart / Pause, **Replay** (restart one-shot effects automatically) and the clock. |
 | Diagnostics (below preview) | "Valid — N emitters, M particles" / "Valid — N layer(s)" / "Valid — N track(s), M event(s)" / "Valid — N animation(s)" / "Valid — N bone(s), M part(s), …" or the errors and warnings from the shared validator, each with its field path. Clicking an entry of an item (`emitters[i]`, `layers[i]`, `tracks[i]`, `animations[i]`, `bones[i]`) selects it. |
@@ -304,6 +304,19 @@ example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 | Launching `OasisFx.exe` on Windows; dragging IK targets with a real mouse | **NOT RUN** (no Windows; dragging was driven by code) |
 | Importing White Sahara's real `mannequin.tscn` | **NOT RUN** — the game repository is not in this session |
 
+## Verification status (0.8.0 — WAV mixdown and CI, 2026-10-16)
+
+| Check | Result |
+|---|---|
+| Feasibility: `AudioStreamPlayback.mix_audio()` decodes wav/ogg/mp3 streams headless (Dummy audio driver, no display) | **PASS** — replaces the Movie Maker idea of 0.4 |
+| Full suite (`run_tests.gd`, 19 test files incl. `test_sfx_mixdown.gd`) | **PASS** — 198 passed, 0 failed; same result on a fresh copy without `.godot/` |
+| Mixdown timing against test tones: start offsets, gain, pitch, trim, fades, loops (fade-in once), variants, normalize, clipping report, determinism, written 16-bit stereo WAV (automated) | **PASS** |
+| Example mixdowns inspected as waveform images (Sword Slash: whoosh, then the hit at 140 ms; Cooking Sizzle 3 s loop fading in) | **PASS** (visual) |
+| App **Render WAV…** (file name with spaces and Thai, normalize on clipping, loop length, hidden for other types) (automated) | **PASS** |
+| Packaged Linux build `--smoke-test` incl. `"sound_mixdown": true`, `"rig_bending": true`, `"matches_cli": true` | **PASS** |
+| GitHub Actions workflow on the pushed branch | see README (result of the first run) |
+| **Listening** to the rendered files; Windows launch | **NOT RUN** — no audio device in the cloud session |
+
 ## Verification status (0.7.0 — bending parts, 2026-10-15)
 
 | Check | Result |
@@ -355,6 +368,9 @@ Sounds (Phase 2):
 16. Save the sound as `my hit.sfx.json`, export it to `sfx` in the test game: the list
     shows the scene, `oasis_sfx_effect.gd`, `USE` for the game's own audio and `CREATE` for
     example audio. In Godot, play `res://sfx/<id>.tscn`: you hear it and the node frees itself.
+16a. With a sound open, click **Render WAV…** and save `my hit.wav`: the message gives its
+    length and peak; play the file in Windows' media player: it sounds like the preview
+    (without the random variation).
 
 Animations and sprite frames (Phase 3):
 

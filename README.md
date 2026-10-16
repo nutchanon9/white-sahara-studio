@@ -16,6 +16,7 @@
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 **Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
 **Phase 4 ทำแล้ว:** rig ตัวละคร 2D แบบ cutout — bone, ชิ้นส่วน PNG/polygon, IK สองท่อน, skin (เปลี่ยนชุด), pose และนำเข้า rig จาก scene เดิม (ดู [rig_format.md](addons/oasis_fx/docs/rig_format.md))
+**0.8.0 ทำแล้ว:** แปลงเสียง (sfx) เป็นไฟล์ **WAV ไฟล์เดียว** (mixdown) ได้ทั้งใน CLI และแอป และมี **GitHub CI** รันเทสต์ด้วย Godot 4.7.2 ที่ตรึงเวอร์ชันไว้
 **0.7.0 ทำแล้ว:** ชิ้นส่วนที่ **บิดงอตาม bone** (deformation / bone weights) — คำนวณ weight อัตโนมัติ, นำเข้า weight จาก scene เดิม, ตัวอย่างงูทะเลทรายที่เลื้อยได้
 
 ![OasisFx desktop app](docs/images/desktop_app.png)
@@ -39,7 +40,7 @@
 | 1A | schema, loader, validator, CLI `validate`/`generate`, Fire Burst, headless tests | ✅ เสร็จ (แก้ test runner ตาม review แล้ว) |
 | 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide | ✅ เสร็จ |
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
-| 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
+| 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม; 0.8.0: mixdown เป็น WAV | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
 | 3 | Animation Timeline: keyframe ของ node ใน scene เดิม (bone, sprite, polygon), event ที่เรียก VFX/SFX, sprite frames, timeline + preview ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองกับตัวละครจริงของ White Sahara — repo เกมไม่อยู่ใน session นี้) |
 | 4 | Rigging: สร้าง/นำเข้า rig (Skeleton2D/Bone2D), ชิ้นส่วน PNG/polygon, marker, IK สองท่อน, skin, pose, ลาก IK ในแอป; 0.7.0: ชิ้นส่วนบิดงอตาม bone (weights) | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองนำเข้า mannequin จริงของ White Sahara; ไม่มีแปรงระบาย weight) |
 
@@ -290,6 +291,27 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` (`rig_bending: true`, `matches_cli: true` ครบ 17 ตัวอย่าง)
 - ภาพหน้าจอจริง: `docs/images/desktop_rig_bend.png`, `runtime_demo.png`
 - **NOT RUN:** `gpu_deform` บน GPU จริง, เปิด .exe บน Windows, นำเข้า mannequin จริงของ White Sahara
+
+## 0.8.0: Mixdown เป็น WAV และ GitHub CI
+
+- **ทดลองก่อน:** `AudioStreamPlayback.mix_audio()` ของ Godot 4.7.2 ถอดรหัสเสียง wav/ogg/mp3 ได้แบบ offline ใน headless
+  (ไม่ต้องมีการ์ดเสียงหรือหน้าจอ) → ใช้แทนแนวคิด Movie Maker เดิมที่ต้องมีหน้าจอ
+- **mixdown:** `mixdown <sfx.json> --out <file.wav> [--variant N] [--seconds S] [--normalize]` หรือปุ่ม **Render WAV…** ในแอป
+  ใช้กฎเวลาเดียวกับ runtime (เริ่มช้า, ตัดหัว, ความยาว, pitch, gain, fade, loop) → WAV 16-bit stereo
+  เป็น "take เดียว" (ไฟล์ที่ N ของแต่ละ layer, ไม่สุ่ม pitch/volume); เสียงที่วนลูปต้องบอกความยาว (แอปใช้ 4 วินาที);
+  รายงาน peak และจำนวน sample ที่ clip (`--normalize` ปรับ peak เป็น −1 dBFS; แอปทำให้อัตโนมัติเมื่อจะ clip)
+- **ข้อสังเกต:** เสียงตัวอย่าง Sword Slash เมื่อ whoosh กับเสียงกระทบซ้อนกัน ดังเกิน 0 dBFS เล็กน้อย (~+0.7 dB) —
+  ในเกมก็รวมเสียงแบบเดียวกัน
+- **CI:** `.github/workflows/oasisfx.yml` — ดาวน์โหลด Godot 4.7.2 ทางการ ตรวจ SHA-256, import, `validate-all`,
+  `format --check` และเทสต์ทั้งหมด ทุกครั้งที่ push ไป `main`/`claude/**` และทุก PR (ไม่ build ตัวติดตั้ง และไม่ทดสอบ GPU/เสียง/Windows)
+
+**ผลการตรวจ 0.8.0:**
+- เทสต์ทั้งหมด **198 passed, 0 failed** (exit 0) และได้ผลเดียวกันบนสำเนาใหม่ที่ไม่มี `.godot/`
+- เทสต์ mixdown ด้วยเสียงทดสอบ (sine): ตำแหน่งเริ่ม, gain, pitch, trim, fade, loop, variant, normalize, clip, ผลเหมือนเดิมทุกครั้ง;
+  ดูรูปคลื่นของเสียงตัวอย่างแล้วถูกต้อง (เสียงกระทบเริ่มที่ 140 ms)
+- build Linux/Windows ใหม่, Linux ผ่าน `--smoke-test` (`sound_mixdown`, `rig_bending`, `matches_cli` เป็น true)
+- GitHub Actions: CI_RESULT
+- **NOT RUN:** ฟังไฟล์ WAV ที่ได้ (ไม่มีลำโพงใน cloud), เปิด .exe บน Windows
 
 ## License
 

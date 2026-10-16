@@ -241,3 +241,15 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | part ที่บิดงอ | ต้องติดกับ root (`bone` "") | จุดของมันขยับตาม bone หลายตัวอยู่แล้ว ถ้าติดกับ bone ด้วยจะถูกขยับซ้ำ |
 | weight อัตโนมัติ | 2 bone ที่ใกล้ที่สุดต่อจุด, 1/d⁴ แล้ว normalize, ปัดเศษ 0.001 | เรียบง่ายและคาดเดาได้; จุดบนข้อต่อได้ครึ่งต่อครึ่ง; ไม่มีแปรงระบาย (เกินขอบเขต) |
 | นำเข้า | เก็บ weight เมื่อ `skeleton` ของ Polygon2D ชี้ไปที่ Skeleton2D ที่นำเข้า (หรือว่างใน rig ของ OasisFx); ข้าม IKTargets ของ rig ที่ OasisFx สร้าง | weight ที่ไม่มี skeleton ไม่ทำให้ Godot ดัดอยู่แล้ว → นำเข้าแบบแข็งพร้อม note |
+
+---
+
+## 14. ภาคผนวก (2026-10-16): 0.8.0 — WAV mixdown และ GitHub CI
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| วิธี mixdown | `AudioStreamPlayback.mix_audio()` ต่อ layer, รวมเองใน GDScript (`sfx_mixdown.gd`) | ทำงานใน headless โดยไม่ต้องมีการ์ดเสียง/หน้าจอ (ทดลองแล้ว); Movie Maker (ภาคผนวกเดิมใน sfx_format.md) ต้องมีหน้าจอและเขียนภาพทุกเฟรม |
+| กฎเวลา | เรียก `_layer_duration` / `_fade_gain` ของ `oasis_sfx_effect.gd` โดยตรง | ไม่มีโค้ดซ้ำ ผลจึงตรงกับที่เกมเล่น |
+| การสุ่ม | mixdown เป็น take เดียว: ไฟล์ที่ `variant` ของแต่ละ layer, ไม่สุ่ม pitch/volume | ไฟล์เสียงหนึ่งไฟล์เก็บความสุ่มไม่ได้; ผลเหมือนเดิมทุกครั้ง (ทดสอบได้) |
+| clip | รายงานจำนวน sample; `--normalize` (−1 dBFS) แบบเลือกเอง; แอป normalize เฉพาะเมื่อจะ clip และบอกผู้ใช้ | ไม่เปลี่ยนความดังแบบเงียบ ๆ ใน CLI |
+| CI | GitHub Actions บน ubuntu-24.04, Godot 4.7.2 จาก release ทางการ + ตรวจ SHA-256 (ตรงกับ binary ที่ใช้ใน session นี้), import → validate-all → format --check → เทสต์ทั้งหมด | สเปก §6 แนะนำ; ผู้ใช้ตอบ "ทำต่อเลย" หลังจากเสนอ CI; ไม่ build ตัวติดตั้งเพราะ export templates ใหญ่ |

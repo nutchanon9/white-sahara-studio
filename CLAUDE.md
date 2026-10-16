@@ -88,6 +88,13 @@ example `sand_serpent` + `sand_serpent_slither`, app weights editor / Bend with 
 0 failed (also on a fresh copy); packaged Linux smoke test incl. `rig_bending` passed; GPU skinning on real
 hardware, Windows launch and the real mannequin import NOT RUN. Awaiting owner acceptance.
 
+**0.8.0 WAV mixdown + CI (user requested "continue", 2026-10-16):** `sfx_mixdown.gd` renders sound presets offline
+with `AudioStreamPlayback.mix_audio()` and the runtime's timing functions → 16-bit stereo WAV (CLI `mixdown`, app
+Render WAV…; one fixed take, loops need a length, clipping reported / `--normalize`); `.github/workflows/oasisfx.yml`
+runs import, validate-all, format --check and the suite with Godot 4.7.2 (zip SHA-256 pinned). Full suite TOTAL
+passed, 0 failed (also on a fresh copy); packaged Linux smoke test incl. `sound_mixdown` passed; listening and
+Windows launch NOT RUN. Awaiting owner acceptance.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

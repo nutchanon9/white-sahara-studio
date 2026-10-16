@@ -7,7 +7,12 @@ and generates `.tscn` files built from built-in nodes (`Node2D`, `GPUParticles2D
 `ParticleProcessMaterial`, `AudioStreamPlayer`, …) plus one small runtime script that
 handles playback.
 
-**Status: 0.7.0 — Phase 4 with bending parts.** Polygon parts can bend with several bones
+**Status: 0.8.0.** Sound presets render to one WAV file (`mixdown` command, **Render
+WAV…** in the app) offline and headless with `AudioStreamPlayback.mix_audio()` and the
+runtime's timing rules; GitHub Actions runs the suite with the pinned Godot
+(`.github/workflows/oasisfx.yml`).
+
+0.7.0 — Phase 4 with bending parts. Polygon parts can bend with several bones
 (`weights`, plus `uv`, internal points and custom pieces): `OasisRig` moves their points on
 the CPU with Godot's skinning math (GPU skinning drew wrong in the Compatibility renderer
 tested), `auto-weights` computes weights, `import-rig` keeps the weights of skinned
@@ -124,7 +129,7 @@ registered class names (e.g. `--script` tools on a fresh clone), use
 
 ```
 addons/oasis_fx/
-  cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], format, schema, import-rig, auto-weights)
+  cli/oasis_fx_cli.gd           headless CLI (validate[-all], generate[-all], format, schema, import-rig, auto-weights, mixdown)
   src/core/                      shared loader, validator, builder, generator, manifest
   src/runtime/oasis_fx_effect.gd playback script attached to generated effect scenes
   src/runtime/oasis_sfx_effect.gd playback script attached to generated sound scenes

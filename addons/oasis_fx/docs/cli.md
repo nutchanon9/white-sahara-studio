@@ -26,6 +26,7 @@ $OASIS --json validate addons/oasis_fx/presets/examples/fire_burst.vfx.json
 $OASIS schema sfx
 $OASIS import-rig res://addons/oasis_fx/presets/examples/rigs/chef_rig.tscn --out presets/chef_rig.rig.json
 $OASIS auto-weights presets/chef_rig.rig.json --part torso --bones hips,chest
+$OASIS mixdown addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json --out build/sword_slash.wav --normalize
 $OASIS help
 ```
 
@@ -53,6 +54,7 @@ Every command handles all asset types; the type comes from the preset's `asset_t
 | `schema [TYPE] [--write]` | Prints the JSON Schema of an asset type (`vfx` (default), `sfx`, `animation`, `sprite_frames`, `rig`) built from the validator's field tables; `--write` rewrites every `schemas/<type>.v1.schema.json` (a test fails while any is out of date). |
 | `import-rig <scene> --out <file.rig.json>` | Creates a rig preset from an existing `.tscn` with a `Skeleton2D` (bones, Polygon2D/Sprite2D parts, Marker2D points), read as text — the scene is never loaded or changed. Prints what was not imported as `note:` lines (bone weights, IK, skew, regions, animations, renamed nodes). `--id` sets the rig id (default: the scene root's name in snake_case); without `--force` an existing preset file is an error. See [rig_format.md](rig_format.md#importing-an-existing-rig-scene). |
 | `auto-weights <file.rig.json> --part <id> [--bones a,b,c]` | Makes polygon part `<id>` bend with its two nearest bones per point (all bones, or the listed ones): moves it to the rig root at the same place and writes automatic `weights`; the preset is rewritten in canonical form and validated. The preset must be valid first; sprite parts are refused. See [rig_format.md](rig_format.md#bending-parts-deformation). |
+| `mixdown <file.sfx.json> --out <file.wav> [--variant N] [--seconds S] [--normalize] [--force]` | Renders a sound preset into one 16-bit stereo WAV file: one fixed take (file `N` of each layer's source + variants, nominal pitch and volume), with the runtime's timing, fades and loops. Sounds with looping layers need `--seconds`. Reports length, rate, peak and clipped samples. See [sfx_format.md](sfx_format.md#mixdown-to-one-wav-file-080). |
 | `version` | Prints the OasisFx version. |
 | `help` | Prints usage. |
 
@@ -64,6 +66,7 @@ Every command handles all asset types; the type comes from the preset's `asset_t
 | `--force` | generate, generate-all, import-rig | Allow overwriting existing `<id>.tscn` / `<id>.tres` files (the preset file for import-rig). Without it an existing file is an error. |
 | `--id <id>` | import-rig | Id of the imported rig. |
 | `--part <id>`, `--bones a,b,c` | auto-weights | The polygon part to bend; the bones it may follow (default: all). |
+| `--variant N`, `--seconds S`, `--normalize` | mixdown | Which file of each layer (0 = source); length in seconds (required with looping layers, max 60); scale the peak to −1 dBFS. `--out` is the `.wav` file, `--force` overwrites it. |
 | `--dry-run` | generate, generate-all | Validate and report the target paths; write nothing (no folders either). |
 | `--json` | all | Print one JSON object on its own line instead of text. |
 | `--write` | schema | Write the schema file instead of printing it. |
@@ -186,6 +189,15 @@ On a fresh clone the CLI works without opening the editor first, also for preset
 reference image or audio files (they only need to exist). To *play* generated sounds or
 show file textures, Godot needs the files imported: open the project in the editor once or
 run `godot --headless --path . --import`.
+
+## Continuous integration
+
+`.github/workflows/oasisfx.yml` runs on pushes to `main` and `claude/**` branches and on
+pull requests (GitHub-hosted `ubuntu-24.04`): it downloads Godot 4.7.2 from the official
+release, **checks the zip's SHA-256**, imports the project, runs `validate-all` and
+`format --check` on the example presets, then the full test suite. It does not build the
+Windows/Linux packages (export templates are large) and cannot check rendering on a GPU,
+audio output or Windows; those stay manual (see [desktop.md](desktop.md)).
 
 ## Running the tests
 

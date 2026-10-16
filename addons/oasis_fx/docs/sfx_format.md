@@ -170,17 +170,32 @@ including your own recordings ("own recording") and AI-generated audio (name the
 its terms). The bundled example sounds are synthesized by OasisFx and released as CC0
 (`presets/examples/audio/LICENSE.txt`).
 
-## Not in this version
+## Mixdown to one WAV file (0.8.0)
 
-- **Rendering a mixdown** (one new `.wav` file from the layers) is not implemented. A game
-  plays the layered scene directly, which also keeps the random variation. Feasibility was
-  checked (2026-10-15, Godot 4.7.2): Godot's Movie Maker mode
-  (`godot --path . --write-movie out.png --fixed-fps 60 --quit-after N scene.tscn`) renders
-  a scene that plays the sound non-real-time and writes `out.wav` (48 kHz stereo, 32-bit
-  PCM) next to the frames; a Sword Slash SFX test gave 0.75 s of non-silent audio. It
-  needs a display (it ran under Xvfb; with `--headless` Godot aborted) and also writes one
-  image per frame, so it is a possible basis for a later `mixdown` command, not a feature
-  yet.
+A game normally plays the layered scene, which keeps the random variation. When one plain
+audio file is needed (a trailer, a sound designer, an engine without OasisFx), render a
+**mixdown**: `oasis_fx_cli.gd -- mixdown <file.sfx.json> --out <file.wav>` or **Render
+WAV…** in the desktop app.
+
+- Each layer's file is decoded with Godot's `AudioStreamPlayback.mix_audio()` — offline,
+  headless, no audio device or display — and mixed with the runtime's own timing functions
+  (`_layer_duration`, `_fade_gain` of `oasis_sfx_effect.gd`): start offsets, trim, length,
+  pitch (overall × layer), volume (overall + layer gain), fades and loops behave as in the
+  game.
+- It is **one fixed take**: file number `--variant N` of each layer's source + variants
+  (default 0 = the sources), at the nominal pitch and volume — the random pitch and volume
+  changes are not applied.
+- Sounds with looping layers never end; give a length with `--seconds` (the app renders
+  4 s). Maximum 60 s.
+- Output: 16-bit stereo PCM WAV at Godot's mix rate (44.1 kHz by default). Samples beyond
+  ±1 are clipped and reported; `--normalize` scales the peak to −1 dBFS (the app does that
+  only when the mix would clip). The bundled Sword Slash SFX peaks at about +0.7 dBFS
+  where the whoosh and the hit overlap — in a game the bus adds them the same way.
+- The same preset renders the same samples every time (tested).
+- Earlier feasibility note (2026-10-15): Godot's Movie Maker mode can also capture audio,
+  but it needs a display and writes one image per frame; `mix_audio()` replaced it.
+
+## Not in this version
 - Effects (reverb, EQ, filters) are not part of the preset; use the game's audio buses.
 - Audio is never synthesized, downloaded or generated from text by OasisFx.
 

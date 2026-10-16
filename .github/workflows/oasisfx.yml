@@ -1,0 +1,51 @@
+# Headless checks of OasisFx with the pinned Godot version (spec v1.1 §6
+# "GitHub CI"): example presets valid and canonical, then the full test suite
+# (core, CLI, desktop app driven headless, runtime demo and golden files).
+# No GPU, display, audio device or Windows here; see addons/oasis_fx/docs/desktop.md
+# for the checks that need them.
+name: OasisFx
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oasisfx-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Pinned: generated .tscn text can differ between Godot releases.
+      GODOT_VERSION: 4.7.2-stable
+      GODOT_ZIP_SHA256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        run: |
+          zip="Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -sSLO "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${zip}"
+          echo "${GODOT_ZIP_SHA256}  ${zip}" | sha256sum -c -
+          unzip -q "${zip}"
+          sudo mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          godot --headless --version
+
+      - name: Import project resources
+        run: godot --headless --path . --import
+
+      - name: Example presets are valid and canonical
+        run: |
+          OASIS="godot --headless --path . --script res://addons/oasis_fx/cli/oasis_fx_cli.gd --"
+          $OASIS validate-all addons/oasis_fx/presets/examples
+          $OASIS format addons/oasis_fx/presets/examples --check
+
+      - name: Test suite
+        run: godot --headless --path . --script res://addons/oasis_fx/tests/run_tests.gd
