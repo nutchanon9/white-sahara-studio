@@ -428,3 +428,23 @@ func test_bending_parts_in_the_app() -> void:
 	check(app._message.visible and app._message.dialog_text.contains("only polygon parts can bend"), "a sprite part cannot bend: a message explains")
 	app._message.hide()
 	await _stop(app)
+
+
+func test_render_wav_from_the_app() -> void:
+	var app := await _start("ui_wav", "res://addons/oasis_fx/presets/examples/sword_slash_sfx.sfx.json")
+	check(app._wav_button.visible, "Render WAV… shown for sounds")
+	var out := ProjectSettings.globalize_path(temp_dir("ui_wav_out"))
+	var mix: Dictionary = app.render_wav(out.path_join("sword slash ทดสอบ.wav"))
+	check(mix.ok and FileAccess.file_exists(out.path_join("sword slash ทดสอบ.wav")), "written (spaces and Thai in the name)")
+	check_eq(mix.clipped, 0, "a mix that would clip is normalized")
+	await tree.process_frame
+	check(app._message.visible and app._message.dialog_text.contains("turned down to a -1 dBFS peak"), "the message says what happened: " + app._message.dialog_text)
+	app._message.hide()
+	app.open_file("res://addons/oasis_fx/presets/examples/cooking_sizzle_loop.sfx.json")
+	var loop: Dictionary = app.render_wav(out.path_join("sizzle.wav"))
+	check(loop.ok and absf(loop.seconds - app.LOOP_RENDER_SECONDS) < 0.001, "loops render for a fixed length")
+	await tree.process_frame
+	app._message.hide()
+	app.open_file("res://addons/oasis_fx/presets/examples/fire_burst.vfx.json")
+	check(not app._wav_button.visible, "hidden for effects")
+	await _stop(app)

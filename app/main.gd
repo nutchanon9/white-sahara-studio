@@ -24,6 +24,9 @@ const Validator := preload("res://addons/oasis_fx/src/core/preset_validator.gd")
 const AssetTypes := preload("res://addons/oasis_fx/src/core/asset_types.gd")
 const Generator := preload("res://addons/oasis_fx/src/core/vfx_generator.gd")
 const RigImporter := preload("res://addons/oasis_fx/src/core/rig_importer.gd")
+const SfxMixdown := preload("res://addons/oasis_fx/src/core/sfx_mixdown.gd")
+## Length of a WAV rendered from a sound with looping layers.
+const LOOP_RENDER_SECONDS := 4.0
 
 ## "New" menu entries: [label, asset type, shortcut].
 const NEW_ITEMS := [
@@ -62,6 +65,8 @@ var _audio_cache := {}
 var _texture_cache := {}
 var _save_button: Button
 var _export_button: Button
+var _wav_button: Button
+var _wav_dialog: FileDialog
 var _open_dialog: FileDialog
 var _save_dialog: FileDialog
 var _export_dialog: FileDialog
@@ -289,6 +294,12 @@ func _build_ui() -> void:
 	_tool_button(toolbar, "Save As…", "Ctrl+Shift+S", save_as)
 	toolbar.add_child(VSeparator.new())
 	_export_button = _tool_button(toolbar, "Export to game…", "Ctrl+E", _show_export_dialog)
+	_wav_button = Button.new()
+	_wav_button.text = "Render WAV…"
+	_wav_button.tooltip_text = "Mix this sound's layers into one .wav file (one fixed take: the first file of each layer, no random pitch/volume)."
+	_wav_button.pressed.connect(_show_wav_dialog)
+	_wav_button.visible = false
+	toolbar.add_child(_wav_button)
 	toolbar.add_child(VSeparator.new())
 	var game_button := Button.new()
 	game_button.text = "Game project…"
@@ -389,6 +400,9 @@ func _build_dialogs() -> void:
 	_game_dialog.dir_selected.connect(set_game_project)
 	_asset_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_FILE, "Choose a file in your game project")
 	_asset_dialog.file_selected.connect(_on_asset_selected)
+	_wav_dialog = _file_dialog(FileDialog.FILE_MODE_SAVE_FILE, "Render the sound to a WAV file")
+	_wav_dialog.filters = PackedStringArray(["*.wav ; WAV audio"])
+	_wav_dialog.file_selected.connect(func(path: String) -> void: render_wav(path))
 
 	_discard_dialog = ConfirmationDialog.new()
 	_discard_dialog.title = "Unsaved changes"
@@ -443,6 +457,48 @@ func _show_export_dialog() -> void:
 	_export_dialog.popup_centered_ratio(0.6)
 
 
+func _show_wav_dialog() -> void:
+	_revalidate()
+	if validation.get("preset", {}).is_empty():
+		show_message("Cannot render", "The sound has errors. Fix the errors listed under the preview first.")
+		return
+	_wav_dialog.current_dir = settings.last_export_dir if not settings.last_export_dir.is_empty() else settings.workspace_dir
+	_wav_dialog.current_file = str(validation.preset.id) + ".wav"
+	_wav_dialog.popup_centered_ratio(0.6)
+
+
+## Mixes the current (valid) sound into `path` (sfx_mixdown.gd). Sounds with
+## looping layers are rendered for LOOP_RENDER_SECONDS; a mix that would clip
+## is normalized. Shows what was written; returns the render result.
+func render_wav(path: String) -> Dictionary:
+	_revalidate()
+	var preset: Dictionary = validation.get("preset", {})
+	if preset.is_empty() or preset.asset_type != "sfx":
+		show_message("Cannot render", "Only a valid sound (sfx) preset can be rendered to WAV.")
+		return {"ok": false}
+	var looping: bool = preset.layers.any(func(l): return l.loop)
+	var options := {"seconds": LOOP_RENDER_SECONDS if looping else 0.0}
+	var mix := SfxMixdown.render(preset, document.res_roots, options)
+	if mix.ok and mix.clipped > 0:
+		options["normalize"] = true
+		mix = SfxMixdown.render(preset, document.res_roots, options)
+	if not mix.ok:
+		show_message("Cannot render", mix.error)
+		return mix
+	var error := SfxMixdown.save_wav(mix.frames, mix.mix_rate, path)
+	if error != OK:
+		show_message("Cannot render", "Cannot write %s: %s" % [path, error_string(error)])
+		return {"ok": false, "error": error_string(error)}
+	var notes := PackedStringArray()
+	if looping:
+		notes.append("The sound loops; %d seconds were rendered." % LOOP_RENDER_SECONDS)
+	if options.has("normalize"):
+		notes.append("The layers together were louder than 0 dBFS, so the file was turned down to a -1 dBFS peak.")
+	notes.append("One fixed take: the first file of each layer, without the random pitch and volume the game adds.")
+	show_message("WAV rendered", "%s\n%s\n\n%s" % [path, SfxMixdown.describe(mix), "\n".join(notes)])
+	return mix
+
+
 func _on_export_dir_selected(dir: String) -> void:
 	var planned := plan_export(dir)
 	if not planned.ok:
@@ -464,6 +520,7 @@ func _on_export_dir_selected(dir: String) -> void:
 # --- Reactions -------------------------------------------------------------
 
 func _after_load() -> void:
+	_wav_button.visible = document.asset_type() == "sfx"
 	inspector.bind(document)
 	_revalidate()
 	_update_title()
@@ -606,7 +663,8 @@ func cli_output_mismatches() -> PackedStringArray:
 ## res:// refuses writes, Fire Burst exports into the given game folder, the
 ## Sword Slash sound previews with its bundled audio and exports with it, and
 ## the Chef Ladle Attack animation, Campfire Flame sprite frames and Oasis
-## Chef rig validate, preview and export, and the Sand Serpent's body bends.
+## Chef rig validate, preview and export, the Sword Slash SFX mixes down to
+## WAV samples, and the Sand Serpent's body bends.
 ## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
 func _smoke_test(export_dir: String) -> void:
 	var checks := {}
@@ -657,6 +715,13 @@ func _smoke_test(export_dir: String) -> void:
 			checks[key + "_export_ok"] = result.ok
 			checks[key + "_export_errors"] = result.errors
 			ok = ok and result.ok
+	# Mixdown: the Sword Slash SFX renders from the packaged example audio.
+	var mixed := false
+	if open_file(OasisFx.EXAMPLES_DIR.path_join("sword_slash_sfx.sfx.json")) and not validation.preset.is_empty():
+		var mix := SfxMixdown.render(validation.preset, document.res_roots, {"normalize": true})
+		mixed = mix.ok and mix.seconds > 0.3 and mix.peak > 0.5
+	checks["sound_mixdown"] = mixed
+	ok = ok and mixed
 	# A bending part: the serpent's body follows its bones (CPU skinning in the
 	# packaged runtime) with its texture loaded from the package.
 	var bent := false
