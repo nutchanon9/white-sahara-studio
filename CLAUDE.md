@@ -106,6 +106,12 @@ per serpent). Full suite 199 passed, 0 failed (also on a fresh copy); GPU profil
 validated before writing, import notes/limits, CRLF tolerance + `.gitattributes`, multi-line strings in scene_outline,
 per-command CLI options. Regression tests fail on the old code. Full suite 209 passed, 0 failed (also on a fresh copy). Awaiting owner acceptance.
 
+**0.8.3 second review (user requested "continue", 2026-10-16):** runtimes + app UI — events skip scenes that cannot
+be instantiated and accept the runtimes by class name (moved addon folder), `playback_speed` setter, app: pending
+action cleared on cancelled/failed Save As, no silent overwrite when the suffix is added, wrong-typed event effects,
+replay held while paused, id lists filled on open, sprite Restart from frame 0; loop + one_shot skipping is already a
+validator warning. Regression tests fail on the old code. Full suite 217 passed, 0 failed (also on a fresh copy). Awaiting owner acceptance.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

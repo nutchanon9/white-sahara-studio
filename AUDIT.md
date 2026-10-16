@@ -278,3 +278,15 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | CRLF (Windows autocrlf) ทำให้ format --check / export / manifest เห็นเป็นไฟล์ต่าง | `.gitattributes` eol=lf + เทียบแบบไม่สน CRLF (เทสต์ใหม่เจอจุดที่ manifest ด้วย) | test_format_check_accepts_crlf…, test_crlf_copy_of_the_runtime… |
 | scene_outline อ่านบรรทัดในสตริงหลายบรรทัดเป็น header | สถานะ "อยู่ในสตริง" ต่อเนื่องข้ามบรรทัด | test_multi_line_strings… |
 | CLI รับ option ของคำสั่งอื่นเงียบ ๆ | ตาราง option ต่อคำสั่ง | test_cli_rejects_options… |
+
+---
+
+## 17. ภาคผนวก (2026-10-16): 0.8.3 — รีวิวรอบสอง (runtime + UI ของแอป)
+
+| ข้อค้นพบ | การตัดสินใจ | หลักฐาน |
+|---|---|---|
+| one-shot ในเอฟเฟกต์วนลูปที่ยาวกว่ารอบ ข้ามบางรอบ | ไม่แก้: validator เตือนอยู่แล้ว ("some cycles will be skipped"); การ restart กลางทางจะตัดอนุภาคที่ยังแสดงอยู่ | — |
+| events: `instantiate()` คืน null → script error ในเกม | ข้ามพร้อม warning | เทสต์ในเกมแยก (ล้มกับโค้ดเดิม) |
+| events: allow-list ด้วย path ทำให้ย้ายโฟลเดอร์ addon แล้ว effect หาย | ยอมรับทั้ง path เดิมและชื่อคลาส `OasisFxEffect`/`OasisSfxEffect` (`get_global_name()`) | เทสต์เดียวกัน (addon ที่ `res://plugins/oasis_fx`) |
+| `playback_speed` ตั้งหลัง spawn ไม่ถึงอนุภาค | setter เรียก `_apply_speed()` | test_playback_speed… |
+| แอป: pending action ค้าง, Save As เขียนทับไฟล์อื่น, effects ผิดชนิด, replay ตอน pause, รายการ id เก่า, sprite restart | แก้แต่ละจุด (ดู README) | 6 เทสต์ใน tests/test_app_ui.gd ล้มกับโค้ดเดิม |

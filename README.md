@@ -16,6 +16,7 @@
 **Phase 2 ทำแล้ว:** สร้างเสียงแบบหลาย layer (SFX) ได้ทั้งใน CLI และแอป (ดู [sfx_format.md](addons/oasis_fx/docs/sfx_format.md))
 **Phase 3 ทำแล้ว:** animation แบบ keyframe + event สำหรับ scene ที่มีอยู่แล้ว (เช่นตัวละครที่ใช้ Skeleton2D) และ sprite frames จาก sprite sheet (ดู [animation_format.md](addons/oasis_fx/docs/animation_format.md))
 **Phase 4 ทำแล้ว:** rig ตัวละคร 2D แบบ cutout — bone, ชิ้นส่วน PNG/polygon, IK สองท่อน, skin (เปลี่ยนชุด), pose และนำเข้า rig จาก scene เดิม (ดู [rig_format.md](addons/oasis_fx/docs/rig_format.md))
+**0.8.3 ทำแล้ว:** รีวิวรอบสองที่ runtime (โค้ดที่รันในเกม) และ UI ของแอป — แก้ 9 จุด พร้อมเทสต์กันซ้ำ
 **0.8.2 ทำแล้ว:** แก้บั๊กจากการ code review 11 จุด (เช่น `import-rig` พังกับ sprite sheet, แก้ field ผิดชนิดในแอปไม่ได้, ไฟล์ CRLF บน Windows) พร้อมเทสต์กันซ้ำ
 **0.8.1 ทำแล้ว:** วัดประสิทธิภาพ (ฝั่ง CPU) ของฉากต่อสู้ + ทำอาหารที่มี effect/เสียง/rig จำนวนมาก — ไม่จำเป็นต้องมี pooling หรือ quality presets; การดัดชิ้นส่วนเร็วขึ้น 2–4 เท่า (ดู [performance.md](addons/oasis_fx/docs/performance.md))
 **0.8.0 ทำแล้ว:** แปลงเสียง (sfx) เป็นไฟล์ **WAV ไฟล์เดียว** (mixdown) ได้ทั้งใน CLI และแอป และมี **GitHub CI** รันเทสต์ด้วย Godot 4.7.2 ที่ตรึงเวอร์ชันไว้
@@ -349,6 +350,24 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 
 เทสต์ใหม่ `test_review_fixes.gd` (7) + เทสต์แอป 3 — **ทั้งหมดล้มเหลวกับโค้ดเดิม** (ตรวจแล้ว) และผ่านกับโค้ดใหม่;
 เทสต์ทั้งหมด **209 passed, 0 failed** (รวมบนสำเนาใหม่และจำลองขั้นตอน CI)
+
+## 0.8.3: รีวิวรอบสอง (runtime ในเกม + UI ของแอป)
+
+รีวิวพบ 10 จุด: แก้ 9 จุด, อีก 1 จุด (one-shot ในเอฟเฟกต์วนลูปที่ยาวกว่ารอบจะข้ามบางรอบ) validator เตือนไว้อยู่แล้ว จึงไม่ต้องแก้
+
+**Runtime (รันในเกมของผู้เล่น):**
+- animation event ที่อ้าง scene ที่ instantiate ไม่ได้ เคยทำให้เกิด script error ระหว่างเล่นและ effect ถัดไปหาย → ข้ามพร้อมคำเตือน
+- ย้ายโฟลเดอร์ addon ในเกม (เช่นไป `res://plugins/oasis_fx`) แล้ว effect จาก event หายหมด → รู้จัก runtime จากชื่อคลาสด้วย
+- ตั้ง `playback_speed` หลัง `spawn()` เดิมเร่งแค่นาฬิกาแต่อนุภาคไม่เร่ง → ใช้กับ emitter ทันที
+
+**แอป:**
+- ยกเลิก Save As ที่มาจากหน้าต่าง "ยังไม่ได้บันทึก" แล้ว Save As ครั้งถัดไปจะสั่ง action เก่า (เช่นปิดโปรแกรม) → ล้างทิ้ง
+- Save As ที่เติมนามสกุลให้ เคยเขียนทับ preset อื่นที่มีอยู่โดยไม่ถาม → ปฏิเสธพร้อมแจ้ง
+- event ที่ `effects` เป็นข้อความแทน array ทำให้ inspector พัง; Pause ไม่หยุดการเล่นซ้ำอัตโนมัติที่รออยู่;
+  รายการ ▾ ของ bone/part ไม่อัปเดตหลังเปลี่ยนชื่อ/เพิ่ม/ลบ (ตอนนี้โหลดตอนเปิดเมนู); Restart ของ sprite ไม่กลับไปเฟรม 0
+
+เทสต์ใหม่ 8 ตัว (runtime 2 ใน `test_review_fixes.gd` ซึ่งรันในเกมแยกที่ย้าย addon แล้ว, แอป 6) — **ล้มเหลวทั้งหมดกับโค้ดเดิม**
+และผ่านกับโค้ดใหม่; เทสต์ทั้งหมด **217 passed, 0 failed** (รวมบนสำเนาใหม่และจำลองขั้นตอน CI)
 
 ## License
 
