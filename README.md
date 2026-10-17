@@ -41,7 +41,7 @@
 |---|---|---|
 | 0 | สำรวจ repo และสภาพแวดล้อม ([AUDIT.md](AUDIT.md)) | ✅ เสร็จ |
 | 1A | schema, loader, validator, CLI `validate`/`generate`, Fire Burst, headless tests | ✅ เสร็จ (แก้ test runner ตาม review แล้ว) |
-| 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide | ✅ เสร็จ |
+| 1B | หลาย emitter (สูงสุด 8), preset ตัวอย่าง 5 แบบ, validate-all/generate-all, manifest, runtime lifecycle, demo, AI guide; 0.9.0: texture อนุภาคแบบวาดมือ | ✅ เสร็จ |
 | 1C | แอป Windows แยก: preset editor, preview, save/export และ Windows package | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ทดสอบบนเครื่อง Windows จริง) |
 | 2 | SFX Composer: preset เสียงหลาย layer, runtime, timeline ในแอป, export เสียงเข้าเกม; 0.8.0: mixdown เป็น WAV | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ฟังเสียงจริง — cloud ไม่มีลำโพง) |
 | 3 | Animation Timeline: keyframe ของ node ใน scene เดิม (bone, sprite, polygon), event ที่เรียก VFX/SFX, sprite frames, timeline + preview ในแอป | ✅ ทำแล้ว รอรับงาน (ยังไม่ได้ลองกับตัวละครจริงของ White Sahara — repo เกมไม่อยู่ใน session นี้) |
@@ -57,7 +57,7 @@ tests/                 เทสต์ระดับ repo (แอป, เดโ
 docs/images/           ภาพ preview ที่ render จริง
 app/                   แอป desktop (main.tscn, ui/, services/, export/ = plugin ตอน build)
 export_presets.cfg     การตั้งค่า export สำหรับ Windows และ Linux
-tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียง, วาด sprite sheet และชิ้นส่วน rig ตัวอย่าง)
+tools/                 เครื่องมือสำหรับนักพัฒนา (render ภาพ preview, สังเคราะห์เสียง, วาด sprite sheet, ชิ้นส่วน rig ตัวอย่าง และ texture อนุภาค)
 AUDIT.md               รายงาน Phase 0
 CLAUDE.md              คำแนะนำเริ่มงานและ milestone ปัจจุบัน
 Godot_Asset_Studio_Claude_Code_Implementation_Spec.md   สเปกต้นฉบับ
@@ -371,6 +371,39 @@ preset ชนิดใหม่ `rig` (`<id>.rig.json` → `<id>.tscn`): ตั�
 - **เจอเพิ่มระหว่างตรวจ:** คำเตือน "leaked" ตอนจบเทสต์ (มีมาตั้งแต่ Phase 3) มาจาก inspector สร้าง GridContainer ต่อ event
   แล้วไม่ได้ใช้ → ลบออก; ตอนนี้ชุดเทสต์จบโดยไม่มีคำเตือน leak เลย และมีเทสต์ตรวจ orphan node
 - เทสต์ทั้งหมด **218 passed, 0 failed** (รวมบนสำเนาใหม่)
+
+## 0.9.0: texture อนุภาคแบบวาดมือ (สเปก §2 ทิศทางภาพ)
+
+สเปกขอเอฟเฟกต์ "ไฟ น้ำแข็ง ฟัน ควัน ประกาย ที่ดูวาดมือแบบ stylized" แต่ก่อนหน้านี้อนุภาคทุกตัวเป็นวงกลม/วงรีที่ไล่สี
+จึงดูเป็นจุดกลม ๆ เวอร์ชันนี้เพิ่ม texture แบบวาดในตัว addon:
+
+![texture อนุภาคแบบวาด](docs/images/particle_textures.png)
+
+| `texture` | ใช้กับ |
+|---|---|
+| `flame` | เปลวไฟชี้ขึ้น ปลายม้วน แกนร้อนด้านล่าง (blend `add`, มุมสุ่มไม่เกิน ±15°) |
+| `smoke` | ก้อนควันเป็นปุย มีแสงจากซ้ายบน (มุมสุ่ม ±180° หมุนช้า ๆ) |
+| `spark` | ประกายสี่แฉกพร้อมแสงฟุ้ง (เวทมนตร์ ทำอาหารสำเร็จ) |
+| `shard` | ผลึกน้ำแข็งเหลี่ยมชี้ขึ้น (ใช้คู่กับ `align_to_velocity`) |
+| `slash` | เสี้ยวพระจันทร์สำหรับรอยฟัน |
+
+- รูป 64×64 สีขาว/เทา ที่ `addons/oasis_fx/textures/` ให้ `color_start` … `color_end` ย้อมสี; `texture_size_px` คือขนาดที่วาด
+  (64 = scale 1) วาดด้วยสูตรคณิตใน `tools/synth_particle_textures.gd` (ได้ไฟล์เดิมทุก byte, CC0 ไม่มีงานของผู้อื่น)
+- schema v1 แค่เพิ่มค่าใน enum `texture` — preset เดิมยังใช้ได้และให้ผลเหมือนเดิม
+- scene ที่สร้างอ้างรูปเป็น ext_resource (`res://addons/oasis_fx/textures/…`); การ export จากแอปคัดลอกรูปเข้าเกมเหมือน
+  runtime script (ไม่เตือนว่า "เป็นไฟล์ตัวอย่างให้เปลี่ยน") เกมต้องเปิดใน editor หนึ่งครั้งเพื่อ import รูป เหมือนไฟล์รูปอื่น ๆ
+- ตัวอย่างที่เปลี่ยน: Fire Burst / Campfire Loop (flame + smoke), Ice Nova (shard, spark, smoke), Cooking Success (spark, smoke);
+  Sword Slash คงเดิม
+- **พบระหว่างทำ:** preview ในแอปสร้าง effect โดยไม่โหลดรูป (`texture: "file"` ก็แสดงเป็น placeholder ที่มองไม่เห็นมาตลอด) → แก้ให้โหลดรูปจริง
+
+ก่อน (0.8) → หลัง (0.9) ของ Fire Burst:
+
+![Fire Burst 0.8](docs/images/fire_burst_preview_0_8.png)
+![Fire Burst 0.9](docs/images/fire_burst_preview.png)
+
+- เทสต์ใหม่ 7 ตัว (`test_particle_textures.gd` 6 ตัว รวมการวาดซ้ำแล้วได้ไฟล์เดิมทุก byte, และ preview ในแอป 1 ตัว)
+- เทสต์ทั้งหมด **225 passed, 0 failed** (รวมบนสำเนาใหม่และจำลอง CI); smoke test ของแอป Linux ที่แพ็กแล้วผ่าน รวม `"stylized_textures": true`
+- ตรวจด้วยตาจาก render จริง (Xvfb + llvmpipe): ไฟดูเป็นเปลว ควันเป็นก้อน ผลึกเป็นเหลี่ยม; บน GPU จริงและ Windows **NOT RUN**
 
 ## License
 

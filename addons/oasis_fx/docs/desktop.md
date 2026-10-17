@@ -159,10 +159,11 @@ its events show and everything those scenes need (from the manifest next to them
 |---|---|
 | exists in the game at that path | `USE` — referenced, **never overwritten** |
 | is one of the files bundled with OasisFx (example sounds, sprite sheet, rig part images, example effects) | `CREATE` — copied into the game at the same path, with a warning to replace it before shipping |
+| is one of the addon's own stylized particle textures (`addons/oasis_fx/textures/`) | `CREATE` — copied like the runtime script, no warning (they are part of OasisFx) |
 | is missing from the game and not bundled | error: put the file into the game first (nothing is written) |
 
-Godot imports copied audio the next time the game is opened in the editor (or with
-`godot --headless --import`).
+Godot imports copied audio and images the next time the game is opened in the editor (or
+with `godot --headless --import`).
 
 The exported file is byte-identical to what `oasis_fx_cli.gd -- generate` writes inside
 the game at the same `res://` path (same stable UID), from source and from the packaged
@@ -233,7 +234,8 @@ validates, loads its audio from the package (real lengths on the timeline) and e
 with its runtime and audio files, the Chef Ladle Attack animation, Campfire Flame
 sprite frames and Oasis Chef rig validate, preview (rig stand-in / sheet / rig with its part
 images) and export, the Sand Serpent's body bends in the preview (`"rig_bending": true`),
-and every bundled
+Fire Burst's stylized flame texture draws in the preview and the exported game folder holds
+the addon's `textures/` images (`"stylized_textures": true`), and every bundled
 example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 `OasisFx.console.exe` (same arguments) to see the output in a console.
 
@@ -303,6 +305,19 @@ example generates exactly the CLI's text (`"matches_cli": true`). On Windows use
 | App with a window (Xvfb, software OpenGL): rig preview with skin, pose and a moved IK target; runtime demo with the generated rig reaching | **PASS** — images above and in README |
 | Launching `OasisFx.exe` on Windows; dragging IK targets with a real mouse | **NOT RUN** (no Windows; dragging was driven by code) |
 | Importing White Sahara's real `mannequin.tscn` | **NOT RUN** — the game repository is not in this session |
+
+## Verification status (0.9.0 — stylized particle textures, 2026-10-17)
+
+| Check | Result |
+|---|---|
+| Full suite (`run_tests.gd`, incl. `test_particle_textures.gd`) | **PASS** — 225 passed, 0 failed; same result on a fresh copy without `.godot/` and in a local simulation of the CI workflow |
+| Drawing tool run again → byte-identical PNGs; images 64 px, gray only, transparent around the shape (automated) | **PASS** |
+| Example previews rendered under Xvfb + llvmpipe (`docs/images/*_preview.png`): flames read as flame tongues, smoke as puffs, ice as faceted shards | **PASS** (visual, software renderer) |
+| App preview draws the images (automated: not placeholders; screenshot `docs/images/desktop_app.png`) | **PASS** |
+| Export copies `addons/oasis_fx/textures/*.png` without the "example file" warning; the scene loads and plays in a separate game after import (automated) | **PASS** |
+| Packaged Linux build `--smoke-test` into a Thai-named game folder: `"stylized_textures": true`, `"matches_cli": true`, `"rig_bending": true`, `"sound_mixdown": true`; exported images byte-identical; the scene loads in that game after `--import` | **PASS** |
+| Windows export (`OasisFx.exe` + console wrapper) | **PASS** (build only) |
+| Look on a real GPU; Windows launch | **NOT RUN** |
 
 ## Verification status (0.8.0 — WAV mixdown and CI, 2026-10-16)
 

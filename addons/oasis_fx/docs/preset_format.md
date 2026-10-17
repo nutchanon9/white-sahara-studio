@@ -101,8 +101,8 @@ large images). Presets with generated textures produce the same scenes as before
 | `color_mid` | color |  | `""` | Optional color at half-life; "" = no middle stop. |
 | `color_end` | color |  | **required** | Color at death, #RRGGBB or #RRGGBBAA (alpha 00 fades out). |
 | `hue_variation` | number | 0.0 … 1.0 | `0.0` | Random hue shift per particle, 0 = none, 1 = full color wheel. |
-| `texture` | enum: `soft_circle`, `hard_circle`, `ring`, `streak`, `square`, `file` |  | `"soft_circle"` | Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path). |
-| `texture_size_px` | int | 4 … 256 | `32` | Size of the generated texture in pixels (streak: height; its width is a quarter). |
+| `texture` | enum: `soft_circle`, `hard_circle`, `ring`, `streak`, `square`, `flame`, `smoke`, `spark`, `shard`, `slash`, `file` |  | `"soft_circle"` | Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square; a hand-drawn-looking image shipped with OasisFx: flame (tongue pointing up), smoke (puff), spark (four-point twinkle), shard (ice crystal pointing up), slash (crescent); or an image file (texture_path). |
+| `texture_size_px` | int | 4 … 256 | `32` | Size of the particle texture in pixels (streak: height; its width is a quarter; flame … slash: the drawn size of the 64 px image). |
 | `texture_path` | res_path (png/webp/jpg/jpeg/svg/tres/res) |  | `""` | res:// path to a Texture2D; required when texture is "file". |
 | `blend_mode` | enum: `mix`, `add`, `sub`, `mul`, `premult_alpha` |  | `"mix"` | CanvasItemMaterial blend mode; "add" suits fire, sparks and glows. |
 | `local_coords` | bool |  | `false` | true = particles move with the emitter after spawning. |

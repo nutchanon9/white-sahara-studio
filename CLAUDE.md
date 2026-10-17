@@ -114,6 +114,13 @@ validator warning; an unused GridContainer per event leaked on every inspector r
 Phase 3; suite now ends without them). Regression tests fail on the old code. Full suite 218 passed, 0 failed (also on
 a fresh copy). Awaiting owner acceptance.
 
+**0.9.0 stylized particle textures (user requested "continue", 2026-10-17):** spec §2 visual direction — emitter
+`texture` gains `flame`, `smoke`, `spark`, `shard`, `slash` (additive enum values): 64 px white/gray CC0 images in
+`addons/oasis_fx/textures/` drawn by `tools/synth_particle_textures.gd` (byte-reproducible), referenced as ext_resources and
+scaled to `texture_size_px`; examples fire_burst / campfire_loop / ice_nova / cooking_success use them; exporter copies them as
+addon files; the app preview now loads real textures (file textures were invisible placeholders). Full suite 225 passed, 0 failed (also on a fresh copy); packaged Linux smoke test incl. `stylized_textures` passed;
+GPU look on real hardware and Windows launch NOT RUN. Awaiting owner acceptance.
+
 Stop after the requested milestone unless the user has requested a later one.
 Phase 1B expands the shared VFX core; Phase 1C implements desktop UI and Windows
 packaging. SFX, animation and rigging remain later milestones.

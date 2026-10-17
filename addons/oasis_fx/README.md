@@ -57,7 +57,9 @@ on the app.
 
 Generated scenes reference `res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd` (effects)
 , `oasis_sfx_effect.gd` (sounds) or `oasis_rig.gd` + `oasis_animation_events.gd` (rigs), so a game that uses them must contain the addon (at
-least `src/runtime/`) at that path, plus the audio/image files the presets reference.
+least `src/runtime/`) at that path, plus the audio/image files the presets reference
+(effects that use the stylized `flame`, `smoke`, `spark`, `shard` or `slash` textures also
+need `textures/`).
 OasisFx only writes into the output folder you give it.
 
 ## Quick start
@@ -139,6 +141,7 @@ addons/oasis_fx/
   src/runtime/oasis_sfx_effect.gd playback script attached to generated sound scenes
   src/runtime/oasis_animation_events.gd  receives animation events (shows their effects)
   src/runtime/oasis_rig.gd       root script of generated rigs (skins, poses, IK lookups, bending parts)
+  textures/                      stylized particle images (flame, smoke, spark, shard, slash; CC0)
   schemas/                       JSON Schemas vfx/sfx/animation/sprite_frames/rig v1 (generated from the field tables)
   presets/examples/              example presets; audio/, sprites/ and rig_parts/ hold CC0 example files,
                                  rigs/chef_rig.tscn is the example character for the animations

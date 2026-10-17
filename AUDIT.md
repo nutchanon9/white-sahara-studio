@@ -290,3 +290,18 @@ tools/render_preview.gd               (dev) render contact sheet ผ่าน Xv
 | events: allow-list ด้วย path ทำให้ย้ายโฟลเดอร์ addon แล้ว effect หาย | ยอมรับทั้ง path เดิมและชื่อคลาส `OasisFxEffect`/`OasisSfxEffect` (`get_global_name()`) | เทสต์เดียวกัน (addon ที่ `res://plugins/oasis_fx`) |
 | `playback_speed` ตั้งหลัง spawn ไม่ถึงอนุภาค | setter เรียก `_apply_speed()` | test_playback_speed… |
 | แอป: pending action ค้าง, Save As เขียนทับไฟล์อื่น, effects ผิดชนิด, replay ตอน pause, รายการ id เก่า, sprite restart | แก้แต่ละจุด (ดู README) | 6 เทสต์ใน tests/test_app_ui.gd ล้มกับโค้ดเดิม |
+
+---
+
+## 18. ภาคผนวก (2026-10-17): 0.9.0 — texture อนุภาคแบบวาดมือ (สเปก §2)
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| ที่มาของรูป | วาดด้วยสูตรคณิตใน `tools/synth_particle_textures.gd` (value noise จาก hash, 4×4 supersampling), CC0 | ไม่ใช้งานของผู้อื่น ไม่มีปัญหา license; วาดซ้ำได้ไฟล์เดิมทุก byte (มีเทสต์) |
+| รูปแบบรูป | 64×64 สีขาว/เทา + alpha | ให้ color ramp เดิมย้อมสีได้ แสงเงาสีเทากลายเป็นสีเข้มของสีที่ย้อม ดูเหมือนรอยพู่กัน; ความละเอียดพอสำหรับอนุภาคและไม่ใช่ pixel art |
+| ขนาด | `texture_size_px` = ขนาดที่วาด (scale ใน ParticleProcessMaterial × size/64) | ความหมายของ field เหมือนกับ texture ที่สร้างเอง preset เขียนง่าย |
+| schema | เพิ่มค่าใน enum `texture` เท่านั้น (additive v1) | preset เดิมได้ผลเหมือนเดิมทุก byte (golden ของ Sword Slash ไม่เปลี่ยน) |
+| ใน scene ที่สร้าง | ext_resource ไปยัง `res://addons/oasis_fx/textures/<kind>.png` ไม่ฝังรูปใน scene | ไฟล์เล็ก diff อ่านง่าย; ใช้ placeholder ตอน generate (ไม่มี uid ของโปรเจกต์ใดติดไป) |
+| export เข้าเกม | คัดลอกรูปเป็นไฟล์ของ addon (kind `addon`) ไม่เตือนให้เปลี่ยน | เป็นส่วนของ OasisFx เหมือน runtime script ไม่ใช่สื่อตัวอย่าง |
+| preview ในแอป | ส่งตัวโหลดรูปให้ builder (ถ้าโหลดไม่ได้ใช้ placeholder) | เดิม preview ไม่โหลดรูปเลย (`texture: "file"` มองไม่เห็นมาตั้งแต่ Phase 1C) |
+| fixture ของ release build | เก็บข้อความ CLI เดิมของ fire_burst ไว้ที่ `fixtures/release_build/expected/` | fixture เป็นผลจาก release template ของ preset เวอร์ชันก่อน; ยังพิสูจน์ normalization ได้เหมือนเดิม |
