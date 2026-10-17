@@ -42,6 +42,18 @@ func test_starts_with_an_example_and_a_live_preview() -> void:
 	await _stop(app)
 
 
+func test_preview_draws_the_stylized_textures() -> void:
+	# 0.9.0: the preview built effects without a texture loader, so image
+	# textures were invisible placeholders.
+	var app := await _start("ui_textures")
+	for emitter in ["flame", "smoke"]:
+		var texture := (app.preview.effect.get_node(emitter) as GPUParticles2D).texture
+		check(texture != null and not texture is PlaceholderTexture2D, emitter + " draws the real image, got %s" % texture)
+		if texture != null:
+			check_eq(texture.get_size(), Vector2(64, 64), emitter + " image size")
+	await _stop(app)
+
+
 func test_editing_through_controls_updates_document_preview_and_diagnostics() -> void:
 	var app := await _start("ui_edit")
 	app.inspector.select_item(1)

@@ -22,6 +22,17 @@ const SUPPORTED_ASSET_TYPES := ["vfx"]
 
 ## Maximum emitters per effect.
 const MAX_EMITTERS := 8
+## Stylized particle images shipped with the addon (drawn by
+## tools/synth_particle_textures.gd, CC0): texture kind -> image. They are
+## IMAGE_TEXTURE_SIZE px; texture_size_px scales them.
+const TEXTURE_IMAGES := {
+	"flame": "res://addons/oasis_fx/textures/flame.png",
+	"smoke": "res://addons/oasis_fx/textures/smoke.png",
+	"spark": "res://addons/oasis_fx/textures/spark.png",
+	"shard": "res://addons/oasis_fx/textures/shard.png",
+	"slash": "res://addons/oasis_fx/textures/slash.png",
+}
+const IMAGE_TEXTURE_SIZE := 64
 
 ## Hard cap on the sum of `amount` over all emitters.
 const MAX_TOTAL_PARTICLES := 2000
@@ -150,10 +161,10 @@ const EMITTER_FIELDS := {
 	"hue_variation": {"type": "number", "default": 0.0, "min": 0.0, "max": 1.0,
 		"doc": "Random hue shift per particle, 0 = none, 1 = full color wheel."},
 	"texture": {"type": "enum", "default": "soft_circle",
-		"values": ["soft_circle", "hard_circle", "ring", "streak", "square", "file"],
-		"doc": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path)."},
+		"values": ["soft_circle", "hard_circle", "ring", "streak", "square", "flame", "smoke", "spark", "shard", "slash", "file"],
+		"doc": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square; a hand-drawn-looking image shipped with OasisFx: flame (tongue pointing up), smoke (puff), spark (four-point twinkle), shard (ice crystal pointing up), slash (crescent); or an image file (texture_path)."},
 	"texture_size_px": {"type": "int", "default": 32, "min": 4, "max": 256,
-		"doc": "Size of the generated texture in pixels (streak: height; its width is a quarter)."},
+		"doc": "Size of the particle texture in pixels (streak: height; its width is a quarter; flame … slash: the drawn size of the 64 px image)."},
 	"texture_path": {"type": "res_path", "default": "", "allow_empty": true, "extensions": TEXTURE_EXTENSIONS,
 		"doc": "res:// path to a Texture2D; required when texture is \"file\"."},
 	"blend_mode": {"type": "enum", "default": "mix", "values": ["mix", "add", "sub", "mul", "premult_alpha"],

@@ -32,7 +32,11 @@ func test_plan_lists_files_and_writes_nothing() -> void:
 	check_eq(plan.files.map(func(f): return [f.res_path, f.action]), [
 		["res://vfx/fire_burst.tscn", "create"],
 		[OasisFx.RUNTIME_SCRIPT_PATH, "create"],
+		["res://addons/oasis_fx/textures/smoke.png", "create"],
+		["res://addons/oasis_fx/textures/flame.png", "create"],
 	], "files and actions")
+	check_eq(plan.files.slice(2).map(func(f): return f.kind), ["addon", "addon"], "the stylized textures belong to the addon")
+	check(plan.warnings.is_empty(), "addon textures are not example files to replace: %s" % [plan.warnings])
 	check(not FileAccess.file_exists(game.path_join("vfx/fire_burst.tscn")), "planning writes nothing")
 	check(not Exporter.needs_confirmation(plan), "nothing to confirm for new files")
 
@@ -59,7 +63,7 @@ func test_reexport_is_unchanged_and_overwrite_needs_confirmation() -> void:
 	var dest := game.path_join("vfx")
 	check(Exporter.run(Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest)).ok, "first export")
 	var again := Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest)
-	check_eq(again.files.map(func(f): return f.action), ["unchanged", "unchanged"], "identical re-export changes nothing")
+	check_eq(again.files.map(func(f): return f.action), ["unchanged", "unchanged", "use", "use"], "identical re-export changes nothing")
 	var edited := _preset(FIRE_BURST)
 	edited.emitters[1].amount = 12
 	var plan := Exporter.plan(edited, FIRE_BURST, dest)
@@ -127,6 +131,8 @@ func test_thai_folder_in_game() -> void:
 func test_exported_scene_runs_in_a_separate_project() -> void:
 	var game := _game("export_runs")
 	check(Exporter.run(Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, game.path_join("vfx"))).ok, "exported")
+	# The game editor imports the copied textures when it opens the project.
+	OS.execute(OS.get_executable_path(), PackedStringArray(["--headless", "--path", game, "--import"]), [], true)
 	write_text(game.path_join("verify.gd"), """extends SceneTree
 func _initialize():
 	# Watchdog: a script error aborts _check(), so make sure the process ends.
@@ -510,8 +516,8 @@ func test_crlf_copy_of_the_runtime_counts_as_unchanged() -> void:
 	var game := _game("export_crlf")
 	var dest := game.path_join("vfx")
 	check(Exporter.run(Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest)).ok, "first export")
-	for f in Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest).files:
+	for f in Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest).files.filter(func(f): return f.kind != "asset"):
 		write_text(f.path, FileAccess.get_file_as_string(f.path).replace("\n", "\r\n"))
 	var again := Exporter.plan(_preset(FIRE_BURST), FIRE_BURST, dest)
-	check_eq(again.files.map(func(f): return f.action), ["unchanged", "unchanged"], "line endings alone are not a change")
+	check_eq(again.files.map(func(f): return f.action), ["unchanged", "unchanged", "use", "use"], "line endings alone are not a change")
 	check(again.warnings.is_empty(), "no 'different runtime' warning: %s" % [again.warnings])

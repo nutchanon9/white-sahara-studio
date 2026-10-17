@@ -11,12 +11,14 @@
     },
     "campfire_loop": {
       "dependencies": [
-        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
+        "res://addons/oasis_fx/textures/flame.png",
+        "res://addons/oasis_fx/textures/smoke.png"
       ],
       "preset": "res://addons/oasis_fx/presets/examples/campfire_loop.vfx.json",
-      "preset_sha256": "19f8fbcce68f3ce140456d5281cd6860beec16fbce8d0b8b806e3f12a8aba517",
+      "preset_sha256": "b184f8f755c675f68f69b302789086b77c77c2e2637b1ac4a74a8422a006bd0f",
       "scene": "res://examples/runtime_demo/fx/campfire_loop.tscn",
-      "scene_sha256": "33873393848bce67f0182e997aaa9cd216e219ef4b60a0c8d2d6509e7848e5d2"
+      "scene_sha256": "b41022630e461946f65565bb0daa7e1960c664b4ba27d6bd9f30fd510ab8d08d"
     },
     "chef_cooking_success": {
       "dependencies": [
@@ -25,6 +27,8 @@
         "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
         "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
         "res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd",
+        "res://addons/oasis_fx/textures/smoke.png",
+        "res://addons/oasis_fx/textures/spark.png",
         "res://examples/runtime_demo/fx/cooking_success.tscn",
         "res://examples/runtime_demo/fx/cooking_success_sfx.tscn"
       ],
@@ -48,6 +52,8 @@
         "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
         "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
         "res://addons/oasis_fx/src/runtime/oasis_sfx_effect.gd",
+        "res://addons/oasis_fx/textures/flame.png",
+        "res://addons/oasis_fx/textures/smoke.png",
         "res://examples/runtime_demo/fx/fire_burst.tscn",
         "res://examples/runtime_demo/fx/fire_burst_sfx.tscn"
       ],
@@ -69,12 +75,14 @@
     },
     "cooking_success": {
       "dependencies": [
-        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
+        "res://addons/oasis_fx/textures/smoke.png",
+        "res://addons/oasis_fx/textures/spark.png"
       ],
       "preset": "res://addons/oasis_fx/presets/examples/cooking_success.vfx.json",
-      "preset_sha256": "7895aa236c8a07de1119160aa0dfb33dec0d178cc0d34312bea647a9d1089e15",
+      "preset_sha256": "f295aeb9a5485bdf8e50528e4312624828de782a62daa5708cc8bd9ef5508e1e",
       "scene": "res://examples/runtime_demo/fx/cooking_success.tscn",
-      "scene_sha256": "c645691eff3b33987b170f34d7733d013843d082c1900d6cd92b5c803e6b5008"
+      "scene_sha256": "62f92dde7dfba042c7a4ceeb10ff05752253e2043deed0df17044a13878e6b98"
     },
     "cooking_success_sfx": {
       "dependencies": [
@@ -89,12 +97,14 @@
     },
     "fire_burst": {
       "dependencies": [
-        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
+        "res://addons/oasis_fx/textures/flame.png",
+        "res://addons/oasis_fx/textures/smoke.png"
       ],
       "preset": "res://addons/oasis_fx/presets/examples/fire_burst.vfx.json",
-      "preset_sha256": "68648910a032d992c609b3c3dc4e7e42ca3c29ed5c958d9cc9199c3734905e6a",
+      "preset_sha256": "481900ff1fd7792eacf8c6343f883e75ce3aa4024072b691b91470c29adda693",
       "scene": "res://examples/runtime_demo/fx/fire_burst.tscn",
-      "scene_sha256": "a2da772f9f63d8a4fd661fed5226884d7bb4502960b0f61998a28b7de27ea7ba"
+      "scene_sha256": "56180cdd5e9eebc1803c7b46e1057bc498f847715a1882539cffbabbffd56545"
     },
     "fire_burst_sfx": {
       "dependencies": [
@@ -110,12 +120,15 @@
     },
     "ice_nova": {
       "dependencies": [
-        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd"
+        "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
+        "res://addons/oasis_fx/textures/shard.png",
+        "res://addons/oasis_fx/textures/smoke.png",
+        "res://addons/oasis_fx/textures/spark.png"
       ],
       "preset": "res://addons/oasis_fx/presets/examples/ice_nova.vfx.json",
-      "preset_sha256": "463300452c2221389d121f9f800067cb439534227ada403e2d46f2ff309a3c8a",
+      "preset_sha256": "4fa54facf00582eec4df30a7c482f2d35e34c85fe389a8f7b1c5c501e3718f93",
       "scene": "res://examples/runtime_demo/fx/ice_nova.tscn",
-      "scene_sha256": "7b03fa10b15044d47d0b52ac0ebd4a93d3f4baf9afe23b52c3b9f6a3fa7f347b"
+      "scene_sha256": "e5bdb1eece6f2cbd1bcb4fee800ea5d7a89a13d935e401eeb8c740826445fb79"
     },
     "oasis_chef": {
       "dependencies": [
@@ -136,6 +149,8 @@
       "dependencies": [
         "res://addons/oasis_fx/src/runtime/oasis_animation_events.gd",
         "res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd",
+        "res://addons/oasis_fx/textures/smoke.png",
+        "res://addons/oasis_fx/textures/spark.png",
         "res://examples/runtime_demo/fx/cooking_success.tscn"
       ],
       "preset": "res://addons/oasis_fx/presets/examples/oasis_chef_reach.anim.json",
@@ -190,5 +205,5 @@
   },
   "format": "oasis_fx_manifest",
   "format_version": 1,
-  "generator": "OasisFx 0.8.3"
+  "generator": "OasisFx 0.9.0"
 }

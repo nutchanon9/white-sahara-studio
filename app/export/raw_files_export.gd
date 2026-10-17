@@ -14,6 +14,7 @@ const RAW_DIRS := [
 	"res://addons/oasis_fx/presets/examples/sprites",
 	"res://addons/oasis_fx/presets/examples/rigs",
 	"res://addons/oasis_fx/presets/examples/rig_parts",
+	"res://addons/oasis_fx/textures",
 	"res://examples/runtime_demo/fx",
 ]
 const RAW_EXTENSIONS := ["wav", "ogg", "mp3", "png", "jpg", "jpeg", "webp", "svg", "tscn", "tres"]

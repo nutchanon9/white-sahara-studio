@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://crak27blc7g6"]
 
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/spark.png" id="glints_texture_file"]
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/smoke.png" id="mist_texture_file"]
 [ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/shard.png" id="shards_texture_file"]
 
 [sub_resource type="CanvasItemMaterial" id="shockwave_canvas_material"]
 blend_mode = 1
@@ -41,16 +44,6 @@ scale_max = 0.3
 scale_curve = SubResource("shockwave_scale_curve_texture")
 color_ramp = SubResource("shockwave_color_ramp")
 
-[sub_resource type="Gradient" id="mist_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.35, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="mist_texture"]
-gradient = SubResource("mist_texture_gradient")
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
-
 [sub_resource type="Gradient" id="mist_color_gradient"]
 colors = PackedColorArray(0.8117647, 0.9607843, 1, 0.33333334, 0.56078434, 0.827451, 1, 0)
 
@@ -74,6 +67,8 @@ emission_ring_height = 0.0
 emission_ring_radius = 60.0
 emission_ring_inner_radius = 30.0
 emission_ring_cone_angle = 90.0
+angle_min = -180.0
+angle_max = 180.0
 spread = 180.0
 initial_velocity_min = 10.0
 initial_velocity_max = 30.0
@@ -87,18 +82,6 @@ color_ramp = SubResource("mist_color_ramp")
 
 [sub_resource type="CanvasItemMaterial" id="shards_canvas_material"]
 blend_mode = 1
-
-[sub_resource type="Gradient" id="shards_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.3, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.8, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="shards_texture"]
-gradient = SubResource("shards_texture_gradient")
-width = 8
-height = 32
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="shards_color_gradient"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -130,24 +113,13 @@ initial_velocity_max = 340.0
 gravity = Vector3(0, 0, 0)
 damping_min = 300.0
 damping_max = 420.0
-scale_min = 0.7
+scale_min = 0.35
+scale_max = 0.5
 scale_curve = SubResource("shards_scale_curve_texture")
 color_ramp = SubResource("shards_color_ramp")
 
 [sub_resource type="CanvasItemMaterial" id="glints_canvas_material"]
 blend_mode = 1
-
-[sub_resource type="Gradient" id="glints_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.85, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="glints_texture"]
-gradient = SubResource("glints_texture_gradient")
-width = 8
-height = 8
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="glints_color_gradient"]
 colors = PackedColorArray(1, 1, 1, 1, 0.8117647, 0.9647059, 1, 0)
@@ -174,7 +146,8 @@ direction = Vector3(0, -1, 0)
 spread = 180.0
 initial_velocity_max = 10.0
 gravity = Vector3(0, 0, 0)
-scale_min = 0.5
+scale_min = 0.140625
+scale_max = 0.28125
 scale_curve = SubResource("glints_scale_curve_texture")
 color_ramp = SubResource("glints_color_ramp")
 
@@ -201,7 +174,7 @@ process_material = SubResource("shockwave_process")
 z_index = -1
 emitting = false
 amount = 14
-texture = SubResource("mist_texture")
+texture = ExtResource("mist_texture_file")
 lifetime = 0.9
 one_shot = true
 explosiveness = 0.8
@@ -212,7 +185,7 @@ process_material = SubResource("mist_process")
 material = SubResource("shards_canvas_material")
 emitting = false
 amount = 24
-texture = SubResource("shards_texture")
+texture = ExtResource("shards_texture_file")
 lifetime = 0.55
 one_shot = true
 explosiveness = 1.0
@@ -223,9 +196,9 @@ process_material = SubResource("shards_process")
 material = SubResource("glints_canvas_material")
 emitting = false
 amount = 10
-texture = SubResource("glints_texture")
+texture = ExtResource("glints_texture_file")
 lifetime = 0.4
 one_shot = true
 explosiveness = 0.4
-visibility_rect = Rect2(-86, -86, 172, 172)
+visibility_rect = Rect2(-91, -91, 182, 182)
 process_material = SubResource("glints_process")

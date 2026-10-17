@@ -462,16 +462,21 @@
             "ring",
             "streak",
             "square",
+            "flame",
+            "smoke",
+            "spark",
+            "shard",
+            "slash",
             "file"
           ],
-          "description": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square, or an image file (texture_path).",
+          "description": "Particle texture: generated soft_circle, hard_circle, ring, streak (tall soft ellipse) or square; a hand-drawn-looking image shipped with OasisFx: flame (tongue pointing up), smoke (puff), spark (four-point twinkle), shard (ice crystal pointing up), slash (crescent); or an image file (texture_path).",
           "default": "soft_circle"
         },
         "texture_size_px": {
           "type": "integer",
           "minimum": 4,
           "maximum": 256,
-          "description": "Size of the generated texture in pixels (streak: height; its width is a quarter).",
+          "description": "Size of the particle texture in pixels (streak: height; its width is a quarter; flame … slash: the drawn size of the 64 px image).",
           "default": 32
         },
         "texture_path": {

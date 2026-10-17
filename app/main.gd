@@ -673,7 +673,8 @@ func cli_output_mismatches() -> PackedStringArray:
 ## Sword Slash sound previews with its bundled audio and exports with it, and
 ## the Chef Ladle Attack animation, Campfire Flame sprite frames and Oasis
 ## Chef rig validate, preview and export, the Sword Slash SFX mixes down to
-## WAV samples, and the Sand Serpent's body bends.
+## WAV samples, the Sand Serpent's body bends, and Fire Burst's stylized
+## textures preview from the package and are exported into the game.
 ## Prints one "SMOKE {json}" line and exits 0 (all good) or 1.
 func _smoke_test(export_dir: String) -> void:
 	var checks := {}
@@ -691,6 +692,14 @@ func _smoke_test(export_dir: String) -> void:
 		checks["export_ok"] = result.ok
 		checks["export_errors"] = result.errors
 		ok = ok and result.ok
+	# Stylized textures: the startup example (Fire Burst) draws the addon's
+	# images in the preview, and the export copied them into the game.
+	var flame: GPUParticles2D = preview.effect.get_node_or_null("flame") if checks.preview_built else null
+	checks["stylized_textures"] = flame != null and flame.texture != null and flame.texture.get_width() == 64
+	if not export_dir.is_empty() and checks.get("export_ok", false):
+		var root := Exporter.find_project_root(Exporter.normalize(export_dir))
+		checks["stylized_textures"] = checks.stylized_textures and ["flame", "smoke"].all(func(k): return FileAccess.get_file_as_bytes(root.path_join("addons/oasis_fx/textures/%s.png" % k)).size() > 100)
+	ok = ok and checks.stylized_textures
 	# Sound: the bundled example audio is readable from the package (preview
 	# uses its real length) and a sound exports with its audio files.
 	var sound_opened := open_file(OasisFx.EXAMPLES_DIR.path_join("sword_slash_sfx.sfx.json"))

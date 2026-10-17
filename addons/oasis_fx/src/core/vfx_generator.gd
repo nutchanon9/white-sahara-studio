@@ -33,6 +33,7 @@ const SpriteFramesBuilder := preload("res://addons/oasis_fx/src/core/sprite_fram
 const AnimSpec := preload("res://addons/oasis_fx/src/core/animation_spec.gd")
 const RigSpec := preload("res://addons/oasis_fx/src/core/rig_spec.gd")
 const RigBuilder := preload("res://addons/oasis_fx/src/core/rig_builder.gd")
+const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 
 
 ## Validates and generates one preset file.
@@ -262,6 +263,8 @@ static func dependencies(preset: Dictionary, roots := PackedStringArray()) -> Pa
 	for e in preset.emitters:
 		if e.texture == "file" and not deps.has(e.texture_path):
 			deps.append(e.texture_path)
+		elif Spec.TEXTURE_IMAGES.has(e.texture) and not deps.has(Spec.TEXTURE_IMAGES[e.texture]):
+			deps.append(Spec.TEXTURE_IMAGES[e.texture])
 	return deps
 
 

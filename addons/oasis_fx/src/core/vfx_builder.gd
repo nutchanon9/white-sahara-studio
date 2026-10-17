@@ -11,6 +11,7 @@ extends RefCounted
 
 const OasisFx := preload("res://addons/oasis_fx/src/core/oasis_fx.gd")
 const PathUtils := preload("res://addons/oasis_fx/src/core/path_utils.gd")
+const Spec := preload("res://addons/oasis_fx/src/core/vfx_spec.gd")
 
 const _BLEND_MODES := {
 	"mix": CanvasItemMaterial.BLEND_MODE_MIX,
@@ -119,8 +120,10 @@ static func _make_process_material(e: Dictionary) -> ParticleProcessMaterial:
 	m.angular_velocity_min = e.angular_velocity_min
 	m.angular_velocity_max = e.angular_velocity_max
 	m.particle_flag_align_y = e.align_to_velocity
-	m.scale_min = e.scale_min
-	m.scale_max = e.scale_max
+	# The shipped images are 64 px; texture_size_px sets their drawn size.
+	var image_scale: float = float(e.texture_size_px) / Spec.IMAGE_TEXTURE_SIZE if Spec.TEXTURE_IMAGES.has(e.texture) else 1.0
+	m.scale_min = e.scale_min * image_scale
+	m.scale_max = e.scale_max * image_scale
 	m.hue_variation_min = -e.hue_variation
 	m.hue_variation_max = e.hue_variation
 	m.emission_shape_offset = Vector3(e.emission_offset[0], e.emission_offset[1], 0.0)
@@ -181,11 +184,12 @@ static func _make_scale_curve(e: Dictionary) -> CurveTexture:
 
 
 static func _make_texture(e: Dictionary, path: String, report: RefCounted, texture_provider: Callable) -> Texture2D:
-	if e.texture == "file":
+	if e.texture == "file" or Spec.TEXTURE_IMAGES.has(e.texture):
+		var file: String = e.texture_path if e.texture == "file" else Spec.TEXTURE_IMAGES[e.texture]
 		var provider := texture_provider if texture_provider.is_valid() else Callable(placeholder_texture)
-		var loaded: Texture2D = provider.call(e.texture_path)
+		var loaded: Texture2D = provider.call(file)
 		if loaded == null:
-			report.error(path + ".texture_path", "could not load a texture from %s" % e.texture_path)
+			report.error(path + (".texture_path" if e.texture == "file" else ".texture"), "could not load a texture from %s" % file)
 			return null
 		return loaded
 
@@ -241,7 +245,7 @@ static func _visibility_rect(e: Dictionary, texture: Texture2D) -> Rect2:
 			spawn += e.emission_radius
 		"rect":
 			spawn += Vector2(e.emission_rect_size[0], e.emission_rect_size[1]).length() * 0.5
-	var texture_size := FILE_TEXTURE_SIZE if e.texture == "file" else float(maxi(texture.get_width(), texture.get_height()))
+	var texture_size := FILE_TEXTURE_SIZE if e.texture == "file" else (float(e.texture_size_px) if Spec.TEXTURE_IMAGES.has(e.texture) else float(maxi(texture.get_width(), texture.get_height())))
 	var particle_size: float = texture_size * e.scale_max * maxf(1.0, e.scale_end_ratio) * 0.5
 	var extent := clampf(ceilf(travel + spawn + particle_size + 8.0), 16.0, 8192.0)
 	return Rect2(-extent, -extent, extent * 2.0, extent * 2.0)

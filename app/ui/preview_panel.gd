@@ -235,7 +235,12 @@ func show_preset(preset: Dictionary, stream_provider := Callable()) -> void:
 				return
 			effect = frames_preview
 		_:
-			effect = Builder.build(preset, report)
+			# Draw the real images (built-in stylized textures, the game's files);
+			# a file that cannot be read stays an invisible placeholder.
+			var provider := func(path: String) -> Texture2D:
+				var loaded: Texture2D = texture_provider.call(path) if texture_provider.is_valid() else null
+				return loaded if loaded != null else Builder.placeholder_texture(path)
+			effect = Builder.build(preset, report, provider)
 	if effect == null:
 		return
 	effect.auto_play = false

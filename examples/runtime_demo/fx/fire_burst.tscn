@@ -1,19 +1,11 @@
 [gd_scene format=3 uid="uid://hivoonmx7e3j"]
 
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/flame.png" id="flame_texture_file"]
 [ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
-
-[sub_resource type="Gradient" id="smoke_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.35, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="smoke_texture"]
-gradient = SubResource("smoke_texture_gradient")
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/smoke.png" id="smoke_texture_file"]
 
 [sub_resource type="Gradient" id="smoke_color_gradient"]
-colors = PackedColorArray(0.2901961, 0.22745098, 0.20392157, 0.4, 0.16470589, 0.13333334, 0.1254902, 0)
+colors = PackedColorArray(0.41568628, 0.34509805, 0.3137255, 0.6, 0.22745098, 0.1882353, 0.17254902, 0)
 
 [sub_resource type="GradientTexture1D" id="smoke_color_ramp"]
 gradient = SubResource("smoke_color_gradient")
@@ -35,31 +27,24 @@ emission_ring_height = 0.0
 emission_ring_radius = 10.0
 emission_ring_inner_radius = 0.0
 emission_ring_cone_angle = 90.0
+angle_min = -180.0
+angle_max = 180.0
 direction = Vector3(0, -1, 0)
 spread = 35.0
 initial_velocity_min = 30.0
 initial_velocity_max = 70.0
+angular_velocity_min = -40.0
+angular_velocity_max = 40.0
 gravity = Vector3(0, -60, 0)
 damping_min = 10.0
 damping_max = 20.0
-scale_min = 0.6
+scale_min = 0.675
+scale_max = 1.125
 scale_curve = SubResource("smoke_scale_curve_texture")
 color_ramp = SubResource("smoke_color_ramp")
 
 [sub_resource type="CanvasItemMaterial" id="flame_canvas_material"]
 blend_mode = 1
-
-[sub_resource type="Gradient" id="flame_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.35, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="flame_texture"]
-gradient = SubResource("flame_texture_gradient")
-width = 40
-height = 40
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="flame_color_gradient"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -69,7 +54,7 @@ colors = PackedColorArray(1, 0.8784314, 0.47843137, 0.9019608, 1, 0.41568628, 0.
 gradient = SubResource("flame_color_gradient")
 
 [sub_resource type="Curve" id="flame_scale_curve"]
-_data = [Vector2(0, 1), 0.0, -0.75, 1, 1, Vector2(1, 0.25), -0.75, 0.0, 1, 1]
+_data = [Vector2(0, 1), 0.0, -0.6999999, 1, 1, Vector2(1, 0.3), -0.6999999, 0.0, 1, 1]
 point_count = 2
 
 [sub_resource type="CurveTexture" id="flame_scale_curve_texture"]
@@ -84,6 +69,8 @@ emission_ring_height = 0.0
 emission_ring_radius = 6.0
 emission_ring_inner_radius = 0.0
 emission_ring_cone_angle = 90.0
+angle_min = -14.0
+angle_max = 14.0
 direction = Vector3(0, -1, 0)
 spread = 55.0
 initial_velocity_min = 140.0
@@ -91,10 +78,12 @@ initial_velocity_max = 280.0
 gravity = Vector3(0, -220, 0)
 damping_min = 90.0
 damping_max = 160.0
-scale_min = 0.35
-scale_max = 0.8
+scale_min = 0.45
+scale_max = 0.95
 scale_curve = SubResource("flame_scale_curve_texture")
 color_ramp = SubResource("flame_color_ramp")
+hue_variation_min = -0.03
+hue_variation_max = 0.03
 
 [sub_resource type="CanvasItemMaterial" id="embers_canvas_material"]
 blend_mode = 1
@@ -148,21 +137,21 @@ emitter_delays = {
 z_index = -1
 emitting = false
 amount = 10
-texture = SubResource("smoke_texture")
+texture = ExtResource("smoke_texture_file")
 one_shot = true
 explosiveness = 0.6
-visibility_rect = Rect2(-176, -176, 352, 352)
+visibility_rect = Rect2(-183, -183, 366, 366)
 process_material = SubResource("smoke_process")
 
 [node name="flame" type="GPUParticles2D" parent="." unique_id=1568792182]
 material = SubResource("flame_canvas_material")
 emitting = false
 amount = 40
-texture = SubResource("flame_texture")
+texture = ExtResource("flame_texture_file")
 lifetime = 0.6
 one_shot = true
 explosiveness = 0.9
-visibility_rect = Rect2(-238, -238, 476, 476)
+visibility_rect = Rect2(-252, -252, 504, 504)
 process_material = SubResource("flame_process")
 
 [node name="embers" type="GPUParticles2D" parent="." unique_id=192612751]

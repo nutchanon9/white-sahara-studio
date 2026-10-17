@@ -25,7 +25,7 @@ func test_generation_records_manifest_entry() -> void:
 	check_eq(entry.get("preset"), FIRE_BURST, "preset path")
 	check_eq(entry.get("scene"), out + "/fire_burst.tscn", "scene path")
 	check_eq(entry.get("scene_sha256"), FileAccess.get_sha256(out + "/fire_burst.tscn"), "scene hash")
-	check_eq(entry.get("dependencies"), [OasisFx.RUNTIME_SCRIPT_PATH], "dependencies")
+	check_eq(entry.get("dependencies"), [OasisFx.RUNTIME_SCRIPT_PATH, "res://addons/oasis_fx/textures/flame.png", "res://addons/oasis_fx/textures/smoke.png"], "dependencies: the runtime and the image textures")
 	check_eq(String(entry.get("preset_sha256")).length(), 64, "preset hash")
 	check_eq(data.keys(), ["entries", "format", "format_version", "generator"], "only deterministic top-level keys (no timestamps)")
 	check_eq(entry.keys(), ["dependencies", "preset", "preset_sha256", "scene", "scene_sha256"], "entry keys")

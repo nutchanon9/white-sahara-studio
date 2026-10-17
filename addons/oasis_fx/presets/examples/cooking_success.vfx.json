@@ -45,12 +45,14 @@
       "initial_velocity_min": 30,
       "initial_velocity_max": 60,
       "gravity": [0, -30],
+      "angle_min": -180,
+      "angle_max": 180,
       "scale_min": 0.4,
       "scale_max": 0.6,
       "scale_end_ratio": 1.8,
       "color_start": "#FFFFFF40",
       "color_end": "#FFFFFF00",
-      "texture": "soft_circle",
+      "texture": "smoke",
       "texture_size_px": 48
     },
     {
@@ -76,8 +78,8 @@
       "color_start": "#FFF6C8FF",
       "color_mid": "#FFD45AFF",
       "color_end": "#FFB03000",
-      "texture": "hard_circle",
-      "texture_size_px": 10,
+      "texture": "spark",
+      "texture_size_px": 22,
       "blend_mode": "add"
     },
     {

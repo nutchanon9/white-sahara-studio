@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://k6pxidpfoux2"]
 
 [ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/spark.png" id="sparkles_texture_file"]
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/smoke.png" id="steam_texture_file"]
 
 [sub_resource type="CanvasItemMaterial" id="glow_canvas_material"]
 blend_mode = 1
@@ -40,18 +42,6 @@ scale_max = 1.2
 scale_curve = SubResource("glow_scale_curve_texture")
 color_ramp = SubResource("glow_color_ramp")
 
-[sub_resource type="Gradient" id="steam_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.35, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="steam_texture"]
-gradient = SubResource("steam_texture_gradient")
-width = 48
-height = 48
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
-
 [sub_resource type="Gradient" id="steam_color_gradient"]
 colors = PackedColorArray(1, 1, 1, 0.2509804, 1, 1, 1, 0)
 
@@ -70,30 +60,20 @@ curve = SubResource("steam_scale_curve")
 particle_flag_disable_z = true
 emission_shape = 3
 emission_box_extents = Vector3(30, 0, 0)
+angle_min = -180.0
+angle_max = 180.0
 direction = Vector3(0, -1, 0)
 spread = 15.0
 initial_velocity_min = 30.0
 initial_velocity_max = 60.0
 gravity = Vector3(0, -30, 0)
-scale_min = 0.4
-scale_max = 0.6
+scale_min = 0.3
+scale_max = 0.45
 scale_curve = SubResource("steam_scale_curve_texture")
 color_ramp = SubResource("steam_color_ramp")
 
 [sub_resource type="CanvasItemMaterial" id="sparkles_canvas_material"]
 blend_mode = 1
-
-[sub_resource type="Gradient" id="sparkles_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.85, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="sparkles_texture"]
-gradient = SubResource("sparkles_texture_gradient")
-width = 10
-height = 10
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="sparkles_color_gradient"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -125,8 +105,8 @@ initial_velocity_max = 260.0
 gravity = Vector3(0, 320, 0)
 damping_min = 20.0
 damping_max = 40.0
-scale_min = 0.6
-scale_max = 1.1
+scale_min = 0.20625
+scale_max = 0.378125
 scale_curve = SubResource("sparkles_scale_curve_texture")
 color_ramp = SubResource("sparkles_color_ramp")
 
@@ -194,7 +174,7 @@ process_material = SubResource("glow_process")
 [node name="steam" type="GPUParticles2D" parent="." unique_id=1705572696]
 emitting = false
 amount = 6
-texture = SubResource("steam_texture")
+texture = ExtResource("steam_texture_file")
 one_shot = true
 explosiveness = 0.3
 visibility_rect = Rect2(-139, -139, 278, 278)
@@ -204,11 +184,11 @@ process_material = SubResource("steam_process")
 material = SubResource("sparkles_canvas_material")
 emitting = false
 amount = 22
-texture = SubResource("sparkles_texture")
+texture = ExtResource("sparkles_texture_file")
 lifetime = 0.9
 one_shot = true
 explosiveness = 0.85
-visibility_rect = Rect2(-388, -388, 776, 776)
+visibility_rect = Rect2(-394, -394, 788, 788)
 process_material = SubResource("sparkles_process")
 
 [node name="confetti" type="GPUParticles2D" parent="." unique_id=1035509370]

@@ -94,7 +94,10 @@ static func plan(preset: Dictionary, preset_path: String, dest_dir: String, root
 		if bundled.is_empty():
 			result.errors.append("%s is not in the game project (%s) and is not one of the files bundled with OasisFx. Put the file in the game at that path, or change the preset." % [dep, root])
 			return result
-		result.files.append({"path": target, "res_path": dep, "kind": "asset", "action": "create", "content": "", "bytes": bundled})
+		# Files of the addon itself (runtimes, stylized textures) belong in the
+		# game like the runtime script; only example media should be replaced.
+		var kind := "asset" if dep.begins_with(OasisFx.EXAMPLES_DIR) or not dep.begins_with(OasisFx.ADDON_ROOT) else "addon"
+		result.files.append({"path": target, "res_path": dep, "kind": kind, "action": "create", "content": "", "bytes": bundled})
 
 	var manifest := Manifest.new()
 	manifest.load_dir(dest)

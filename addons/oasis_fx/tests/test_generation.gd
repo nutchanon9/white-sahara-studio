@@ -49,7 +49,7 @@ func _check_flame(flame: GPUParticles2D) -> void:
 	check_eq(flame.one_shot, true, "one_shot")
 	check_eq(flame.emitting, false, "emitters wait for the runtime script")
 	check_eq(flame.explosiveness, e.explosiveness, "explosiveness")
-	check(flame.texture is GradientTexture2D, "procedural texture")
+	check_eq(flame.texture.resource_path, "res://addons/oasis_fx/textures/flame.png", "stylized flame texture of the addon")
 	check_eq(flame.texture.get_width(), e.texture_size_px, "texture size")
 	var canvas := flame.material as CanvasItemMaterial
 	check(canvas != null and canvas.blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "additive blend")
@@ -129,8 +129,10 @@ func test_generation_is_deterministic() -> void:
 	check(not text_a.is_empty(), "scene written")
 	check(text_a == text_b, "regenerating gives byte-identical output")
 	check(text_a.contains("id=\"flame_process\""), "readable, stable sub-resource ids")
-	check(text_a.contains("[ext_resource type=\"Script\" path=\"%s\" id=\"oasis_fx_runtime\"]" % OasisFx.RUNTIME_SCRIPT_PATH), "runtime script is the only external resource, with a fixed id")
-	check_eq(text_a.count("[ext_resource"), 1, "procedural textures are embedded")
+	check(text_a.contains("[ext_resource type=\"Script\" path=\"%s\" id=\"oasis_fx_runtime\"]" % OasisFx.RUNTIME_SCRIPT_PATH), "runtime script with a fixed id")
+	check(text_a.contains("[ext_resource type=\"Texture2D\" path=\"res://addons/oasis_fx/textures/flame.png\" id=\"flame_texture_file\"]"), "image texture with a fixed id")
+	check_eq(text_a.count("[ext_resource"), 3, "runtime and the two image textures are external; the embers' procedural texture is embedded")
+	check(text_a.contains("[sub_resource type=\"GradientTexture2D\" id=\"embers_texture\"]"), "procedural texture embedded")
 
 
 func test_project_output_gets_stable_uid() -> void:
@@ -274,12 +276,14 @@ func test_shapes_map_to_flat_rings() -> void:
 ## fixtures/release_build/ holds files written by the packaged desktop app
 ## (Godot 4.7.2 release export template) before normalization: numeric
 ## ext_resource ids and runtime properties at their default values. After
-## normalize_saved_text() they must equal the editor/CLI golden files.
+## normalize_saved_text() they must equal the editor/CLI golden files
+## (expected/<file> when the example changed after the fixture was captured).
 func test_release_build_output_normalizes_to_the_cli_text() -> void:
 	var fixtures := "res://addons/oasis_fx/tests/fixtures/release_build/"
 	var strip_uid := func(t: String) -> String: return RegEx.create_from_string(" uid=\"uid://[a-z0-9]+\"").sub(t, "", true)
 	for file in ["fire_burst.tscn", "sword_slash_sfx.tscn", "chef_ladle_attack.tres", "campfire_flame.tres"]:
-		var golden: String = strip_uid.call(FileAccess.get_file_as_string("res://examples/runtime_demo/fx/" + file))
+		var expected: String = fixtures + "expected/" + file
+		var golden: String = strip_uid.call(FileAccess.get_file_as_string(expected if FileAccess.file_exists(expected) else "res://examples/runtime_demo/fx/" + file))
 		var release: String = strip_uid.call(FileAccess.get_file_as_string(fixtures + file))
 		check(release != golden, file + ": the fixture really differs")
 		var ids := {}

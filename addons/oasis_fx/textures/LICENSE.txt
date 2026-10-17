@@ -1,0 +1,2 @@
+These particle textures were drawn by tools/synth_particle_textures.gd for OasisFx.
+They contain no third-party material and are dedicated to the public domain (CC0 1.0).

@@ -1,16 +1,8 @@
 [gd_scene format=3 uid="uid://eyuk0btd2sv5"]
 
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/flame.png" id="fire_texture_file"]
 [ext_resource type="Script" path="res://addons/oasis_fx/src/runtime/oasis_fx_effect.gd" id="oasis_fx_runtime"]
-
-[sub_resource type="Gradient" id="smoke_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.35, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="smoke_texture"]
-gradient = SubResource("smoke_texture_gradient")
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
+[ext_resource type="Texture2D" path="res://addons/oasis_fx/textures/smoke.png" id="smoke_texture_file"]
 
 [sub_resource type="Gradient" id="smoke_color_gradient"]
 colors = PackedColorArray(0.22745098, 0.1882353, 0.17254902, 0.26666668, 0.16470589, 0.13333334, 0.1254902, 0)
@@ -30,10 +22,14 @@ curve = SubResource("smoke_scale_curve")
 particle_flag_disable_z = true
 emission_shape = 3
 emission_box_extents = Vector3(10, 2, 0)
+angle_min = -180.0
+angle_max = 180.0
 direction = Vector3(0, -1, 0)
 spread = 10.0
 initial_velocity_min = 20.0
 initial_velocity_max = 40.0
+angular_velocity_min = -30.0
+angular_velocity_max = 30.0
 gravity = Vector3(0, 0, 0)
 scale_min = 0.6
 scale_curve = SubResource("smoke_scale_curve_texture")
@@ -41,18 +37,6 @@ color_ramp = SubResource("smoke_color_ramp")
 
 [sub_resource type="CanvasItemMaterial" id="fire_canvas_material"]
 blend_mode = 1
-
-[sub_resource type="Gradient" id="fire_texture_gradient"]
-offsets = PackedFloat32Array(0, 0.35, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.75, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture2D" id="fire_texture"]
-gradient = SubResource("fire_texture_gradient")
-width = 48
-height = 48
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="fire_color_gradient"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -73,13 +57,15 @@ lifetime_randomness = 0.3
 particle_flag_disable_z = true
 emission_shape = 3
 emission_box_extents = Vector3(18, 2, 0)
+angle_min = -10.0
+angle_max = 10.0
 direction = Vector3(0, -1, 0)
 spread = 12.0
 initial_velocity_min = 40.0
 initial_velocity_max = 80.0
 gravity = Vector3(0, -80, 0)
-scale_min = 0.5
-scale_max = 0.9
+scale_min = 0.4375
+scale_max = 0.7875
 scale_curve = SubResource("fire_scale_curve_texture")
 color_ramp = SubResource("fire_color_ramp")
 
@@ -128,7 +114,7 @@ z_index = -1
 position = Vector2(0, -40)
 emitting = false
 amount = 6
-texture = SubResource("smoke_texture")
+texture = ExtResource("smoke_texture_file")
 lifetime = 2.0
 preprocess = 2.0
 visibility_rect = Rect2(-163, -163, 326, 326)
@@ -138,10 +124,10 @@ process_material = SubResource("smoke_process")
 material = SubResource("fire_canvas_material")
 emitting = false
 amount = 30
-texture = SubResource("fire_texture")
+texture = ExtResource("fire_texture_file")
 lifetime = 0.8
 preprocess = 1.0
-visibility_rect = Rect2(-138, -138, 276, 276)
+visibility_rect = Rect2(-141, -141, 282, 282)
 process_material = SubResource("fire_process")
 
 [node name="embers" type="GPUParticles2D" parent="." unique_id=1419940570]
